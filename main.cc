@@ -295,6 +295,19 @@ private:
       }
   }
 
+  /**
+   * (v, D/tau) + (v, S⋅∇B) - (∇⋅v, p) + (ε(v), νε(B))
+   *            + δ_1 (S⋅∇v, ∇p + S⋅∇B) + δ_2 (∇⋅v, div(B)) = 0
+   *              +------ SUPG -------+   +------ GD -----+
+   *
+   * (q, div(B)) + δ_1 (∇q, ∇p + S⋅∇B) = 0
+   *               +------ PSPG -----+
+   *
+   * with the following nomenclature:
+   *  - S := u^*
+   *  - B := θ u^{n+1} + (1-θ) u^{n}
+   *  - D := u^{n+1} - u^{n}
+   */
   void
   do_vmult_cell(FECellIntegrator &integrator) const
   {
@@ -306,6 +319,7 @@ private:
     VectorizedArray<Number> inv_tau         = 0.0;
     VectorizedArray<Number> theta           = 0.0;
     VectorizedArray<Number> one_minus_theta = 0.0;
+    VectorizedArray<Number> nu              = 0.0;
 
     const unsigned int cell = integrator.get_current_cell_index();
 
@@ -313,11 +327,6 @@ private:
 
     for (const auto q : integrator.quadrature_point_indices())
       {
-        // in the following we use the nomenclature:
-        //  - S := u^*
-        //  - B := θ u^{n+1} + (1-θ) u^{n}
-        //  - D := u^{n+1} - u^{n}
-
         typename FECellIntegrator::value_type value = integrator.get_value(q);
         typename FECellIntegrator::gradient_type gradient =
           integrator.get_gradient(q);
@@ -358,9 +367,9 @@ private:
           for (unsigned int d1 = 0; d1 < dim; ++d1)
             value_result[d0] += value_star[d1] * gradient_bar[d0][d1];
 
-        //  c)  (∇⋅v, p)
+        //  c)  -(∇⋅v, p)
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += value[dim];
+          gradient_result[d][d] -= value[dim];
 
         //  d)  (ε(v), νε(B))
         Tensor<2, dim, VectorizedArray<Number>> symm_gradient_bar;
@@ -369,6 +378,8 @@ private:
           for (unsigned int d1 = 0; d1 < dim; ++d1)
             symm_gradient_bar[d0][d1] =
               (gradient_bar[d0][d1] + gradient_bar[d1][d0]) * 0.5;
+
+        symm_gradient_bar *= nu;
 
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
