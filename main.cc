@@ -39,7 +39,7 @@ public:
   set_linearization_point(const VectorType &src) = 0;
 
   virtual void
-  evaluate_rhs(const VectorType &src) const = 0;
+  evaluate_rhs(VectorType &dst, const VectorType &src) const = 0;
 
   virtual void
   vmult(VectorType &dst, const VectorType &src) const = 0;
@@ -171,7 +171,7 @@ public:
     // compute right-hans-side vector
     VectorType rhs;
     rhs.reinit(solution);
-    op.evaluate_rhs(rhs);
+    op.evaluate_rhs(rhs, solution);
 
     // solve linear system
     linear_solver.initialize();
@@ -223,20 +223,36 @@ public:
   }
 
   void
-  evaluate_rhs(const VectorType &src) const override
+  evaluate_rhs(VectorType &dst, const VectorType &src) const override
   {
-    AssertThrow(false, ExcNotImplemented());
+    // compute right-hand side
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim>::do_rhs_range, this, dst, src, true);
 
-    (void)src;
+    // apply inhomogeneous DBC
+    VectorType dst_temp, src_temp;
+    dst_temp.reinit(dst);
+    src_temp.reinit(src);
+
+    constraints_inhomogeneous.distribute(dst_temp);
+
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim>::do_vmult_range<false>,
+      this,
+      dst_temp,
+      src_temp,
+      true);
+
+    constraints_inhomogeneous.set_zero(dst_temp);
+
+    dst -= dst_temp;
   }
 
   void
   vmult(VectorType &dst, const VectorType &src) const override
   {
-    AssertThrow(false, ExcNotImplemented());
-
-    (void)dst;
-    (void)src;
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
   }
 
   const SparseMatrixType &
@@ -261,8 +277,59 @@ private:
   VectorType               linearization_point;
   mutable SparseMatrixType system_matrix;
 
+  template <bool homogeneous>
+  void
+  do_vmult_range(const MatrixFree<dim, Number>               &matrix_free,
+                 VectorType                                  &dst,
+                 const VectorType                            &src,
+                 const std::pair<unsigned int, unsigned int> &range) const
+  {
+    FECellIntegrator phi(matrix_free, homogeneous ? 0 : 1);
+
+    for (auto cell = range.first; cell < range.second; ++cell)
+      {
+        phi.reinit(cell);
+        phi.read_dof_values(src);
+
+        do_vmult_cell(phi);
+
+        phi.distribute_local_to_global(dst);
+      }
+  }
+
   void
   do_vmult_cell(FECellIntegrator &phi) const
+  {
+    phi.evaluate(EvaluationFlags::EvaluationFlags::values |
+                 EvaluationFlags::EvaluationFlags::gradients);
+
+    // TODO
+
+    phi.integrate(EvaluationFlags::EvaluationFlags::values |
+                  EvaluationFlags::EvaluationFlags::gradients);
+  }
+
+  void
+  do_rhs_range(const MatrixFree<dim, Number>               &matrix_free,
+               VectorType                                  &dst,
+               const VectorType                            &src,
+               const std::pair<unsigned int, unsigned int> &range) const
+  {
+    FECellIntegrator phi(matrix_free);
+
+    for (auto cell = range.first; cell < range.second; ++cell)
+      {
+        phi.reinit(cell);
+        phi.read_dof_values(src);
+
+        do_rhs_cell(phi);
+
+        phi.distribute_local_to_global(dst);
+      }
+  }
+
+  void
+  do_rhs_cell(FECellIntegrator &phi) const
   {
     phi.evaluate(EvaluationFlags::EvaluationFlags::values |
                  EvaluationFlags::EvaluationFlags::gradients);
