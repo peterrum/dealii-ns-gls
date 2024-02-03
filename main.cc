@@ -1,10 +1,22 @@
 #include <deal.II/base/mpi.h>
+#include <deal.II/base/quadrature_lib.h>
+
+#include <deal.II/distributed/tria.h>
+
+#include <deal.II/dofs/dof_handler.h>
+#include <deal.II/dofs/dof_tools.h>
+
+#include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/fe_system.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/lac/solver_gmres.h>
 #include <deal.II/lac/trilinos_precondition.h>
 #include <deal.II/lac/trilinos_sparse_matrix.h>
+
+#include <deal.II/numerics/vector_tools.h>
 
 using namespace dealii;
 
@@ -29,6 +41,9 @@ public:
 
   virtual const SparseMatrixType &
   get_system_matrix() const = 0;
+
+  virtual void
+  initialize_dof_vector(VectorType &src) const = 0;
 };
 
 
@@ -40,18 +55,24 @@ public:
   void
   set_linearization_point(const VectorType &src) override
   {
+    AssertThrow(false, ExcNotImplemented());
+
     (void)src;
   }
 
   void
   evaluate_rhs(const VectorType &src) const override
   {
+    AssertThrow(false, ExcNotImplemented());
+
     (void)src;
   }
 
   void
   vmult(VectorType &dst, const VectorType &src) const override
   {
+    AssertThrow(false, ExcNotImplemented());
+
     (void)dst;
     (void)src;
   }
@@ -62,6 +83,14 @@ public:
     AssertThrow(false, ExcNotImplemented());
 
     return system_matrix;
+  }
+
+  void
+  initialize_dof_vector(VectorType &src) const override
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    (void)src;
   }
 
 private:
@@ -209,7 +238,58 @@ public:
   void
   run()
   {
+    const unsigned int fe_degree      = 2;
+    const unsigned int mapping_degree = 1;
+
+    const MPI_Comm comm = MPI_COMM_WORLD;
+
     // set up system
+    parallel::distributed::Triangulation<dim> tria(comm);
+
+    // TODO: create mesh
+
+    FESystem<dim> fe(FE_Q<dim>(fe_degree), 1 + dim);
+
+    DoFHandler<dim> dof_handler(tria);
+    dof_handler.distribute_dofs(fe);
+
+    QGauss<dim> quadrature(fe_degree + 1);
+
+    MappingQ<dim> mapping(mapping_degree);
+
+    std::vector<unsigned int> all_homogeneous_dbcs;
+    std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim>>>>
+      all_inhomogeneous_dbcs;
+
+    // set up constraints
+    ComponentMask mask_v(dim + 1, true);
+    mask_v.set(dim, false);
+
+    ComponentMask mask_p(dim + 1, false);
+    mask_p.set(dim, true);
+
+    AffineConstraints<Number> constraints;
+
+    for (const auto bci : all_homogeneous_dbcs)
+      DoFTools::make_zero_boundary_constraints(dof_handler,
+                                               bci,
+                                               constraints,
+                                               mask_v);
+
+    AffineConstraints<Number> constraints_homogeneous;
+    constraints_homogeneous.copy_from(constraints);
+
+    for (const auto &[bci, _] : all_inhomogeneous_dbcs)
+      DoFTools::make_zero_boundary_constraints(dof_handler,
+                                               bci,
+                                               constraints_homogeneous,
+                                               mask_v);
+
+    constraints.close();
+    constraints_homogeneous.close();
+
+    AffineConstraints<Number> constraints_inhomogeneous;
+    // note: filled during time loop
 
     // set up Navier-Stokes operator
     NavierStokesOperator<dim> ns_operator;
@@ -231,13 +311,21 @@ public:
     nonlinear_solver =
       std::make_shared<NonLinearSolverLinearized>(ns_operator, *linear_solver);
 
-    VectorType solution;
-
     // initialize solution
+    VectorType solution;
+    ns_operator.initialize_dof_vector(solution);
 
     // perform time loop
     for (;;)
       {
+        // set time-dependent inhomogeneous DBCs
+        constraints_inhomogeneous.clear();
+        for (const auto &[bci, fu] : all_inhomogeneous_dbcs)
+          VectorTools::interpolate_boundary_values(
+            mapping, dof_handler, bci, *fu, constraints_inhomogeneous, mask_v);
+        constraints_inhomogeneous.close();
+
+        // solve nonlinear problem
         nonlinear_solver->solve(solution);
       }
   }
