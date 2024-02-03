@@ -39,7 +39,7 @@ public:
   set_linearization_point(const VectorType &src) = 0;
 
   virtual void
-  evaluate_rhs(VectorType &dst, const VectorType &src) const = 0;
+  evaluate_rhs(VectorType &dst) const = 0;
 
   virtual void
   vmult(VectorType &dst, const VectorType &src) const = 0;
@@ -171,7 +171,7 @@ public:
     // compute right-hans-side vector
     VectorType rhs;
     rhs.reinit(solution);
-    op.evaluate_rhs(rhs, solution);
+    op.evaluate_rhs(rhs);
 
     // solve linear system
     linear_solver.initialize();
@@ -223,25 +223,16 @@ public:
   }
 
   void
-  evaluate_rhs(VectorType &dst, const VectorType &src) const override
+  evaluate_rhs(VectorType &dst) const override
   {
     // apply inhomogeneous DBC
-    VectorType src_temp;
-    src_temp.reinit(src);
-    constraints_inhomogeneous.distribute(src_temp);
-
-    // create difference for velocity
-    for (unsigned int i = 0; i < src.locally_owned_size(); ++i)
-      if ((i % (dim + 1)) != dim)
-        src_temp.local_element(i) -= src.local_element(i);
+    VectorType src;
+    dst.reinit(src);
+    constraints_inhomogeneous.distribute(src);
 
     // perform vmult
     this->matrix_free.cell_loop(
-      &NavierStokesOperator<dim>::do_vmult_range<false>,
-      this,
-      dst,
-      src_temp,
-      true);
+      &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
 
     // apply constraints
     constraints_inhomogeneous.set_zero(dst);
