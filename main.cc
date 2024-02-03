@@ -15,9 +15,11 @@
 #include <deal.II/lac/solver_gmres.h>
 #include <deal.II/lac/trilinos_precondition.h>
 #include <deal.II/lac/trilinos_sparse_matrix.h>
+#include <deal.II/lac/trilinos_sparsity_pattern.h>
 
 #include <deal.II/matrix_free/fe_evaluation.h>
 #include <deal.II/matrix_free/matrix_free.h>
+#include <deal.II/matrix_free/tools.h>
 
 #include <deal.II/numerics/vector_tools.h>
 
@@ -190,6 +192,8 @@ template <int dim>
 class NavierStokesOperator : public OperatorBase
 {
 public:
+  using FECellIntegrator = FEEvaluation<dim, -1, 0, dim + 1, Number>;
+
   NavierStokesOperator(
     const Mapping<dim>              &mapping,
     const DoFHandler<dim>           &dof_handler,
@@ -238,7 +242,7 @@ public:
   const SparseMatrixType &
   get_system_matrix() const override
   {
-    AssertThrow(false, ExcNotImplemented());
+    initialize_system_matrix();
 
     return system_matrix;
   }
@@ -254,8 +258,55 @@ private:
 
   MatrixFree<dim, Number> matrix_free;
 
-  VectorType       linearization_point;
-  SparseMatrixType system_matrix;
+  VectorType               linearization_point;
+  mutable SparseMatrixType system_matrix;
+
+  void
+  do_vmult_cell(FECellIntegrator &phi) const
+  {
+    phi.evaluate(EvaluationFlags::EvaluationFlags::values |
+                 EvaluationFlags::EvaluationFlags::gradients);
+
+    // TODO
+
+    phi.integrate(EvaluationFlags::EvaluationFlags::values |
+                  EvaluationFlags::EvaluationFlags::gradients);
+  }
+
+  void
+  initialize_system_matrix() const
+  {
+    const bool system_matrix_is_empty =
+      system_matrix.m() == 0 || system_matrix.n() == 0;
+
+    const auto &dof_handler = matrix_free.get_dof_handler();
+    const auto &constraints = matrix_free.get_affine_constraints();
+
+    if (system_matrix_is_empty)
+      {
+        system_matrix.clear();
+
+        TrilinosWrappers::SparsityPattern dsp;
+
+        dsp.reinit(dof_handler.locally_owned_dofs(),
+                   dof_handler.get_communicator());
+        DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints);
+        dsp.compress();
+
+        system_matrix.reinit(dsp);
+      }
+
+    {
+      if (system_matrix_is_empty == false)
+        system_matrix = 0.0; // clear existing content
+
+      MatrixFreeTools::compute_matrix(matrix_free,
+                                      constraints,
+                                      system_matrix,
+                                      &NavierStokesOperator<dim>::do_vmult_cell,
+                                      this);
+    }
+  }
 };
 
 
