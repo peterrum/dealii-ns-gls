@@ -225,27 +225,29 @@ public:
   void
   evaluate_rhs(VectorType &dst, const VectorType &src) const override
   {
-    // compute right-hand side
-    this->matrix_free.cell_loop(
-      &NavierStokesOperator<dim>::do_rhs_range, this, dst, src, true);
-
     // apply inhomogeneous DBC
-    VectorType dst_temp, src_temp;
-    dst_temp.reinit(dst);
+    VectorType src_temp;
     src_temp.reinit(src);
+    constraints_inhomogeneous.distribute(src_temp);
 
-    constraints_inhomogeneous.distribute(dst_temp);
+    // create difference for velocity
+    for (unsigned int i = 0; i < src.locally_owned_size(); ++i)
+      if ((i % (dim + 1)) != dim)
+        src_temp.local_element(i) -= src.local_element(i);
 
+    // perform vmult
     this->matrix_free.cell_loop(
       &NavierStokesOperator<dim>::do_vmult_range<false>,
       this,
-      dst_temp,
+      dst,
       src_temp,
       true);
 
-    constraints_inhomogeneous.set_zero(dst_temp);
+    // apply constraints
+    constraints_inhomogeneous.set_zero(dst);
 
-    dst -= dst_temp;
+    // move to rhs
+    dst *= -1.0;
   }
 
   void
@@ -299,37 +301,6 @@ private:
 
   void
   do_vmult_cell(FECellIntegrator &phi) const
-  {
-    phi.evaluate(EvaluationFlags::EvaluationFlags::values |
-                 EvaluationFlags::EvaluationFlags::gradients);
-
-    // TODO
-
-    phi.integrate(EvaluationFlags::EvaluationFlags::values |
-                  EvaluationFlags::EvaluationFlags::gradients);
-  }
-
-  void
-  do_rhs_range(const MatrixFree<dim, Number>               &matrix_free,
-               VectorType                                  &dst,
-               const VectorType                            &src,
-               const std::pair<unsigned int, unsigned int> &range) const
-  {
-    FECellIntegrator phi(matrix_free);
-
-    for (auto cell = range.first; cell < range.second; ++cell)
-      {
-        phi.reinit(cell);
-        phi.read_dof_values(src);
-
-        do_rhs_cell(phi);
-
-        phi.distribute_local_to_global(dst);
-      }
-  }
-
-  void
-  do_rhs_cell(FECellIntegrator &phi) const
   {
     phi.evaluate(EvaluationFlags::EvaluationFlags::values |
                  EvaluationFlags::EvaluationFlags::gradients);
