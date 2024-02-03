@@ -279,6 +279,11 @@ private:
   VectorType               linearization_point;
   mutable SparseMatrixType system_matrix;
 
+  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> star_value;
+  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> old_value;
+  Table<2, Tensor<1, dim + 1, Tensor<1, dim, VectorizedArray<Number>>>>
+    old_gradient;
+
   template <bool homogeneous>
   void
   do_vmult_range(const MatrixFree<dim, Number>               &matrix_free,
@@ -305,27 +310,44 @@ private:
     integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
                         EvaluationFlags::EvaluationFlags::gradients);
 
-    VectorizedArray<Number> delta_1 = 0.0;
-    VectorizedArray<Number> delta_2 = 0.0;
-    VectorizedArray<Number> inv_tau = 0.0;
+    VectorizedArray<Number> delta_1         = 0.0;
+    VectorizedArray<Number> delta_2         = 0.0;
+    VectorizedArray<Number> inv_tau         = 0.0;
+    VectorizedArray<Number> theta           = 0.0;
+    VectorizedArray<Number> one_minus_theta = 0.0;
+
+    const unsigned int cell = integrator.get_current_cell_index();
+
+    const bool residual = false;
 
     for (const auto q : integrator.quadrature_point_indices())
       {
+        // in the following we use the nomenclature:
+        //  - S := u^*
+        //  - B := θ u^{n+1} + (1-θ) u^{n}
+        //  - D := u^{n+1} - u^{n}
+
         typename FECellIntegrator::value_type value = integrator.get_value(q);
         typename FECellIntegrator::gradient_type gradient =
           integrator.get_gradient(q);
 
+        typename FECellIntegrator::value_type value_star  = star_value[cell][q];
         typename FECellIntegrator::value_type value_delta = value;
+        typename FECellIntegrator::gradient_type gradient_bar =
+          theta * gradient;
 
-        typename FECellIntegrator::gradient_type gradient_bar = gradient;
+        if (residual)
+          {
+            value_delta -= old_value[cell][q];
+            gradient_bar += one_minus_theta * old_gradient[cell][q];
+          }
 
+        // precompute: div(B)
         VectorizedArray<Number> div_bar = gradient_bar[0][0];
         for (unsigned int d = 1; d < dim; ++d)
           div_bar += gradient_bar[d][d];
 
-        typename FECellIntegrator::value_type value_star; // star
-
-        // precompute scaled residual: δ_1 (∇p + S⋅∇B)
+        // precompute scaled residual: residual := δ_1 (∇p + S⋅∇B)
         Tensor<1, dim, VectorizedArray<Number>> residual;
         residual = gradient[dim];
         for (unsigned int d = 0; d < dim; ++d)
@@ -334,11 +356,6 @@ private:
 
         typename FECellIntegrator::value_type    value_result;
         typename FECellIntegrator::gradient_type gradient_result;
-
-        // in the following we use the nomenclature:
-        //  - S := u^*
-        //  - B := θ u^{n+1} + (1-θ) u^{n}
-        //  - D := u^{n+1} - u^{n}
 
         // velocity block:
         //  a)  (v, D/tau)
@@ -369,7 +386,7 @@ private:
               gradient_result[d1][d0] += symm_gradient_bar[d0][d1] * 0.5;
             }
 
-        //  e)  δ_1 (S⋅∇v, ∇p + S⋅∇B) -> SUPG stabilization
+        //  e)  δ_1 (S⋅∇v, residual) -> SUPG stabilization
         for (unsigned int d = 0; d < dim; ++d)
           gradient_result[d][d] += value_star[d] * residual[d];
 
@@ -384,7 +401,7 @@ private:
         for (unsigned int d = 0; d < dim; ++d)
           value_result[dim] += div_bar;
 
-        //  b)  δ_1 (∇q, ∇p + S⋅∇B) -> PSPG stabilization
+        //  b)  δ_1 (∇q, residual) -> PSPG stabilization
         gradient_result[dim] = residual;
 
 
