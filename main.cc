@@ -16,6 +16,9 @@
 #include <deal.II/lac/trilinos_precondition.h>
 #include <deal.II/lac/trilinos_sparse_matrix.h>
 
+#include <deal.II/matrix_free/fe_evaluation.h>
+#include <deal.II/matrix_free/matrix_free.h>
+
 #include <deal.II/numerics/vector_tools.h>
 
 using namespace dealii;
@@ -187,12 +190,32 @@ template <int dim>
 class NavierStokesOperator : public OperatorBase
 {
 public:
-  void
-  set_linearization_point(const VectorType &src) override
+  NavierStokesOperator(
+    const Mapping<dim>              &mapping,
+    const DoFHandler<dim>           &dof_handler,
+    const AffineConstraints<Number> &constraints_homogeneous,
+    const AffineConstraints<Number> &constraints,
+    const AffineConstraints<Number> &constraints_inhomogeneous,
+    const Quadrature<dim>           &quadrature)
+    : constraints_inhomogeneous(constraints_inhomogeneous)
   {
-    AssertThrow(false, ExcNotImplemented());
+    const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
+                                                                  &dof_handler};
+    const std::vector<const AffineConstraints<Number> *> mf_constraints = {
+      &constraints_homogeneous, &constraints};
 
-    (void)src;
+    typename MatrixFree<dim, Number>::AdditionalData additional_data;
+
+    additional_data.mapping_update_flags = update_values | update_gradients;
+
+    matrix_free.reinit(
+      mapping, mf_dof_handlers, mf_constraints, quadrature, additional_data);
+  }
+
+  void
+  set_linearization_point(const VectorType &vec) override
+  {
+    this->linearization_point = vec;
   }
 
   void
@@ -221,14 +244,17 @@ public:
   }
 
   void
-  initialize_dof_vector(VectorType &src) const override
+  initialize_dof_vector(VectorType &vec) const override
   {
-    AssertThrow(false, ExcNotImplemented());
-
-    (void)src;
+    matrix_free.initialize_dof_vector(vec);
   }
 
 private:
+  const AffineConstraints<Number> &constraints_inhomogeneous;
+
+  MatrixFree<dim, Number> matrix_free;
+
+  VectorType       linearization_point;
   SparseMatrixType system_matrix;
 };
 
@@ -295,7 +321,12 @@ public:
     // note: filled during time loop
 
     // set up Navier-Stokes operator
-    NavierStokesOperator<dim> ns_operator;
+    NavierStokesOperator<dim> ns_operator(mapping,
+                                          dof_handler,
+                                          constraints_homogeneous,
+                                          constraints,
+                                          constraints_inhomogeneous,
+                                          quadrature);
 
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
