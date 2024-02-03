@@ -48,57 +48,6 @@ public:
 
 
 
-template <int dim>
-class NavierStokesOperator : public OperatorBase
-{
-public:
-  void
-  set_linearization_point(const VectorType &src) override
-  {
-    AssertThrow(false, ExcNotImplemented());
-
-    (void)src;
-  }
-
-  void
-  evaluate_rhs(const VectorType &src) const override
-  {
-    AssertThrow(false, ExcNotImplemented());
-
-    (void)src;
-  }
-
-  void
-  vmult(VectorType &dst, const VectorType &src) const override
-  {
-    AssertThrow(false, ExcNotImplemented());
-
-    (void)dst;
-    (void)src;
-  }
-
-  const SparseMatrixType &
-  get_system_matrix() const override
-  {
-    AssertThrow(false, ExcNotImplemented());
-
-    return system_matrix;
-  }
-
-  void
-  initialize_dof_vector(VectorType &src) const override
-  {
-    AssertThrow(false, ExcNotImplemented());
-
-    (void)src;
-  }
-
-private:
-  SparseMatrixType system_matrix;
-};
-
-
-
 /**
  * Preconditioners.
  */
@@ -227,6 +176,60 @@ public:
 private:
   OperatorBase     &op;
   LinearSolverBase &linear_solver;
+};
+
+
+
+/**
+ * Navier-Stokes operator.
+ */
+template <int dim>
+class NavierStokesOperator : public OperatorBase
+{
+public:
+  void
+  set_linearization_point(const VectorType &src) override
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    (void)src;
+  }
+
+  void
+  evaluate_rhs(const VectorType &src) const override
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    (void)src;
+  }
+
+  void
+  vmult(VectorType &dst, const VectorType &src) const override
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    (void)dst;
+    (void)src;
+  }
+
+  const SparseMatrixType &
+  get_system_matrix() const override
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    return system_matrix;
+  }
+
+  void
+  initialize_dof_vector(VectorType &src) const override
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    (void)src;
+  }
+
+private:
+  SparseMatrixType system_matrix;
 };
 
 
