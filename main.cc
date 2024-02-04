@@ -523,7 +523,8 @@ private:
               gradient_result[d1][d0] += symm_gradient_bar[d0][d1] * 0.5;
             }
 
-        //  e)  δ_1 (S⋅∇v, residual) -> SUPG stabilization
+        //  e)  (S⋅∇v, δ_1 (∇p + S⋅∇B)) -> SUPG stabilization
+        //             +---residual--+
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
             gradient_result[d0][d1] += value_star[d1] * residual[d0];
@@ -538,7 +539,8 @@ private:
         //  a)  (q, div(B))
         value_result[dim] = div_bar;
 
-        //  b)  δ_1 (∇q, residual) -> PSPG stabilization
+        //  b)  (∇q, δ_1 (∇p + S⋅∇B)) -> PSPG stabilization
+        //           +---residual--+
         gradient_result[dim] = residual;
 
 
