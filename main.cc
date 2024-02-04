@@ -298,10 +298,9 @@ private:
   AlignedVector<VectorizedArray<Number>> delta_1; // TODO
   AlignedVector<VectorizedArray<Number>> delta_2; // TODO
 
-  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> star_value; // TODO
-  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> old_value;  // TODO
-  Table<2, Tensor<1, dim + 1, Tensor<1, dim, VectorizedArray<Number>>>>
-    old_gradient; // TODO
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> star_value;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_value;
+  Table<2, Tensor<2, dim, VectorizedArray<Number>>> old_gradient;
 
   template <bool homogeneous>
   void
@@ -358,10 +357,16 @@ private:
         typename FECellIntegrator::gradient_type gradient =
           integrator.get_gradient(q);
 
-        typename FECellIntegrator::value_type value_star  = star_value[cell][q];
-        typename FECellIntegrator::value_type value_delta = value;
-        typename FECellIntegrator::gradient_type gradient_bar =
-          theta * gradient;
+        Tensor<1, dim, VectorizedArray<Number>> value_star =
+          star_value[cell][q];
+        Tensor<1, dim, VectorizedArray<Number>> value_delta;
+        Tensor<2, dim, VectorizedArray<Number>> gradient_bar;
+
+        for (unsigned int d = 0; d < dim; ++d)
+          {
+            value_delta[d]  = value[d];
+            gradient_bar[d] = theta * gradient[d];
+          }
 
         if (residual)
           {
