@@ -237,8 +237,7 @@ public:
   void
   set_time_step_size(const Number tau) override
   {
-    this->tau     = tau;
-    this->inv_tau = Number(1.0) / tau;
+    this->tau = tau;
   }
 
   void
@@ -293,8 +292,8 @@ public:
             if (nu[0] < h)
               {
                 delta_1[cell][v] =
-                  c_1 /
-                  std::sqrt(1. / (tau * tau) + u_max[v] * u_max[v] / (h * h));
+                  c_1 / std::sqrt(1. / (tau[0] * tau[0]) +
+                                  u_max[v] * u_max[v] / (h * h));
                 delta_2[cell][v] = c_2 * h;
               }
             else
@@ -390,8 +389,7 @@ private:
   VectorType               linearization_point;
   mutable SparseMatrixType system_matrix;
 
-  Number                  tau;
-  VectorizedArray<Number> inv_tau;
+  VectorizedArray<Number> tau;
 
   const VectorizedArray<Number> theta;
   const VectorizedArray<Number> nu;
@@ -446,7 +444,7 @@ private:
 
     const auto delta_1 = this->delta_1[cell];
     const auto delta_2 = this->delta_2[cell];
-    const auto inv_tau = this->inv_tau;
+    const auto tau     = this->tau;
     const auto theta   = this->theta;
     const auto nu      = this->nu;
 
@@ -496,15 +494,15 @@ private:
         // velocity block:
         //  a)  (v, D/tau)
         for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] = value_delta[d] * inv_tau;
+          value_result[d] = value_delta[d];
 
         //  b)  (v, S⋅∇B)
         for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] += s_grad_b[d];
+          value_result[d] += s_grad_b[d] * tau;
 
         //  c)  -(div(v), p)
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] -= value[dim];
+          gradient_result[d][d] -= value[dim] * tau;
 
         //  d)  (ε(v), νε(B))
         Tensor<2, dim, VectorizedArray<Number>> symm_gradient_bar;
@@ -514,7 +512,7 @@ private:
             symm_gradient_bar[d0][d1] =
               (gradient_bar[d0][d1] + gradient_bar[d1][d0]) * 0.5;
 
-        symm_gradient_bar *= nu;
+        symm_gradient_bar *= nu * tau;
 
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
@@ -527,11 +525,11 @@ private:
         //             +---residual--+
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
-            gradient_result[d0][d1] += value_star[d1] * residual[d0];
+            gradient_result[d0][d1] += value_star[d1] * residual[d0] * tau;
 
         //  f) δ_2 (div(v), div(B)) -> GD stabilization
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += delta_2 * div_bar;
+          gradient_result[d][d] += delta_2 * div_bar * tau;
 
 
 
@@ -594,12 +592,12 @@ private:
 struct Parameters
 {
   unsigned int dim            = 2;
-  unsigned int fe_degree      = 2;
+  unsigned int fe_degree      = 1;
   unsigned int mapping_degree = 1;
-  double       cfl            = 1.0;
-  double       t_final        = 10.0;
+  double       cfl            = 0.1;
+  double       t_final        = 3.0;
   double       theta          = 0.5;
-  double       nu             = 1.0;
+  double       nu             = 0.1;
   double       c_1            = 4.0;
   double       c_2            = 2.0;
 };
@@ -769,6 +767,9 @@ public:
     // perform time loop
     for (; t < params.t_final; ++counter)
       {
+        std::cout << "\ncycle\t" << counter << " at time t = " << t;
+        std::cout << " with delta_t = " << dt << std::endl;
+
         // set time-dependent inhomogeneous DBCs
         constraints_inhomogeneous.clear();
         for (const auto &[bci, fu] : all_inhomogeneous_dbcs)
@@ -813,7 +814,19 @@ private:
     DataOut<dim> data_out;
     data_out.attach_dof_handler(dof_handler);
 
-    data_out.add_data_vector(vector, "result");
+    std::vector<std::string> labels(dim + 1, "u");
+    labels[dim] = "p";
+
+    std::vector<DataComponentInterpretation::DataComponentInterpretation>
+      data_component_interpretation(
+        dim + 1, DataComponentInterpretation::component_is_part_of_vector);
+    data_component_interpretation[dim] =
+      DataComponentInterpretation::component_is_scalar;
+
+    data_out.add_data_vector(vector,
+                             {"u", "u", "p"},
+                             DataOut<dim>::type_dof_data,
+                             data_component_interpretation);
 
     data_out.build_patches(mapping, params.fe_degree);
 
