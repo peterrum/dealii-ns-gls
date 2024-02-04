@@ -24,6 +24,7 @@
 #include <deal.II/matrix_free/matrix_free.h>
 #include <deal.II/matrix_free/tools.h>
 
+#include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
 
 using namespace dealii;
@@ -346,7 +347,7 @@ public:
   {
     // apply inhomogeneous DBC
     VectorType src;
-    dst.reinit(src);
+    src.reinit(dst);
     constraints_inhomogeneous.distribute(src);
 
     // perform vmult
@@ -603,6 +604,30 @@ struct Parameters
 
 
 
+template <int dim, typename Number>
+class InflowVelocity : public Function<dim, Number>
+{
+public:
+  InflowVelocity()
+    : Function<dim>(dim + 1)
+  {}
+
+  Number
+  value(const Point<dim> &p, const unsigned int component) const override
+  {
+    (void)p;
+
+    if (component == 0)
+      return 1.0;
+    else
+      return 0.0;
+  }
+
+private:
+};
+
+
+
 template <int dim>
 class Driver
 {
@@ -620,8 +645,38 @@ public:
     parallel::distributed::Triangulation<dim> tria(comm);
 
     std::vector<unsigned int> all_homogeneous_dbcs;
-    std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim>>>>
+    std::vector<unsigned int> all_homogeneous_nbcs;
+    std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim, Number>>>>
       all_inhomogeneous_dbcs;
+
+    // TODO: modularize initialization
+    {
+      const unsigned int n = 4;
+
+      std::vector<unsigned int> n_subdivisions(dim, n);
+      n_subdivisions[0] *= n;
+
+      Point<dim> p0;
+      Point<dim> p1;
+
+      for (unsigned int d = 0; d < dim; ++d)
+        p1[d] = 1.0;
+      p1[0] *= n;
+
+      GridGenerator::subdivided_hyper_rectangle(
+        tria, n_subdivisions, p0, p1, true);
+
+      all_inhomogeneous_dbcs.emplace_back(
+        0, std::make_shared<InflowVelocity<dim, Number>>());
+
+      all_homogeneous_nbcs.push_back(1);
+
+      for (unsigned d = 1; d < dim; ++d)
+        {
+          all_homogeneous_dbcs.push_back(2 * d);
+          all_homogeneous_dbcs.push_back(2 * d + 1);
+        }
+    }
 
     FESystem<dim> fe(FE_Q<dim>(params.fe_degree), dim + 1);
 
@@ -646,6 +701,12 @@ public:
                                                bci,
                                                constraints,
                                                mask_v);
+
+    for (const auto bci : all_homogeneous_nbcs)
+      DoFTools::make_zero_boundary_constraints(dof_handler,
+                                               bci,
+                                               constraints,
+                                               mask_p);
 
     AffineConstraints<Number> constraints_homogeneous;
     constraints_homogeneous.copy_from(constraints);
@@ -701,6 +762,8 @@ public:
     double       t       = 0.0;
     unsigned int counter = 0;
 
+    output(mapping, dof_handler, solution);
+
     // perform time loop
     for (; t < params.t_final; ++counter)
       {
@@ -728,11 +791,34 @@ public:
         nonlinear_solver->solve(solution);
 
         t += dt;
+
+        output(mapping, dof_handler, solution);
       }
   }
 
 private:
   const Parameters params;
+
+  void
+  output(const Mapping<dim>    &mapping,
+         const DoFHandler<dim> &dof_handler,
+         const VectorType      &vector) const
+  {
+    DataOut<dim> data_out;
+    data_out.attach_dof_handler(dof_handler);
+
+    data_out.add_data_vector(vector, "result");
+
+    data_out.build_patches(mapping, params.fe_degree);
+
+    static unsigned int counter = 0;
+
+    const std::string file_name = "results." + std::to_string(counter) + ".vtu";
+
+    data_out.write_vtu_in_parallel(file_name, dof_handler.get_communicator());
+
+    counter++;
+  }
 };
 
 
