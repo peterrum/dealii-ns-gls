@@ -619,7 +619,9 @@ public:
     // set up system
     parallel::distributed::Triangulation<dim> tria(comm);
 
-    // TODO: create mesh
+    std::vector<unsigned int> all_homogeneous_dbcs;
+    std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim>>>>
+      all_inhomogeneous_dbcs;
 
     FESystem<dim> fe(FE_Q<dim>(params.fe_degree), dim + 1);
 
@@ -629,10 +631,6 @@ public:
     QGauss<dim> quadrature(params.fe_degree + 1);
 
     MappingQ<dim> mapping(params.mapping_degree);
-
-    std::vector<unsigned int> all_homogeneous_dbcs;
-    std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim>>>>
-      all_inhomogeneous_dbcs;
 
     // set up constraints
     ComponentMask mask_v(dim + 1, true);
