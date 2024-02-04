@@ -10,6 +10,9 @@
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/mapping_q.h>
 
+#include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/grid_tools.h>
+
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/lac/solver_gmres.h>
@@ -35,6 +38,12 @@ using SparseMatrixType = TrilinosWrappers::SparseMatrix;
 class OperatorBase
 {
 public:
+  virtual void
+  set_time_step_size(const Number tau) = 0;
+
+  virtual void
+  set_previous_solution(const VectorType &vec) = 0;
+
   virtual void
   set_linearization_point(const VectorType &src) = 0;
 
@@ -217,6 +226,18 @@ public:
   }
 
   void
+  set_time_step_size(const Number tau) override
+  {
+    this->inv_tau = Number(1.0) / tau;
+  }
+
+  void
+  set_previous_solution(const VectorType &vec) override
+  {
+    (void)vec;
+  }
+
+  void
   set_linearization_point(const VectorType &vec) override
   {
     this->linearization_point = vec;
@@ -270,10 +291,17 @@ private:
   VectorType               linearization_point;
   mutable SparseMatrixType system_matrix;
 
-  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> star_value;
-  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> old_value;
+  VectorizedArray<Number> inv_tau;
+  VectorizedArray<Number> theta; // TODO
+  VectorizedArray<Number> nu;    // TODO
+
+  AlignedVector<VectorizedArray<Number>> delta_1; // TODO
+  AlignedVector<VectorizedArray<Number>> delta_2; // TODO
+
+  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> star_value; // TODO
+  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> old_value;  // TODO
   Table<2, Tensor<1, dim + 1, Tensor<1, dim, VectorizedArray<Number>>>>
-    old_gradient;
+    old_gradient; // TODO
 
   template <bool homogeneous>
   void
@@ -311,19 +339,18 @@ private:
   void
   do_vmult_cell(FECellIntegrator &integrator) const
   {
-    integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
-                        EvaluationFlags::EvaluationFlags::gradients);
-
-    VectorizedArray<Number> delta_1         = 0.0;
-    VectorizedArray<Number> delta_2         = 0.0;
-    VectorizedArray<Number> inv_tau         = 0.0;
-    VectorizedArray<Number> theta           = 0.0;
-    VectorizedArray<Number> one_minus_theta = 0.0;
-    VectorizedArray<Number> nu              = 0.0;
+    const bool residual = false; // TODO
 
     const unsigned int cell = integrator.get_current_cell_index();
 
-    const bool residual = false;
+    const auto delta_1 = this->delta_1[cell];
+    const auto delta_2 = this->delta_2[cell];
+    const auto inv_tau = this->inv_tau;
+    const auto theta   = this->theta;
+    const auto nu      = this->nu;
+
+    integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                        EvaluationFlags::EvaluationFlags::gradients);
 
     for (const auto q : integrator.quadrature_point_indices())
       {
@@ -339,7 +366,8 @@ private:
         if (residual)
           {
             value_delta -= old_value[cell][q];
-            gradient_bar += one_minus_theta * old_gradient[cell][q];
+            gradient_bar +=
+              (VectorizedArray<Number>(1) - theta) * old_gradient[cell][q];
           }
 
         // precompute: div(B)
@@ -367,7 +395,7 @@ private:
           for (unsigned int d1 = 0; d1 < dim; ++d1)
             value_result[d0] += value_star[d1] * gradient_bar[d0][d1];
 
-        //  c)  -(∇⋅v, p)
+        //  c)  -(div(v), p)
         for (unsigned int d = 0; d < dim; ++d)
           gradient_result[d][d] -= value[dim];
 
@@ -392,7 +420,7 @@ private:
         for (unsigned int d = 0; d < dim; ++d)
           gradient_result[d][d] += value_star[d] * residual[d];
 
-        //  f) δ_2 (∇⋅v, div(B)) -> GD stabilization
+        //  f) δ_2 (div(v), div(B)) -> GD stabilization
         for (unsigned int d = 0; d < dim; ++d)
           gradient_result[d][d] += delta_2 * div_bar;
 
@@ -462,6 +490,8 @@ public:
   {
     const unsigned int fe_degree      = 2;
     const unsigned int mapping_degree = 1;
+    const double       cfl            = 1.0;
+    const double       t_final        = 1.0;
 
     const MPI_Comm comm = MPI_COMM_WORLD;
 
@@ -542,8 +572,13 @@ public:
     VectorType solution;
     ns_operator.initialize_dof_vector(solution);
 
+    const double dt = GridTools::minimal_cell_diameter(tria, mapping) * cfl;
+
+    double       t       = 0.0;
+    unsigned int counter = 0;
+
     // perform time loop
-    for (;;)
+    for (; t < t_final; ++counter)
       {
         // set time-dependent inhomogeneous DBCs
         constraints_inhomogeneous.clear();
@@ -552,8 +587,16 @@ public:
             mapping, dof_handler, bci, *fu, constraints_inhomogeneous, mask_v);
         constraints_inhomogeneous.close();
 
+        // set time step size
+        ns_operator.set_time_step_size(dt);
+
+        // set previous solution
+        ns_operator.set_previous_solution(solution);
+
         // solve nonlinear problem
         nonlinear_solver->solve(solution);
+
+        t += dt;
       }
   }
 
