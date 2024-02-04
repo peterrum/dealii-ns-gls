@@ -253,7 +253,7 @@ public:
 
     // perform vmult
     this->matrix_free.cell_loop(
-      &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
+      &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
 
     // apply constraints
     constraints_inhomogeneous.set_zero(dst);
@@ -266,7 +266,7 @@ public:
   vmult(VectorType &dst, const VectorType &src) const override
   {
     this->matrix_free.cell_loop(
-      &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
+      &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
   }
 
   const SparseMatrixType &
@@ -302,21 +302,21 @@ private:
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_value;
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> old_gradient;
 
-  template <bool homogeneous>
+  template <bool evaluate_residual>
   void
   do_vmult_range(const MatrixFree<dim, Number>               &matrix_free,
                  VectorType                                  &dst,
                  const VectorType                            &src,
                  const std::pair<unsigned int, unsigned int> &range) const
   {
-    FECellIntegrator phi(matrix_free, homogeneous ? 0 : 1);
+    FECellIntegrator phi(matrix_free, evaluate_residual ? 1 : 0);
 
     for (auto cell = range.first; cell < range.second; ++cell)
       {
         phi.reinit(cell);
         phi.read_dof_values(src);
 
-        do_vmult_cell(phi);
+        do_vmult_cell<evaluate_residual>(phi);
 
         phi.distribute_local_to_global(dst);
       }
@@ -335,11 +335,10 @@ private:
    *  - B := θ u^{n+1} + (1-θ) u^{n}
    *  - D := u^{n+1} - u^{n}
    */
+  template <bool evaluate_residual>
   void
   do_vmult_cell(FECellIntegrator &integrator) const
   {
-    const bool residual = false; // TODO
-
     const unsigned int cell = integrator.get_current_cell_index();
 
     const auto delta_1 = this->delta_1[cell];
@@ -368,7 +367,7 @@ private:
             gradient_bar[d] = theta * gradient[d];
           }
 
-        if (residual)
+        if (evaluate_residual)
           {
             value_delta -= old_value[cell][q];
             gradient_bar +=
@@ -475,11 +474,12 @@ private:
       if (system_matrix_is_empty == false)
         system_matrix = 0.0; // clear existing content
 
-      MatrixFreeTools::compute_matrix(matrix_free,
-                                      constraints,
-                                      system_matrix,
-                                      &NavierStokesOperator<dim>::do_vmult_cell,
-                                      this);
+      MatrixFreeTools::compute_matrix(
+        matrix_free,
+        constraints,
+        system_matrix,
+        &NavierStokesOperator<dim>::do_vmult_cell<false>,
+        this);
     }
   }
 };
