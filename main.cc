@@ -483,10 +483,8 @@ private:
           div_bar += gradient_bar[d][d];
 
         // precompute: S⋅∇B
-        Tensor<1, dim, VectorizedArray<Number>> s_grad_b =
-          value_star[0] * gradient_bar[0];
-        for (unsigned int d = 1; d < dim; ++d)
-          s_grad_b += value_star[d] * gradient_bar[d];
+        const Tensor<1, dim, VectorizedArray<Number>> s_grad_b =
+          gradient_bar * value_star;
 
         // precompute scaled residual: residual := δ_1 (∇p + S⋅∇B)
         const Tensor<1, dim, VectorizedArray<Number>> residual =
@@ -526,8 +524,9 @@ private:
             }
 
         //  e)  δ_1 (S⋅∇v, residual) -> SUPG stabilization
-        for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += value_star[d] * residual[d];
+        for (unsigned int d0 = 0; d0 < dim; ++d0)
+          for (unsigned int d1 = 0; d1 < dim; ++d1)
+            gradient_result[d0][d1] += value_star[d1] * residual[d0];
 
         //  f) δ_2 (div(v), div(B)) -> GD stabilization
         for (unsigned int d = 0; d < dim; ++d)
