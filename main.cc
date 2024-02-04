@@ -742,10 +742,20 @@ main(int argc, char *argv[])
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-  const int dim = 2;
+  Parameters params; // TODO: read parameters
 
-  Parameters params;
-
-  Driver<dim> driver(params);
-  driver.run();
+  if (params.dim == 2)
+    {
+      Driver<2> driver(params);
+      driver.run();
+    }
+  else if (params.dim == 3)
+    {
+      Driver<3> driver(params);
+      driver.run();
+    }
+  else
+    {
+      AssertThrow(false, ExcNotImplemented());
+    }
 }
