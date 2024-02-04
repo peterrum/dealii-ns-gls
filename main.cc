@@ -138,7 +138,7 @@ public:
   void
   solve(VectorType &dst, const VectorType &src) const override
   {
-    ReductionControl solver_control;
+    ReductionControl solver_control(100, 1e-12, 1e-8); // TODO: parameters
 
     SolverGMRES<VectorType> solver(solver_control);
 
@@ -185,7 +185,7 @@ public:
 
     // solve linear system
     linear_solver.initialize();
-    linear_solver.solve(solution, solution);
+    linear_solver.solve(solution, rhs);
   }
 
 private:
@@ -789,6 +789,8 @@ public:
 
         // solve nonlinear problem
         nonlinear_solver->solve(solution);
+
+        constraints_inhomogeneous.distribute(solution);
 
         t += dt;
 
