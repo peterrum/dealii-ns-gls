@@ -482,12 +482,15 @@ private:
         for (unsigned int d = 1; d < dim; ++d)
           div_bar += gradient_bar[d][d];
 
+        // precompute: S⋅∇B
+        Tensor<1, dim, VectorizedArray<Number>> s_grad_b =
+          value_star[0] * gradient_bar[0];
+        for (unsigned int d = 1; d < dim; ++d)
+          s_grad_b += value_star[d] * gradient_bar[d];
+
         // precompute scaled residual: residual := δ_1 (∇p + S⋅∇B)
-        Tensor<1, dim, VectorizedArray<Number>> residual;
-        residual = gradient[dim];
-        for (unsigned int d = 0; d < dim; ++d)
-          residual += value_star[d] * gradient_bar[d];
-        residual *= delta_1;
+        const Tensor<1, dim, VectorizedArray<Number>> residual =
+          delta_1 * (gradient[dim] + s_grad_b);
 
         typename FECellIntegrator::value_type    value_result;
         typename FECellIntegrator::gradient_type gradient_result;
@@ -498,9 +501,8 @@ private:
           value_result[d] = value_delta[d] * inv_tau;
 
         //  b)  (v, S⋅∇B)
-        for (unsigned int d0 = 0; d0 < dim; ++d0)
-          for (unsigned int d1 = 0; d1 < dim; ++d1)
-            value_result[d0] += value_star[d1] * gradient_bar[d0][d1];
+        for (unsigned int d = 0; d < dim; ++d)
+          value_result[d] += s_grad_b[d];
 
         //  c)  -(div(v), p)
         for (unsigned int d = 0; d < dim; ++d)
@@ -535,8 +537,7 @@ private:
 
         // pressure block:
         //  a)  (q, div(B))
-        for (unsigned int d = 0; d < dim; ++d)
-          value_result[dim] += div_bar;
+        value_result[dim] = div_bar;
 
         //  b)  δ_1 (∇q, residual) -> PSPG stabilization
         gradient_result[dim] = residual;
@@ -595,7 +596,7 @@ struct Parameters
   unsigned int fe_degree      = 2;
   unsigned int mapping_degree = 1;
   double       cfl            = 1.0;
-  double       t_final        = 1.0;
+  double       t_final        = 10.0;
   double       theta          = 0.5;
   double       nu             = 1.0;
   double       c_1            = 4.0;
