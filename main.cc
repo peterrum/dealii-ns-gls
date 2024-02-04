@@ -228,13 +228,76 @@ public:
   void
   set_time_step_size(const Number tau) override
   {
+    this->tau     = tau;
     this->inv_tau = Number(1.0) / tau;
   }
 
   void
   set_previous_solution(const VectorType &vec) override
   {
-    (void)vec;
+    const unsigned n_cells             = matrix_free.n_cell_batches();
+    const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
+
+    old_value.reinit(n_cells, n_quadrature_points);
+    old_gradient.reinit(n_cells, n_quadrature_points);
+
+    delta_1.resize(n_cells);
+    delta_2.resize(n_cells);
+
+    FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+
+    const bool has_ghost_elements = vec.has_ghost_elements();
+
+    AssertThrow(has_ghost_elements == false, ExcInternalError());
+
+    if (has_ghost_elements == false)
+      vec.update_ghost_values();
+
+    for (unsigned int cell = 0; cell < n_cells; ++cell)
+      {
+        integrator.reinit(cell);
+
+        integrator.read_dof_values_plain(vec);
+
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                            EvaluationFlags::EvaluationFlags::gradients);
+
+        // precompute value/gradient of linearization point at quadrature points
+        for (const auto q : integrator.quadrature_point_indices())
+          {
+            old_value[cell][q]    = integrator.get_value(q);
+            old_gradient[cell][q] = integrator.get_gradient(q);
+          }
+
+        // compute stabilization parameters
+        VectorizedArray<Number> u_max = 0.0;
+        for (const auto q : integrator.quadrature_point_indices())
+          u_max = std::max(integrator.get_value(q).norm(), u_max);
+
+        for (unsigned int v = 0;
+             v < matrix_free.n_active_entries_per_cell_batch(cell);
+             ++v)
+          {
+            const auto cell_it = matrix_free.get_cell_iterator(cell, v);
+            const auto h       = cell_it->minimum_vertex_distance();
+
+            if (nu[0] < h)
+              {
+                delta_1[cell][v] =
+                  c_1 /
+                  std::sqrt(1. / (tau * tau) + u_max[v] * u_max[v] / (h * h));
+                delta_2[cell][v] = c_2 * h;
+              }
+            else
+              {
+                delta_1[cell][v] = c_1 * h * h;
+                delta_2[cell][v] = c_2 * h * h;
+              }
+          }
+      }
+
+    if (has_ghost_elements == false)
+      vec.zero_out_ghost_values();
   }
 
   void
@@ -291,9 +354,12 @@ private:
   VectorType               linearization_point;
   mutable SparseMatrixType system_matrix;
 
+  Number                  tau;
   VectorizedArray<Number> inv_tau;
-  VectorizedArray<Number> theta; // TODO
-  VectorizedArray<Number> nu;    // TODO
+  VectorizedArray<Number> theta;    // TODO
+  VectorizedArray<Number> nu;       // TODO
+  Number                  c_1 = 4.; // TODO
+  Number                  c_2 = 2.; // TODO
 
   AlignedVector<VectorizedArray<Number>> delta_1; // TODO
   AlignedVector<VectorizedArray<Number>> delta_2; // TODO
