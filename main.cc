@@ -355,7 +355,7 @@ public:
       &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
 
     // apply constraints
-    constraints_inhomogeneous.set_zero(dst);
+    matrix_free.get_affine_constraints(0).set_zero(dst);
 
     // move to rhs
     dst *= -1.0;
@@ -792,7 +792,9 @@ public:
         // solve nonlinear problem
         nonlinear_solver->solve(solution);
 
+        // apply constraints
         constraints_inhomogeneous.distribute(solution);
+        constraints.distribute(solution);
 
         t += dt;
 
