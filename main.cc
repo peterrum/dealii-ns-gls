@@ -709,8 +709,15 @@ public:
         // set time-dependent inhomogeneous DBCs
         constraints_inhomogeneous.clear();
         for (const auto &[bci, fu] : all_inhomogeneous_dbcs)
-          VectorTools::interpolate_boundary_values(
-            mapping, dof_handler, bci, *fu, constraints_inhomogeneous, mask_v);
+          {
+            fu->set_time(t); // TODO: correct?
+            VectorTools::interpolate_boundary_values(mapping,
+                                                     dof_handler,
+                                                     bci,
+                                                     *fu,
+                                                     constraints_inhomogeneous,
+                                                     mask_v);
+          }
         constraints_inhomogeneous.close();
 
         // set time step size
