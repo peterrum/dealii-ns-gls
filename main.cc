@@ -209,8 +209,16 @@ public:
     const AffineConstraints<Number> &constraints_homogeneous,
     const AffineConstraints<Number> &constraints,
     const AffineConstraints<Number> &constraints_inhomogeneous,
-    const Quadrature<dim>           &quadrature)
+    const Quadrature<dim>           &quadrature,
+    const Number                     theta,
+    const Number                     nu,
+    const Number                     c_1,
+    const Number                     c_2)
     : constraints_inhomogeneous(constraints_inhomogeneous)
+    , theta(theta)
+    , nu(nu)
+    , c_1(c_1)
+    , c_2(c_2)
   {
     const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
                                                                   &dof_handler};
@@ -303,7 +311,34 @@ public:
   void
   set_linearization_point(const VectorType &vec) override
   {
-    this->linearization_point = vec;
+    const unsigned n_cells             = matrix_free.n_cell_batches();
+    const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
+
+    star_value.reinit(n_cells, n_quadrature_points);
+
+    FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+
+    const bool has_ghost_elements = vec.has_ghost_elements();
+
+    AssertThrow(has_ghost_elements == false, ExcInternalError());
+
+    if (has_ghost_elements == false)
+      vec.update_ghost_values();
+
+    for (unsigned int cell = 0; cell < n_cells; ++cell)
+      {
+        integrator.reinit(cell);
+
+        integrator.read_dof_values_plain(vec);
+
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
+
+        for (const auto q : integrator.quadrature_point_indices())
+          star_value[cell][q] = integrator.get_value(q);
+      }
+
+    if (has_ghost_elements == false)
+      vec.zero_out_ghost_values();
   }
 
   void
@@ -356,13 +391,14 @@ private:
 
   Number                  tau;
   VectorizedArray<Number> inv_tau;
-  VectorizedArray<Number> theta;    // TODO
-  VectorizedArray<Number> nu;       // TODO
-  Number                  c_1 = 4.; // TODO
-  Number                  c_2 = 2.; // TODO
 
-  AlignedVector<VectorizedArray<Number>> delta_1; // TODO
-  AlignedVector<VectorizedArray<Number>> delta_2; // TODO
+  const VectorizedArray<Number> theta;
+  const VectorizedArray<Number> nu;
+  const Number                  c_1;
+  const Number                  c_2;
+
+  AlignedVector<VectorizedArray<Number>> delta_1;
+  AlignedVector<VectorizedArray<Number>> delta_2;
 
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> star_value;
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_value;
@@ -552,18 +588,32 @@ private:
 
 
 
+struct Parameters
+{
+  unsigned int dim            = 2;
+  unsigned int fe_degree      = 2;
+  unsigned int mapping_degree = 1;
+  double       cfl            = 1.0;
+  double       t_final        = 1.0;
+  double       theta          = 0.5;
+  double       nu             = 1.0;
+  double       c_1            = 4.0;
+  double       c_2            = 2.0;
+};
+
+
+
 template <int dim>
 class Driver
 {
 public:
+  Driver(const Parameters &params)
+    : params(params)
+  {}
+
   void
   run()
   {
-    const unsigned int fe_degree      = 2;
-    const unsigned int mapping_degree = 1;
-    const double       cfl            = 1.0;
-    const double       t_final        = 1.0;
-
     const MPI_Comm comm = MPI_COMM_WORLD;
 
     // set up system
@@ -571,14 +621,14 @@ public:
 
     // TODO: create mesh
 
-    FESystem<dim> fe(FE_Q<dim>(fe_degree), 1 + dim);
+    FESystem<dim> fe(FE_Q<dim>(params.fe_degree), dim + 1);
 
     DoFHandler<dim> dof_handler(tria);
     dof_handler.distribute_dofs(fe);
 
-    QGauss<dim> quadrature(fe_degree + 1);
+    QGauss<dim> quadrature(params.fe_degree + 1);
 
-    MappingQ<dim> mapping(mapping_degree);
+    MappingQ<dim> mapping(params.mapping_degree);
 
     std::vector<unsigned int> all_homogeneous_dbcs;
     std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim>>>>
@@ -620,7 +670,11 @@ public:
                                           constraints_homogeneous,
                                           constraints,
                                           constraints_inhomogeneous,
-                                          quadrature);
+                                          quadrature,
+                                          params.theta,
+                                          params.nu,
+                                          params.c_1,
+                                          params.c_2);
 
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
@@ -643,13 +697,14 @@ public:
     VectorType solution;
     ns_operator.initialize_dof_vector(solution);
 
-    const double dt = GridTools::minimal_cell_diameter(tria, mapping) * cfl;
+    const double dt =
+      GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
 
     double       t       = 0.0;
     unsigned int counter = 0;
 
     // perform time loop
-    for (; t < t_final; ++counter)
+    for (; t < params.t_final; ++counter)
       {
         // set time-dependent inhomogeneous DBCs
         constraints_inhomogeneous.clear();
@@ -672,6 +727,7 @@ public:
   }
 
 private:
+  const Parameters params;
 };
 
 
@@ -683,6 +739,8 @@ main(int argc, char *argv[])
 
   const int dim = 2;
 
-  Driver<dim> driver;
+  Parameters params;
+
+  Driver<dim> driver(params);
   driver.run();
 }
