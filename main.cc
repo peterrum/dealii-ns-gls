@@ -547,50 +547,51 @@ private:
 
     for (const auto q : integrator.quadrature_point_indices())
       {
-        typename FECellIntegrator::value_type value = integrator.get_value(q);
-        typename FECellIntegrator::gradient_type gradient =
-          integrator.get_gradient(q);
+        typename FECellIntegrator::value_type    value_result    = {};
+        typename FECellIntegrator::gradient_type gradient_result = {};
 
-        Tensor<1, dim, VectorizedArray<Number>> value_star =
-          star_value[cell][q];
-        Tensor<1, dim, VectorizedArray<Number>> value_delta;
-        Tensor<2, dim, VectorizedArray<Number>> gradient_bar;
+        const auto value    = integrator.get_value(q);
+        const auto gradient = integrator.get_gradient(q);
 
-        Tensor<1, dim, VectorizedArray<Number>> p_gradient_bar =
+        const VectorizedArray<Number>                 p_value = value[dim];
+        const Tensor<1, dim, VectorizedArray<Number>> p_gradient =
+          gradient[dim];
+        Tensor<1, dim, VectorizedArray<Number>> p_bar_gradient =
           theta * gradient[dim];
+
+        const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
+          star_value[cell][q];
+        Tensor<1, dim, VectorizedArray<Number>> u_delta_value;
+        Tensor<2, dim, VectorizedArray<Number>> u_bar_gradient;
 
         for (unsigned int d = 0; d < dim; ++d)
           {
-            value_delta[d]  = value[d];
-            gradient_bar[d] = theta * gradient[d];
+            u_delta_value[d]  = value[d];
+            u_bar_gradient[d] = theta * gradient[d];
           }
 
         if (evaluate_residual)
           {
-            value_delta -= old_value[cell][q];
-            gradient_bar +=
+            u_delta_value -= old_value[cell][q];
+            u_bar_gradient +=
               (VectorizedArray<Number>(1) - theta) * old_gradient[cell][q];
 
-            p_gradient_bar +=
+            p_bar_gradient +=
               (VectorizedArray<Number>(1) - theta) * old_gradient_p[cell][q];
           }
 
         // precompute: div(B)
-        VectorizedArray<Number> div_bar = gradient_bar[0][0];
+        VectorizedArray<Number> div_bar = u_bar_gradient[0][0];
         for (unsigned int d = 1; d < dim; ++d)
-          div_bar += gradient_bar[d][d];
+          div_bar += u_bar_gradient[d][d];
 
         // precompute: S⋅∇B
-        const Tensor<1, dim, VectorizedArray<Number>> s_grad_b =
-          gradient_bar * value_star;
-
-        typename FECellIntegrator::value_type    value_result;
-        typename FECellIntegrator::gradient_type gradient_result;
+        const auto s_grad_b = u_bar_gradient * u_star_value;
 
         // velocity block:
         //  a)  (v, D)
         for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] = value_delta[d];
+          value_result[d] = u_delta_value[d];
 
         //  b)  τ (v, S⋅∇B)
         for (unsigned int d = 0; d < dim; ++d)
@@ -598,27 +599,26 @@ private:
 
         //  c)  - τ (div(v), p)
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] -= value[dim] * tau;
+          gradient_result[d][d] -= p_value * tau;
 
         //  d)  τ (ε(v), νε(B))
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += gradient_bar[d][d] * (nu * tau);
+          gradient_result[d][d] += u_bar_gradient[d][d] * (nu * tau);
 
         for (unsigned int e = 0, counter = dim; e < dim; ++e)
           for (unsigned int d = e + 1; d < dim; ++d, ++counter)
             {
-              const auto value =
-                (gradient_bar[d][e] + gradient_bar[e][d]) * (nu * tau * 0.5);
-              gradient_result[d][e] += value;
-              gradient_result[e][d] += value;
+              const auto tmp = (u_bar_gradient[d][e] + u_bar_gradient[e][d]) *
+                               (nu * tau * 0.5);
+              gradient_result[d][e] += tmp;
+              gradient_result[e][d] += tmp;
             }
 
         //  e)  δ_1 τ (S⋅∇v, ∇P + S⋅∇B) -> SUPG stabilization
-        const Tensor<1, dim, VectorizedArray<Number>> residual =
-          (delta_1 * tau) * (p_gradient_bar + s_grad_b);
+        const auto residual = (delta_1 * tau) * (p_bar_gradient + s_grad_b);
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
-            gradient_result[d0][d1] += value_star[d1] * residual[d0];
+            gradient_result[d0][d1] += u_star_value[d1] * residual[d0];
 
         //  f) δ_2 τ (div(v), div(B)) -> GD stabilization
         for (unsigned int d = 0; d < dim; ++d)
@@ -631,7 +631,7 @@ private:
         value_result[dim] = div_bar;
 
         //  b)  δ_1 (∇q, ∇p + S⋅∇B) -> PSPG stabilization
-        gradient_result[dim] = delta_1 * (gradient[dim] + s_grad_b);
+        gradient_result[dim] = delta_1 * (p_gradient + s_grad_b);
 
 
         integrator.submit_value(value_result, q);
