@@ -259,6 +259,60 @@ private:
 
 
 
+class NonLinearSolverPicard : public NonLinearSolverBase
+{
+public:
+  NonLinearSolverPicard(OperatorBase &op, LinearSolverBase &linear_solver)
+    : op(op)
+    , linear_solver(linear_solver)
+  {}
+
+  void
+  solve(VectorType &solution) const override
+  {
+    const double       picard_tolerance     = 1.0e-7; // TODO: make parameter
+    const unsigned int picard_max_iteration = 30;     //
+
+    double       l2_norm       = 1e10;
+    unsigned int num_iteration = 0;
+
+    VectorType rhs, tmp;
+    rhs.reinit(solution);
+    tmp.reinit(solution);
+
+    while (l2_norm > picard_tolerance)
+      {
+        tmp = solution;
+
+        // set linearization point
+        op.set_linearization_point(solution);
+
+        // compute right-hans-side vector
+        op.evaluate_rhs(rhs);
+
+        // solve linear system
+        linear_solver.initialize();
+        linear_solver.solve(solution, rhs);
+
+        // check convergence
+        tmp -= solution;
+        l2_norm = tmp.l2_norm();
+        num_iteration++;
+
+        AssertThrow(num_iteration <= picard_max_iteration,
+                    dealii::ExcMessage(
+                      "Picard iteration did not converge. Final residual is " +
+                      std::to_string(l2_norm) + "."));
+      }
+  }
+
+private:
+  OperatorBase     &op;
+  LinearSolverBase &linear_solver;
+};
+
+
+
 /**
  * Navier-Stokes operator.
  */
@@ -994,7 +1048,7 @@ private:
     prm.add_parameter("nonlinear solver",
                       nonlinear_solver,
                       "",
-                      Patterns::Selection("linearized|Picard simple"));
+                      Patterns::Selection("linearized|Picard simple|Picard"));
   }
 };
 
@@ -1185,6 +1239,9 @@ public:
       nonlinear_solver =
         std::make_shared<NonLinearSolverPicardSimple>(*ns_operator,
                                                       *linear_solver);
+    else if (params.nonlinear_solver == "Picard")
+      nonlinear_solver =
+        std::make_shared<NonLinearSolverPicard>(*ns_operator, *linear_solver);
     else
       AssertThrow(false, ExcNotImplemented());
 
