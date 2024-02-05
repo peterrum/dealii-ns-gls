@@ -650,6 +650,19 @@ public:
       dof_handler.locally_owned_dofs(),
       DoFTools::extract_locally_active_dofs(dof_handler),
       dof_handler.get_communicator());
+
+    // initialize system vector
+    this->initialize_dof_vector(system_rhs);
+
+    // initialize system matrix
+    TrilinosWrappers::SparsityPattern dsp;
+
+    dsp.reinit(dof_handler.locally_owned_dofs(),
+               dof_handler.get_communicator());
+    DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints);
+    dsp.compress();
+
+    system_matrix.reinit(dsp);
   }
 
   void
@@ -686,13 +699,13 @@ public:
   void
   vmult(VectorType &dst, const VectorType &src) const override
   {
-    compute_system_matrix_and_vector();
     get_system_matrix().vmult(dst, src);
   }
 
   const SparseMatrixType &
   get_system_matrix() const override
   {
+    compute_system_matrix_and_vector();
     return system_matrix;
   }
 
@@ -1031,7 +1044,7 @@ public:
     // set up Navier-Stokes operator
     std::shared_ptr<OperatorBase> ns_operator;
 
-    if (true)
+    if (false)
       ns_operator =
         std::make_shared<NavierStokesOperator<dim>>(mapping,
                                                     dof_handler,
