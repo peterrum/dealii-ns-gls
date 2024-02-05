@@ -1,3 +1,4 @@
+#include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/mpi.h>
 #include <deal.II/base/parameter_handler.h>
 #include <deal.II/base/quadrature_lib.h>
@@ -84,13 +85,14 @@ class PreconditionerILU : public PreconditionerBase
 public:
   PreconditionerILU(const OperatorBase &op)
     : op(op)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
   void
   initialize() override
   {
     const auto &matrix = op.get_system_matrix();
-    std::cout << matrix.frobenius_norm() << std::endl;
+    pcout << matrix.frobenius_norm() << std::endl;
     precon.initialize(matrix);
   }
 
@@ -102,6 +104,8 @@ public:
 
 private:
   const OperatorBase &op;
+
+  const ConditionalOStream pcout;
 
   TrilinosWrappers::PreconditionILU precon;
 };
@@ -129,6 +133,7 @@ public:
   LinearSolverGMRES(const OperatorBase &op, PreconditionerBase &preconditioner)
     : op(op)
     , preconditioner(preconditioner)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
   void
@@ -146,13 +151,15 @@ public:
 
     solver.solve(op, dst, src, preconditioner);
 
-    std::cout << "    [L] solved in " << solver_control.last_step()
-              << " iterations." << std::endl;
+    pcout << "    [L] solved in " << solver_control.last_step()
+          << " iterations." << std::endl;
   }
 
 private:
   const OperatorBase &op;
   PreconditionerBase &preconditioner;
+
+  const ConditionalOStream pcout;
 };
 
 
@@ -175,6 +182,7 @@ public:
   NonLinearSolverLinearized(OperatorBase &op, LinearSolverBase &linear_solver)
     : op(op)
     , linear_solver(linear_solver)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
   void
@@ -190,18 +198,20 @@ public:
     rhs.reinit(solution);
     op.evaluate_rhs(rhs);
 
-    std::cout << rhs.l2_norm() << std::endl;
+    pcout << rhs.l2_norm() << std::endl;
 
     // solve linear system
     linear_solver.initialize();
     linear_solver.solve(solution, rhs);
 
-    std::cout << solution.l2_norm() << std::endl;
+    pcout << solution.l2_norm() << std::endl;
   }
 
 private:
   OperatorBase     &op;
   LinearSolverBase &linear_solver;
+
+  const ConditionalOStream pcout;
 };
 
 
@@ -1053,6 +1063,9 @@ public:
   {
     const MPI_Comm comm = MPI_COMM_WORLD;
 
+    ConditionalOStream pcout(std::cout,
+                             Utilities::MPI::this_mpi_process(comm) == 0);
+
     // set up system
     parallel::distributed::Triangulation<dim> tria(comm);
 
@@ -1097,10 +1110,10 @@ public:
     DoFHandler<dim> dof_handler(tria);
     dof_handler.distribute_dofs(fe);
 
-    std::cout << "    [I] Number of active cells:    "
-              << tria.n_global_active_cells()
-              << "\n    [I] Global degrees of freedom: " << dof_handler.n_dofs()
-              << std::endl;
+    pcout << "    [I] Number of active cells:    "
+          << tria.n_global_active_cells()
+          << "\n    [I] Global degrees of freedom: " << dof_handler.n_dofs()
+          << std::endl;
 
     QGauss<dim> quadrature(params.fe_degree + 1);
 
@@ -1211,8 +1224,8 @@ public:
     // perform time loop
     for (; t < params.t_final; ++counter)
       {
-        std::cout << "\ncycle\t" << counter << " at time t = " << t;
-        std::cout << " with delta_t = " << dt << std::endl;
+        pcout << "\ncycle\t" << counter << " at time t = " << t;
+        pcout << " with delta_t = " << dt << std::endl;
 
         // set time-dependent inhomogeneous DBCs
         constraints_inhomogeneous.clear();
@@ -1242,7 +1255,7 @@ public:
         constraints_inhomogeneous.distribute(solution);
         constraints.distribute(solution);
 
-        std::cout << solution.l2_norm() << std::endl;
+        pcout << solution.l2_norm() << std::endl;
 
         t += dt;
 
