@@ -1126,7 +1126,12 @@ public:
     ComponentMask mask_p(dim + 1, false);
     mask_p.set(dim, true);
 
+    const auto locally_relevant_dofs =
+      DoFTools::extract_locally_relevant_dofs(dof_handler);
+
     AffineConstraints<Number> constraints;
+    constraints.reinit(locally_relevant_dofs);
+
     AffineConstraints<Number> constraints_copy;
 
     for (const auto bci : all_homogeneous_dbcs)
