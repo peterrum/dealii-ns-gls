@@ -516,9 +516,9 @@ private:
   }
 
   /**
-   * (v, D/tau) + (v, S⋅∇B) - (∇⋅v, p) + (ε(v), νε(B))
-   *            + δ_1 (S⋅∇v, ∇p + S⋅∇B) + δ_2 (∇⋅v, div(B)) = 0
-   *              +------ SUPG -------+   +------ GD -----+
+   * (v, D) + τ (v, S⋅∇B) - τ (div(v), p) + τ (ε(v), νε(B))
+   *        + δ_1 τ (S⋅∇v, ∇P + S⋅∇B) + δ_2 τ (div(v), div(B)) = 0
+   *          +------- SUPG --------+   +-------- GD --------+
    *
    * (q, div(B)) + δ_1 (∇q, ∇p + S⋅∇B) = 0
    *               +------ PSPG -----+
@@ -526,7 +526,9 @@ private:
    * with the following nomenclature:
    *  - S := u^*
    *  - B := θ u^{n+1} + (1-θ) u^{n}
+   *  - P := θ p^{n+1} + (1-θ) p^{n}
    *  - D := u^{n+1} - u^{n}
+   *  - p := p^{n+1}.
    */
   template <bool evaluate_residual>
   void
@@ -586,19 +588,19 @@ private:
         typename FECellIntegrator::gradient_type gradient_result;
 
         // velocity block:
-        //  a)  (v, D/tau)
+        //  a)  (v, D)
         for (unsigned int d = 0; d < dim; ++d)
           value_result[d] = value_delta[d];
 
-        //  b)  (v, S⋅∇B)
+        //  b)  τ (v, S⋅∇B)
         for (unsigned int d = 0; d < dim; ++d)
           value_result[d] += s_grad_b[d] * tau;
 
-        //  c)  -(div(v), p)
+        //  c)  - τ (div(v), p)
         for (unsigned int d = 0; d < dim; ++d)
           gradient_result[d][d] -= value[dim] * tau;
 
-        //  d)  (ε(v), νε(B))
+        //  d)  τ (ε(v), νε(B))
         for (unsigned int d = 0; d < dim; ++d)
           gradient_result[d][d] += gradient_bar[d][d] * (nu * tau);
 
@@ -611,20 +613,16 @@ private:
               gradient_result[e][d] += value;
             }
 
-        //  e)  (S⋅∇v, δ_1 (∇p + S⋅∇B)) -> SUPG stabilization
-        //             +---residual--+
+        //  e)  δ_1 τ (S⋅∇v, ∇P + S⋅∇B) -> SUPG stabilization
+        const Tensor<1, dim, VectorizedArray<Number>> residual =
+          (delta_1 * tau) * (p_gradient_bar + s_grad_b);
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
-            {
-              const Tensor<1, dim, VectorizedArray<Number>> residual =
-                delta_1 * (p_gradient_bar + s_grad_b);
+            gradient_result[d0][d1] += value_star[d1] * residual[d0];
 
-              gradient_result[d0][d1] += value_star[d1] * residual[d0] * tau;
-            }
-
-        //  f) δ_2 (div(v), div(B)) -> GD stabilization
+        //  f) δ_2 τ (div(v), div(B)) -> GD stabilization
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += delta_2 * div_bar * tau;
+          gradient_result[d][d] += (delta_2 * tau) * div_bar;
 
 
 
@@ -632,8 +630,7 @@ private:
         //  a)  (q, div(B))
         value_result[dim] = div_bar;
 
-        //  b)  (∇q, δ_1 (∇p + S⋅∇B)) -> PSPG stabilization
-        //           +---residual--+
+        //  b)  δ_1 (∇q, ∇p + S⋅∇B) -> PSPG stabilization
         gradient_result[dim] = delta_1 * (gradient[dim] + s_grad_b);
 
 
