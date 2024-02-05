@@ -898,15 +898,16 @@ private:
 
 struct Parameters
 {
-  unsigned int dim            = 2;
-  unsigned int fe_degree      = 1;
-  unsigned int mapping_degree = 1;
-  double       cfl            = 0.1;
-  double       t_final        = 3.0;
-  double       theta          = 0.5;
-  double       nu             = 0.1;
-  double       c_1            = 4.0;
-  double       c_2            = 2.0;
+  unsigned int dim                         = 2;
+  unsigned int fe_degree                   = 1;
+  unsigned int mapping_degree              = 1;
+  double       cfl                         = 0.1;
+  double       t_final                     = 3.0;
+  double       theta                       = 0.5;
+  double       nu                          = 0.1;
+  double       c_1                         = 4.0;
+  double       c_2                         = 2.0;
+  bool         use_matrix_free_ns_operator = true;
 };
 
 
@@ -1041,7 +1042,7 @@ public:
     // set up Navier-Stokes operator
     std::shared_ptr<OperatorBase> ns_operator;
 
-    if (false)
+    if (params.use_matrix_free_ns_operator)
       ns_operator =
         std::make_shared<NavierStokesOperator<dim>>(mapping,
                                                     dof_handler,
