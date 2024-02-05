@@ -1,4 +1,5 @@
 #include <deal.II/base/mpi.h>
+#include <deal.II/base/parameter_handler.h>
 #include <deal.II/base/quadrature_lib.h>
 
 #include <deal.II/distributed/tria.h>
@@ -916,6 +917,34 @@ struct Parameters
   double       c_1                         = 4.0;
   double       c_2                         = 2.0;
   bool         use_matrix_free_ns_operator = true;
+  std::string  paraview_prefix             = "results";
+
+  void
+  parse(const std::string file_name)
+  {
+    dealii::ParameterHandler prm;
+    add_parameters(prm);
+
+    prm.parse_input(file_name, "", true);
+  }
+
+private:
+  void
+  add_parameters(ParameterHandler &prm)
+  {
+    prm.add_parameter("dim", dim);
+    prm.add_parameter("fe degree", fe_degree);
+    prm.add_parameter("mapping degree", mapping_degree);
+    prm.add_parameter("cfl", cfl);
+    prm.add_parameter("t final", t_final);
+    prm.add_parameter("theta", theta);
+    prm.add_parameter("nu", nu);
+    prm.add_parameter("c2", c_1);
+    prm.add_parameter("c2", c_2);
+    prm.add_parameter("use matrix free ns operator",
+                      use_matrix_free_ns_operator);
+    prm.add_parameter("paraview prefix", paraview_prefix);
+  }
 };
 
 
@@ -1183,7 +1212,8 @@ private:
 
     static unsigned int counter = 0;
 
-    const std::string file_name = "results." + std::to_string(counter) + ".vtu";
+    const std::string file_name =
+      params.paraview_prefix + "." + std::to_string(counter) + ".vtu";
 
     data_out.write_vtu_in_parallel(file_name, dof_handler.get_communicator());
 
@@ -1198,7 +1228,10 @@ main(int argc, char *argv[])
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-  Parameters params; // TODO: read parameters
+  Parameters params;
+
+  if (argc > 1)
+    params.parse(std::string(argv[1]));
 
   if (params.dim == 2)
     {
