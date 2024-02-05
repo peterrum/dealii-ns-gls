@@ -89,6 +89,7 @@ public:
   initialize() override
   {
     const auto &matrix = op.get_system_matrix();
+    std::cout << matrix.frobenius_norm() << std::endl;
     precon.initialize(matrix);
   }
 
@@ -178,14 +179,20 @@ public:
     // set linearization point
     op.set_linearization_point(solution);
 
+    linear_solver.initialize();
+
     // compute right-hans-side vector
     VectorType rhs;
     rhs.reinit(solution);
     op.evaluate_rhs(rhs);
 
+    std::cout << rhs.l2_norm() << std::endl;
+
     // solve linear system
-    linear_solver.initialize();
+    // linear_solver.initialize();
     linear_solver.solve(solution, rhs);
+
+    std::cout << solution.l2_norm() << std::endl;
   }
 
 private:
@@ -232,6 +239,9 @@ public:
 
     matrix_free.reinit(
       mapping, mf_dof_handlers, mf_constraints, quadrature, additional_data);
+
+    for (auto i : this->matrix_free.get_constrained_dofs())
+      constrained_indices.push_back(i);
   }
 
   void
@@ -248,11 +258,16 @@ public:
 
     old_value.reinit(n_cells, n_quadrature_points);
     old_gradient.reinit(n_cells, n_quadrature_points);
+    old_gradient_p.reinit(n_cells, n_quadrature_points);
 
     delta_1.resize(n_cells);
     delta_2.resize(n_cells);
 
     FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+    FEEvaluation<dim, -1, 0, 1, Number>   integrator_scalar(matrix_free,
+                                                          0,
+                                                          0,
+                                                          dim);
 
     const bool has_ghost_elements = vec.has_ghost_elements();
 
@@ -264,17 +279,23 @@ public:
     for (unsigned int cell = 0; cell < n_cells; ++cell)
       {
         integrator.reinit(cell);
+        integrator_scalar.reinit(cell);
 
         integrator.read_dof_values_plain(vec);
+        integrator_scalar.read_dof_values_plain(vec);
 
         integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
                             EvaluationFlags::EvaluationFlags::gradients);
+
+        integrator_scalar.evaluate(EvaluationFlags::EvaluationFlags::gradients);
 
         // precompute value/gradient of linearization point at quadrature points
         for (const auto q : integrator.quadrature_point_indices())
           {
             old_value[cell][q]    = integrator.get_value(q);
             old_gradient[cell][q] = integrator.get_gradient(q);
+
+            old_gradient_p[cell][q] = integrator_scalar.get_gradient(q);
           }
 
         // compute stabilization parameters
@@ -365,6 +386,10 @@ public:
   {
     this->matrix_free.cell_loop(
       &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
+
+    for (unsigned int i = 0; i < constrained_indices.size(); ++i)
+      dst.local_element(constrained_indices[i]) =
+        src.local_element(constrained_indices[i]);
   }
 
   const SparseMatrixType &
@@ -402,6 +427,9 @@ private:
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> star_value;
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_value;
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> old_gradient;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_gradient_p;
+
+  std::vector<unsigned int> constrained_indices;
 
   template <bool evaluate_residual>
   void
@@ -462,6 +490,9 @@ private:
         Tensor<1, dim, VectorizedArray<Number>> value_delta;
         Tensor<2, dim, VectorizedArray<Number>> gradient_bar;
 
+        Tensor<1, dim, VectorizedArray<Number>> p_gradient_bar =
+          theta * gradient[dim];
+
         for (unsigned int d = 0; d < dim; ++d)
           {
             value_delta[d]  = value[d];
@@ -473,6 +504,9 @@ private:
             value_delta -= old_value[cell][q];
             gradient_bar +=
               (VectorizedArray<Number>(1) - theta) * old_gradient[cell][q];
+
+            p_gradient_bar +=
+              (VectorizedArray<Number>(1) - theta) * old_gradient_p[cell][q];
           }
 
         // precompute: div(B)
@@ -483,10 +517,6 @@ private:
         // precompute: S⋅∇B
         const Tensor<1, dim, VectorizedArray<Number>> s_grad_b =
           gradient_bar * value_star;
-
-        // precompute scaled residual: residual := δ_1 (∇p + S⋅∇B)
-        const Tensor<1, dim, VectorizedArray<Number>> residual =
-          delta_1 * (gradient[dim] + s_grad_b);
 
         typename FECellIntegrator::value_type    value_result;
         typename FECellIntegrator::gradient_type gradient_result;
@@ -525,7 +555,12 @@ private:
         //             +---residual--+
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
-            gradient_result[d0][d1] += value_star[d1] * residual[d0] * tau;
+            {
+              const Tensor<1, dim, VectorizedArray<Number>> residual =
+                delta_1 * (p_gradient_bar + s_grad_b);
+
+              gradient_result[d0][d1] += value_star[d1] * residual[d0] * tau;
+            }
 
         //  f) δ_2 (div(v), div(B)) -> GD stabilization
         for (unsigned int d = 0; d < dim; ++d)
@@ -539,7 +574,7 @@ private:
 
         //  b)  (∇q, δ_1 (∇p + S⋅∇B)) -> PSPG stabilization
         //           +---residual--+
-        gradient_result[dim] = residual;
+        gradient_result[dim] = delta_1 * (gradient[dim] + s_grad_b);
 
 
         integrator.submit_value(value_result, q);
@@ -683,6 +718,11 @@ public:
     DoFHandler<dim> dof_handler(tria);
     dof_handler.distribute_dofs(fe);
 
+    std::cout << "    [I] Number of active cells:    "
+              << tria.n_global_active_cells()
+              << "\n    [I] Global degrees of freedom: " << dof_handler.n_dofs()
+              << std::endl;
+
     QGauss<dim> quadrature(params.fe_degree + 1);
 
     MappingQ<dim> mapping(params.mapping_degree);
@@ -695,6 +735,7 @@ public:
     mask_p.set(dim, true);
 
     AffineConstraints<Number> constraints;
+    AffineConstraints<Number> constraints_copy;
 
     for (const auto bci : all_homogeneous_dbcs)
       DoFTools::make_zero_boundary_constraints(dof_handler,
@@ -707,6 +748,8 @@ public:
                                                bci,
                                                constraints,
                                                mask_p);
+
+    constraints_copy.copy_from(constraints);
 
     AffineConstraints<Number> constraints_homogeneous;
     constraints_homogeneous.copy_from(constraints);
@@ -756,11 +799,21 @@ public:
     VectorType solution;
     ns_operator.initialize_dof_vector(solution);
 
+    if (false)
+      {
+        solution = 1.0;
+      }
+    else if (false)
+      {
+        for (unsigned int i = 0; i < solution.size(); ++i)
+          solution[i] = (i + 1) * 0.01;
+      }
+
     const double dt =
       GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
 
     double       t       = 0.0;
-    unsigned int counter = 0;
+    unsigned int counter = 1;
 
     output(mapping, dof_handler, solution);
 
@@ -772,6 +825,7 @@ public:
 
         // set time-dependent inhomogeneous DBCs
         constraints_inhomogeneous.clear();
+        constraints_inhomogeneous.copy_from(constraints_copy);
         for (const auto &[bci, fu] : all_inhomogeneous_dbcs)
           {
             fu->set_time(t); // TODO: correct?
@@ -796,6 +850,8 @@ public:
         // apply constraints
         constraints_inhomogeneous.distribute(solution);
         constraints.distribute(solution);
+
+        std::cout << solution.l2_norm() << std::endl;
 
         t += dt;
 
