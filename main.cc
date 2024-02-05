@@ -624,6 +624,64 @@ private:
 
 
 
+template <int dim>
+class NavierStokesOperatorMatrixBased : public OperatorBase
+{
+public:
+  void
+  set_time_step_size(const Number tau) override
+  {
+    this->tau = tau;
+  }
+
+  void
+  set_previous_solution(const VectorType &vec) override
+  {
+    this->previous_solution = vec;
+  }
+
+  void
+  set_linearization_point(const VectorType &src) override
+  {
+    this->linearization_point = src;
+  }
+
+  void
+  evaluate_rhs(VectorType &dst) const override
+  {
+    (void)dst;
+  }
+
+  void
+  vmult(VectorType &dst, const VectorType &src) const override
+  {
+    (void)dst;
+    (void)src;
+  }
+
+  const SparseMatrixType &
+  get_system_matrix() const override
+  {
+    return sparse_matrix;
+  }
+
+  void
+  initialize_dof_vector(VectorType &src) const override
+  {
+    (void)src;
+  }
+
+private:
+  Number tau;
+
+  VectorType previous_solution;
+  VectorType linearization_point;
+
+  SparseMatrixType sparse_matrix;
+};
+
+
+
 struct Parameters
 {
   unsigned int dim            = 2;
@@ -767,37 +825,43 @@ public:
     // note: filled during time loop
 
     // set up Navier-Stokes operator
-    NavierStokesOperator<dim> ns_operator(mapping,
-                                          dof_handler,
-                                          constraints_homogeneous,
-                                          constraints,
-                                          constraints_inhomogeneous,
-                                          quadrature,
-                                          params.theta,
-                                          params.nu,
-                                          params.c_1,
-                                          params.c_2);
+    std::shared_ptr<OperatorBase> ns_operator;
+
+    if (true)
+      ns_operator =
+        std::make_shared<NavierStokesOperator<dim>>(mapping,
+                                                    dof_handler,
+                                                    constraints_homogeneous,
+                                                    constraints,
+                                                    constraints_inhomogeneous,
+                                                    quadrature,
+                                                    params.theta,
+                                                    params.nu,
+                                                    params.c_1,
+                                                    params.c_2);
+    else
+      ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>();
 
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
 
-    preconditioner = std::make_shared<PreconditionerILU>(ns_operator);
+    preconditioner = std::make_shared<PreconditionerILU>(*ns_operator);
 
     // set up linear solver
     std::shared_ptr<LinearSolverBase> linear_solver;
 
     linear_solver =
-      std::make_shared<LinearSolverGMRES>(ns_operator, *preconditioner);
+      std::make_shared<LinearSolverGMRES>(*ns_operator, *preconditioner);
 
     // set up nonlinear solver
     std::shared_ptr<NonLinearSolverBase> nonlinear_solver;
 
     nonlinear_solver =
-      std::make_shared<NonLinearSolverLinearized>(ns_operator, *linear_solver);
+      std::make_shared<NonLinearSolverLinearized>(*ns_operator, *linear_solver);
 
     // initialize solution
     VectorType solution;
-    ns_operator.initialize_dof_vector(solution);
+    ns_operator->initialize_dof_vector(solution);
 
     if (false)
       {
@@ -839,10 +903,10 @@ public:
         constraints_inhomogeneous.close();
 
         // set time step size
-        ns_operator.set_time_step_size(dt);
+        ns_operator->set_time_step_size(dt);
 
         // set previous solution
-        ns_operator.set_previous_solution(solution);
+        ns_operator->set_previous_solution(solution);
 
         // solve nonlinear problem
         nonlinear_solver->solve(solution);
