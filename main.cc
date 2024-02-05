@@ -145,6 +145,9 @@ public:
     SolverGMRES<VectorType> solver(solver_control);
 
     solver.solve(op, dst, src, preconditioner);
+
+    std::cout << "    [L] solved in " << solver_control.last_step()
+              << " iterations." << std::endl;
   }
 
 private:
@@ -194,6 +197,60 @@ public:
     linear_solver.solve(solution, rhs);
 
     std::cout << solution.l2_norm() << std::endl;
+  }
+
+private:
+  OperatorBase     &op;
+  LinearSolverBase &linear_solver;
+};
+
+
+
+class NonLinearSolverPicardSimple : public NonLinearSolverBase
+{
+public:
+  NonLinearSolverPicardSimple(OperatorBase &op, LinearSolverBase &linear_solver)
+    : op(op)
+    , linear_solver(linear_solver)
+  {}
+
+  void
+  solve(VectorType &solution) const override
+  {
+    const double       picard_tolerance     = 1.0e-7; // TODO: make parameter
+    const unsigned int picard_max_iteration = 30;     //
+
+    double       l2_norm       = 1e10;
+    unsigned int num_iteration = 0;
+
+    VectorType rhs, tmp;
+    rhs.reinit(solution);
+    tmp.reinit(solution);
+
+    while (l2_norm > picard_tolerance)
+      {
+        tmp = solution;
+
+        // set linearization point
+        op.set_linearization_point(solution);
+
+        // compute right-hans-side vector
+        op.evaluate_rhs(rhs);
+
+        // solve linear system
+        linear_solver.initialize();
+        linear_solver.solve(solution, rhs);
+
+        // check convergence
+        tmp -= solution;
+        l2_norm = tmp.l2_norm();
+        num_iteration++;
+
+        AssertThrow(num_iteration <= picard_max_iteration,
+                    dealii::ExcMessage(
+                      "Picard iteration did not converge. Final residual is " +
+                      std::to_string(l2_norm) + "."));
+      }
   }
 
 private:
@@ -923,6 +980,7 @@ struct Parameters
   double       c_2                         = 2.0;
   bool         use_matrix_free_ns_operator = true;
   std::string  paraview_prefix             = "results";
+  std::string  nonlinear_solver            = "linearized";
 
   void
   parse(const std::string file_name)
@@ -949,6 +1007,10 @@ private:
     prm.add_parameter("use matrix free ns operator",
                       use_matrix_free_ns_operator);
     prm.add_parameter("paraview prefix", paraview_prefix);
+    prm.add_parameter("nonlinear solver",
+                      nonlinear_solver,
+                      "",
+                      Patterns::Selection("linearized|Picard simple"));
   }
 };
 
@@ -1016,12 +1078,12 @@ public:
       GridGenerator::subdivided_hyper_rectangle(
         tria, n_subdivisions, p0, p1, true);
 
-      all_homogeneous_dbcs.push_back(0);
-      // all_inhomogeneous_dbcs.emplace_back(
-      //   0, std::make_shared<InflowVelocity<dim, Number>>());
+      // all_homogeneous_dbcs.push_back(0);
+      all_inhomogeneous_dbcs.emplace_back(
+        0, std::make_shared<InflowVelocity<dim, Number>>());
 
-      all_homogeneous_dbcs.push_back(1);
-      // all_homogeneous_nbcs.push_back(1);
+      // all_homogeneous_dbcs.push_back(1);
+      all_homogeneous_nbcs.push_back(1);
 
       for (unsigned d = 1; d < dim; ++d)
         {
@@ -1123,22 +1185,20 @@ public:
     // set up nonlinear solver
     std::shared_ptr<NonLinearSolverBase> nonlinear_solver;
 
-    nonlinear_solver =
-      std::make_shared<NonLinearSolverLinearized>(*ns_operator, *linear_solver);
+    if (params.nonlinear_solver == "linearized")
+      nonlinear_solver =
+        std::make_shared<NonLinearSolverLinearized>(*ns_operator,
+                                                    *linear_solver);
+    else if (params.nonlinear_solver == "Picard simple")
+      nonlinear_solver =
+        std::make_shared<NonLinearSolverPicardSimple>(*ns_operator,
+                                                      *linear_solver);
+    else
+      AssertThrow(false, ExcNotImplemented());
 
     // initialize solution
     VectorType solution;
     ns_operator->initialize_dof_vector(solution);
-
-    if (true)
-      {
-        solution = 1.0;
-      }
-    else if (false)
-      {
-        for (unsigned int i = 0; i < solution.size(); ++i)
-          solution[i] = (i + 1) * 0.01;
-      }
 
     const double dt =
       GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
