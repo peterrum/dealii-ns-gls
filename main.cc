@@ -85,14 +85,12 @@ class PreconditionerILU : public PreconditionerBase
 public:
   PreconditionerILU(const OperatorBase &op)
     : op(op)
-    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
   void
   initialize() override
   {
     const auto &matrix = op.get_system_matrix();
-    pcout << matrix.frobenius_norm() << std::endl;
     precon.initialize(matrix);
   }
 
@@ -104,8 +102,6 @@ public:
 
 private:
   const OperatorBase &op;
-
-  const ConditionalOStream pcout;
 
   TrilinosWrappers::PreconditionILU precon;
 };
@@ -182,7 +178,6 @@ public:
   NonLinearSolverLinearized(OperatorBase &op, LinearSolverBase &linear_solver)
     : op(op)
     , linear_solver(linear_solver)
-    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
   void
@@ -198,20 +193,14 @@ public:
     rhs.reinit(solution);
     op.evaluate_rhs(rhs);
 
-    pcout << rhs.l2_norm() << std::endl;
-
     // solve linear system
     linear_solver.initialize();
     linear_solver.solve(solution, rhs);
-
-    pcout << solution.l2_norm() << std::endl;
   }
 
 private:
   OperatorBase     &op;
   LinearSolverBase &linear_solver;
-
-  const ConditionalOStream pcout;
 };
 
 
@@ -1260,7 +1249,8 @@ public:
         constraints_inhomogeneous.distribute(solution);
         constraints.distribute(solution);
 
-        pcout << solution.l2_norm() << std::endl;
+        pcout << "    [S] l2-norm of solution: " << solution.l2_norm()
+              << std::endl;
 
         t += dt;
 
