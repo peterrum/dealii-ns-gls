@@ -180,7 +180,7 @@ public:
     // set linearization point
     op.set_linearization_point(solution);
 
-    linear_solver.initialize();
+    // linear_solver.initialize();
 
     // compute right-hans-side vector
     VectorType rhs;
@@ -190,7 +190,7 @@ public:
     std::cout << rhs.l2_norm() << std::endl;
 
     // solve linear system
-    // linear_solver.initialize();
+    linear_solver.initialize();
     linear_solver.solve(solution, rhs);
 
     std::cout << solution.l2_norm() << std::endl;
@@ -285,14 +285,12 @@ public:
     for (unsigned int cell = 0; cell < n_cells; ++cell)
       {
         integrator.reinit(cell);
-        integrator_scalar.reinit(cell);
-
         integrator.read_dof_values_plain(vec);
-        integrator_scalar.read_dof_values_plain(vec);
-
         integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
                             EvaluationFlags::EvaluationFlags::gradients);
 
+        integrator_scalar.reinit(cell);
+        integrator_scalar.read_dof_values_plain(vec);
         integrator_scalar.evaluate(EvaluationFlags::EvaluationFlags::gradients);
 
         // precompute value/gradient of linearization point at quadrature points
@@ -387,6 +385,8 @@ public:
 
     // move to rhs
     dst *= -1.0;
+
+    rhs_counter++;
   }
 
   void
@@ -441,6 +441,8 @@ private:
 
   std::vector<unsigned int> constrained_indices;
 
+  mutable unsigned int rhs_counter = 0;
+
   template <bool evaluate_residual>
   void
   do_vmult_range(const MatrixFree<dim, Number>               &matrix_free,
@@ -485,6 +487,8 @@ private:
     const auto tau     = this->tau;
     const auto theta   = this->theta;
     const auto nu      = this->nu;
+
+    const bool flag = (rhs_counter == 0) || (evaluate_residual == false);
 
     integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
                         EvaluationFlags::EvaluationFlags::gradients);
@@ -545,20 +549,16 @@ private:
           gradient_result[d][d] -= value[dim] * tau;
 
         //  d)  (ε(v), νε(B))
-        Tensor<2, dim, VectorizedArray<Number>> symm_gradient_bar;
+        for (unsigned int d = 0; d < dim; ++d)
+          gradient_result[d][d] += gradient_bar[d][d] * (nu * tau);
 
-        for (unsigned int d0 = 0; d0 < dim; ++d0)
-          for (unsigned int d1 = 0; d1 < dim; ++d1)
-            symm_gradient_bar[d0][d1] =
-              (gradient_bar[d0][d1] + gradient_bar[d1][d0]) * 0.5;
-
-        symm_gradient_bar *= nu * tau;
-
-        for (unsigned int d0 = 0; d0 < dim; ++d0)
-          for (unsigned int d1 = 0; d1 < dim; ++d1)
+        for (unsigned int e = 0, counter = dim; e < dim; ++e)
+          for (unsigned int d = e + 1; d < dim; ++d, ++counter)
             {
-              gradient_result[d0][d1] += symm_gradient_bar[d0][d1] * 0.5;
-              gradient_result[d1][d0] += symm_gradient_bar[d0][d1] * 0.5;
+              const auto value =
+                (gradient_bar[d][e] + gradient_bar[e][d]) * (nu * tau * 0.5);
+              gradient_result[d][e] += value;
+              gradient_result[e][d] += value;
             }
 
         //  e)  (S⋅∇v, δ_1 (∇p + S⋅∇B)) -> SUPG stabilization
@@ -703,6 +703,8 @@ public:
   {
     compute_system_matrix_and_vector();
     dst = system_rhs;
+
+    rhs_counter++;
   }
 
   void
@@ -737,6 +739,8 @@ private:
   mutable bool valid_system;
 
   Number tau;
+
+  mutable unsigned rhs_counter = 0;
 
   VectorType previous_solution;
   VectorType linearization_point;
@@ -774,16 +778,17 @@ private:
 
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
 
-    std::vector<dealii::Tensor<1, dim>>          u_0(n_q_points);
-    std::vector<dealii::Tensor<1, dim>>          u_star(n_q_points);
-    std::vector<dealii::Tensor<2, dim>>          grad_u_0(n_q_points);
-    std::vector<dealii::SymmetricTensor<2, dim>> eps_u_0(n_q_points);
-    std::vector<double>                          div_u_0(n_q_points);
-    std::vector<double>                          p_0(n_q_points);
-    std::vector<dealii::Tensor<1, dim>>          grad_p_0(n_q_points);
+    std::vector<dealii::Tensor<1, dim>> u_0(n_q_points);
+    std::vector<dealii::Tensor<1, dim>> u_star(n_q_points);
+    std::vector<dealii::Tensor<2, dim>> grad_u_0(n_q_points);
+    std::vector<double>                 div_u_0(n_q_points);
+    std::vector<double>                 p_0(n_q_points);
+    std::vector<dealii::Tensor<1, dim>> grad_p_0(n_q_points);
 
     const auto &Vu_0    = this->previous_solution;
     const auto &Vu_star = this->linearization_point;
+
+    const bool flag = (rhs_counter == 0);
 
     for (const auto &cell : dof_handler.active_cell_iterators())
       {
@@ -875,7 +880,7 @@ private:
                 // velocity
                 cell_rhs += u_0[q] * v_i;                                                                                     // a
                 cell_rhs -= (1.0 - theta) * tau * (grad_u_0[q] * u_star[q]) * v_i;                                            // b
-                cell_rhs -= (1.0 - theta) * tau * nu * scalar_product(eps_u_0[q], eps_v_i);                                   // d
+                cell_rhs -= (1.0 - theta) * tau * nu * scalar_product(symmetrize(grad_u_0[q]), eps_v_i);                      // d
                 cell_rhs -= (1.0 - theta) * tau * delta_1 * (grad_u_0[q] * u_star[q] + grad_p_0[q]) * (grad_v_i * u_star[q]); // e
                 cell_rhs -= (1.0 - theta) * tau * delta_2 * div_u_0[q] * div_v_i;                                             // f
                 
@@ -939,7 +944,7 @@ private:
     prm.add_parameter("t final", t_final);
     prm.add_parameter("theta", theta);
     prm.add_parameter("nu", nu);
-    prm.add_parameter("c2", c_1);
+    prm.add_parameter("c1", c_1);
     prm.add_parameter("c2", c_2);
     prm.add_parameter("use matrix free ns operator",
                       use_matrix_free_ns_operator);
@@ -1011,10 +1016,12 @@ public:
       GridGenerator::subdivided_hyper_rectangle(
         tria, n_subdivisions, p0, p1, true);
 
-      all_inhomogeneous_dbcs.emplace_back(
-        0, std::make_shared<InflowVelocity<dim, Number>>());
+      all_homogeneous_dbcs.push_back(0);
+      // all_inhomogeneous_dbcs.emplace_back(
+      //   0, std::make_shared<InflowVelocity<dim, Number>>());
 
-      all_homogeneous_nbcs.push_back(1);
+      all_homogeneous_dbcs.push_back(1);
+      // all_homogeneous_nbcs.push_back(1);
 
       for (unsigned d = 1; d < dim; ++d)
         {
@@ -1123,7 +1130,7 @@ public:
     VectorType solution;
     ns_operator->initialize_dof_vector(solution);
 
-    if (false)
+    if (true)
       {
         solution = 1.0;
       }
