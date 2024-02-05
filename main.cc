@@ -840,44 +840,41 @@ private:
                     const auto p_j      = pressure.value(j, q);
                     const auto grad_p_j = pressure.gradient(j, q);
 
-                    auto cell_lhs =                                //
-                                                                   //
-                                                                   // velocity
-                      u_j * v_i                                    // a
-                      + theta * tau * (grad_u_j * u_star[q]) * v_i // b
-                      - tau * p_j * div_v_i                        // c
-                      + theta * tau * nu * scalar_product(eps_u_j, eps_v_i) // d
-                      + theta * tau * delta_1 *
-                          (grad_u_j * u_star[q] + grad_p_j) *
-                          (grad_v_i * u_star[q])                  // e
-                      + theta * tau * delta_2 * div_u_j * div_v_i // f
-                      //
-                      // pressure
-                      + theta * div_u_j * q_i // a
-                      + delta_1 * (grad_p_j + theta * grad_u_j * u_star[q]) *
-                          grad_q_i; // b
-                    ;
+                    Number cell_lhs = 0.0;
+
+                    // clang-format off
+                    // velocity
+                    cell_lhs += u_j * v_i;                                                                          // a
+                    cell_lhs += theta * tau * (grad_u_j * u_star[q]) * v_i;                                         // b
+                    cell_lhs -= tau * p_j * div_v_i;                                                                // c
+                    cell_lhs += theta * tau * nu * scalar_product(eps_u_j, eps_v_i);                                // d
+                    cell_lhs += theta * tau * delta_1 * (grad_u_j * u_star[q] + grad_p_j) * (grad_v_i * u_star[q]); // e
+                    cell_lhs += theta * tau * delta_2 * div_u_j * div_v_i;                                          // f
+
+                    // pressure
+                    cell_lhs += theta * div_u_j * q_i;                                          // a
+                    cell_lhs += delta_1 * (grad_p_j + theta * grad_u_j * u_star[q]) * grad_q_i; // b
+                    // clang-format on
+
                     cell_lhs *= JxW;
                     cell_contribution(i, j) += cell_lhs;
                   }
 
-                auto cell_rhs =
-                  //
-                  // velocity
-                  u_0[q] * v_i                                            // a
-                  - (1.0 - theta) * tau * (grad_u_0[q] * u_star[q]) * v_i // b
-                  - (1.0 - theta) * tau * nu *
-                      scalar_product(eps_u_0[q], eps_v_i) // d
-                  - (1.0 - theta) * tau * delta_1 *
-                      (grad_u_0[q] * u_star[q] + grad_p_0[q]) *
-                      (grad_v_i * u_star[q])                             // e
-                  - (1.0 - theta) * tau * delta_2 * div_u_0[q] * div_v_i // f
-                  //
-                  // pressure
-                  - (1.0 - theta) * div_u_0[q] * q_i // a
-                  - delta_1 * ((1.0 - theta) * grad_u_0[q] * u_star[q]) *
-                      grad_q_i; // b
-                ;
+                Number cell_rhs = 0.0;
+
+                // clang-format off
+                // velocity
+                cell_rhs += u_0[q] * v_i;                                                                                     // a
+                cell_rhs -= (1.0 - theta) * tau * (grad_u_0[q] * u_star[q]) * v_i;                                            // b
+                cell_rhs -= (1.0 - theta) * tau * nu * scalar_product(eps_u_0[q], eps_v_i);                                   // d
+                cell_rhs -= (1.0 - theta) * tau * delta_1 * (grad_u_0[q] * u_star[q] + grad_p_0[q]) * (grad_v_i * u_star[q]); // e
+                cell_rhs -= (1.0 - theta) * tau * delta_2 * div_u_0[q] * div_v_i;                                             // f
+                
+                // pressure
+                cell_rhs -= (1.0 - theta) * div_u_0[q] * q_i;                               // a
+                cell_rhs -= delta_1 * ((1.0 - theta) * grad_u_0[q] * u_star[q]) * grad_q_i; // b
+                // clang-format on
+
                 cell_rhs *= JxW;
 
                 cell_rhs_contribution(i) += cell_rhs;
