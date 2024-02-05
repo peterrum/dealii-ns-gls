@@ -646,7 +646,10 @@ public:
     , c_2(c_2)
     , valid_system(false)
   {
-    // TODO
+    this->partitioner = std::make_shared<Utilities::MPI::Partitioner>(
+      dof_handler.locally_owned_dofs(),
+      DoFTools::extract_locally_active_dofs(dof_handler),
+      dof_handler.get_communicator());
   }
 
   void
@@ -677,7 +680,7 @@ public:
   evaluate_rhs(VectorType &dst) const override
   {
     compute_system_matrix_and_vector();
-    dst = rhs;
+    dst = system_rhs;
   }
 
   void
@@ -690,7 +693,7 @@ public:
   const SparseMatrixType &
   get_system_matrix() const override
   {
-    return sparse_matrix;
+    return system_matrix;
   }
 
   void
@@ -709,21 +712,176 @@ private:
   const Number                     c_1;
   const Number                     c_2;
 
-  bool valid_system;
-
-  void
-  compute_system_matrix_and_vector() const
-  {}
+  mutable bool valid_system;
 
   Number tau;
 
   VectorType previous_solution;
   VectorType linearization_point;
 
-  SparseMatrixType sparse_matrix;
-  VectorType       rhs;
+  mutable SparseMatrixType system_matrix;
+  mutable VectorType       system_rhs;
 
   std::shared_ptr<Utilities::MPI::Partitioner> partitioner;
+
+  void
+  compute_system_matrix_and_vector() const
+  {
+    if (valid_system)
+      return;
+
+    valid_system = true;
+
+    system_matrix = 0.;
+    system_rhs    = 0.;
+
+    const auto &finite_element = this->dof_handler.get_fe();
+
+    FEValues<dim>              fe_values(finite_element,
+                            quadrature,
+                            update_values | update_gradients |
+                              update_quadrature_points | update_JxW_values);
+    FEValuesViews::Vector<dim> velocities(fe_values, 0);
+    FEValuesViews::Scalar<dim> pressure(fe_values, dim);
+
+    const unsigned int dofs_per_cell = finite_element.n_dofs_per_cell();
+    const unsigned int n_q_points    = quadrature.size();
+
+    FullMatrix<double> cell_contribution(dofs_per_cell, dofs_per_cell);
+    Vector<double>     cell_rhs_contribution(dofs_per_cell);
+
+    std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
+
+    std::vector<dealii::Tensor<1, dim>>          u_0(n_q_points);
+    std::vector<dealii::Tensor<1, dim>>          u_star(n_q_points);
+    std::vector<dealii::Tensor<2, dim>>          grad_u_0(n_q_points);
+    std::vector<dealii::SymmetricTensor<2, dim>> eps_u_0(n_q_points);
+    std::vector<double>                          div_u_0(n_q_points);
+    std::vector<double>                          p_0(n_q_points);
+    std::vector<dealii::Tensor<1, dim>>          grad_p_0(n_q_points);
+
+    const auto &Vu_0    = this->previous_solution;
+    const auto &Vu_star = this->linearization_point;
+
+    for (const auto &cell : dof_handler.active_cell_iterators())
+      {
+        if (!cell->is_locally_owned())
+          continue;
+
+        cell_contribution     = 0.;
+        cell_rhs_contribution = 0.;
+
+        fe_values.reinit(cell);
+
+        velocities.get_function_values(Vu_0, u_0);
+        velocities.get_function_values(Vu_star, u_star);
+        velocities.get_function_divergences(Vu_0, div_u_0);
+
+        velocities.get_function_gradients(Vu_0, grad_u_0);
+        pressure.get_function_gradients(Vu_0, grad_p_0);
+        pressure.get_function_values(Vu_0, p_0);
+
+        const double h = cell->minimum_vertex_distance();
+
+        const double u_max   = std::accumulate(u_0.begin(),
+                                             u_0.end(),
+                                             0.,
+                                             [](const auto m, const auto u) {
+                                               return std::max(m, u.norm());
+                                             });
+        double       delta_1 = 0.0;
+        double       delta_2 = 0.0;
+        if (nu < h)
+          {
+            delta_1 =
+              c_1 / std::sqrt(1. / (tau * tau) + u_max * u_max / (h * h));
+            delta_2 = c_2 * h;
+          }
+        else
+          {
+            delta_1 = c_1 * h * h;
+            delta_2 = c_2 * h * h;
+          }
+
+        for (unsigned int q = 0; q < n_q_points; ++q)
+          {
+            const auto JxW = fe_values.JxW(q);
+
+            for (unsigned int i = 0; i < dofs_per_cell; ++i)
+              {
+                // test space
+                const auto v_i      = velocities.value(i, q);
+                const auto grad_v_i = velocities.gradient(i, q);
+                const auto div_v_i  = velocities.divergence(i, q);
+                const auto eps_v_i  = velocities.symmetric_gradient(i, q);
+                const auto q_i      = pressure.value(i, q);
+                const auto grad_q_i = pressure.gradient(i, q);
+
+                for (unsigned int j = 0; j < dofs_per_cell; ++j)
+                  {
+                    // ansatz space
+                    const auto u_j      = velocities.value(j, q);
+                    const auto grad_u_j = velocities.gradient(j, q);
+                    const auto div_u_j  = velocities.divergence(j, q);
+                    const auto eps_u_j  = velocities.symmetric_gradient(j, q);
+                    const auto p_j      = pressure.value(j, q);
+                    const auto grad_p_j = pressure.gradient(j, q);
+
+                    auto cell_lhs =                                //
+                                                                   //
+                                                                   // velocity
+                      u_j * v_i                                    // a
+                      + theta * tau * (grad_u_j * u_star[q]) * v_i // b
+                      - tau * p_j * div_v_i                        // c
+                      + theta * tau * nu * scalar_product(eps_u_j, eps_v_i) // d
+                      + theta * tau * delta_1 *
+                          (grad_u_j * u_star[q] + grad_p_j) *
+                          (grad_v_i * u_star[q])                  // e
+                      + theta * tau * delta_2 * div_u_j * div_v_i // f
+                      //
+                      // pressure
+                      + theta * div_u_j * q_i // a
+                      + delta_1 * (grad_p_j + theta * grad_u_j * u_star[q]) *
+                          grad_q_i; // b
+                    ;
+                    cell_lhs *= JxW;
+                    cell_contribution(i, j) += cell_lhs;
+                  }
+
+                auto cell_rhs =
+                  //
+                  // velocity
+                  u_0[q] * v_i                                            // a
+                  - (1.0 - theta) * tau * (grad_u_0[q] * u_star[q]) * v_i // b
+                  - (1.0 - theta) * tau * nu *
+                      scalar_product(eps_u_0[q], eps_v_i) // d
+                  - (1.0 - theta) * tau * delta_1 *
+                      (grad_u_0[q] * u_star[q] + grad_p_0[q]) *
+                      (grad_v_i * u_star[q])                             // e
+                  - (1.0 - theta) * tau * delta_2 * div_u_0[q] * div_v_i // f
+                  //
+                  // pressure
+                  - (1.0 - theta) * div_u_0[q] * q_i // a
+                  - delta_1 * ((1.0 - theta) * grad_u_0[q] * u_star[q]) *
+                      grad_q_i; // b
+                ;
+                cell_rhs *= JxW;
+
+                cell_rhs_contribution(i) += cell_rhs;
+              }
+          }
+
+        cell->get_dof_indices(local_dof_indices);
+        constraints.distribute_local_to_global(cell_contribution,
+                                               cell_rhs_contribution,
+                                               local_dof_indices,
+                                               system_matrix,
+                                               system_rhs);
+      }
+
+    system_rhs.compress(VectorOperation::add);
+    system_matrix.compress(VectorOperation::add);
+  }
 };
 
 
