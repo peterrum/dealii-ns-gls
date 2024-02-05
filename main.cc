@@ -54,6 +54,9 @@ public:
   evaluate_rhs(VectorType &dst) const = 0;
 
   virtual void
+  evaluate_residual(VectorType &dst, const VectorType &src) const = 0;
+
+  virtual void
   vmult(VectorType &dst, const VectorType &src) const = 0;
 
   virtual const SparseMatrixType &
@@ -265,6 +268,8 @@ public:
   NonLinearSolverPicard(OperatorBase &op, LinearSolverBase &linear_solver)
     : op(op)
     , linear_solver(linear_solver)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    , need_to_recompute_matrix(true)
   {}
 
   void
@@ -272,43 +277,101 @@ public:
   {
     const double       picard_tolerance     = 1.0e-7; // TODO: make parameter
     const unsigned int picard_max_iteration = 30;     //
+    const bool         linear_always_recompute_matrix    = false;
+    const double       picard_reduction_ratio_admissible = 1.0e-1;
+    const double       picard_reduction_ratio_recompute_ = 1.0e-2;
+    const double       theta                             = 0.5;
 
-    double       l2_norm       = 1e10;
-    unsigned int num_iteration = 0;
-
-    VectorType rhs, tmp;
-    rhs.reinit(solution);
+    VectorType residual, tmp, update;
+    residual.reinit(solution);
     tmp.reinit(solution);
+    update.reinit(solution);
 
-    while (l2_norm > picard_tolerance)
+    // copy vector
+    tmp = solution;
+
+    // set linearization point
+    op.set_linearization_point(tmp);
+
+    // compute residual
+    op.evaluate_residual(residual, tmp);
+
+    double linfty_norm = residual.linfty_norm();
+
+    pcout << "    [P] initial; residual (linfty) = " << linfty_norm
+          << std::endl;
+
+    for (unsigned int i = 1; linfty_norm > picard_tolerance; ++i)
       {
-        tmp = solution;
+        if (i > picard_max_iteration)
+          {
+            const auto error_string =
+              std::string(
+                "Picard iteration did not converge. Final residual is ") +
+              std::to_string(linfty_norm);
+            AssertThrow(false, dealii::ExcMessage(error_string));
+          }
 
-        // set linearization point
-        op.set_linearization_point(solution);
+        if (need_to_recompute_matrix || linear_always_recompute_matrix)
+          {
+            pcout << "    [P] step " << i << " ; recompute matrix" << std::endl;
+            linear_solver.initialize();
+            need_to_recompute_matrix = false;
+          }
 
-        // compute right-hans-side vector
-        op.evaluate_rhs(rhs);
+        linear_solver.solve(update, residual);
+        tmp += update;
 
-        // solve linear system
-        linear_solver.initialize();
-        linear_solver.solve(solution, rhs);
+        // compute residual
+        op.set_linearization_point(tmp);
+        op.evaluate_residual(residual, tmp);
+        double new_linfty_norm = residual.linfty_norm();
 
-        // check convergence
-        tmp -= solution;
-        l2_norm = tmp.l2_norm();
-        num_iteration++;
+        if (new_linfty_norm > picard_reduction_ratio_admissible * linfty_norm)
+          {
+            // revert to previous step
+            tmp -= update;
+            op.set_linearization_point(tmp);
 
-        AssertThrow(num_iteration <= picard_max_iteration,
-                    dealii::ExcMessage(
-                      "Picard iteration did not converge. Final residual is " +
-                      std::to_string(l2_norm) + "."));
+            need_to_recompute_matrix = true;
+
+            pcout << "    [P] step " << i
+                  << " ; inadmissible residual reduction (" << new_linfty_norm
+                  << " > " << linfty_norm << " ), recompute matrix\n"
+                  << std::endl;
+          }
+        else if (new_linfty_norm >
+                 picard_reduction_ratio_recompute_ * linfty_norm)
+          {
+            // accept new step
+            linfty_norm = new_linfty_norm;
+            pcout << "    [P] step " << i
+                  << " ; residual (linfty) = " << linfty_norm
+                  << ", recompute matrix" << std::endl;
+            need_to_recompute_matrix = true;
+          }
+        else
+          {
+            // accept new step
+            linfty_norm = new_linfty_norm;
+            pcout << "    [P] step " << i
+                  << " ; residual (linfty) = " << linfty_norm << std::endl;
+          }
       }
+
+    tmp *= 1. / theta;
+    tmp.add((theta - 1.) / theta, solution);
+
+    solution = tmp;
   }
 
 private:
   OperatorBase     &op;
   LinearSolverBase &linear_solver;
+
+  const ConditionalOStream pcout;
+
+  mutable bool need_to_recompute_matrix;
 };
 
 
@@ -495,6 +558,16 @@ public:
 
     // move to rhs
     dst *= -1.0;
+  }
+
+  virtual void
+  evaluate_residual(VectorType &dst, const VectorType &src) const override
+  {
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
+
+    // apply constraints
+    matrix_free.get_affine_constraints(0).set_zero(dst);
   }
 
   void
@@ -804,6 +877,13 @@ public:
   {
     compute_system_matrix_and_vector();
     dst = system_rhs;
+  }
+
+  virtual void
+  evaluate_residual(VectorType &dst, const VectorType &src) const override
+  {
+    (void)dst;
+    (void)src;
   }
 
   void
