@@ -227,6 +227,7 @@ public:
     , nu(nu)
     , c_1(c_1)
     , c_2(c_2)
+    , valid_system(false)
   {
     const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
                                                                   &dof_handler};
@@ -247,12 +248,16 @@ public:
   void
   set_time_step_size(const Number tau) override
   {
+    this->valid_system = false;
+
     this->tau = tau;
   }
 
   void
   set_previous_solution(const VectorType &vec) override
   {
+    this->valid_system = false;
+
     const unsigned n_cells             = matrix_free.n_cell_batches();
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
@@ -332,6 +337,8 @@ public:
   void
   set_linearization_point(const VectorType &vec) override
   {
+    this->valid_system = false;
+
     const unsigned n_cells             = matrix_free.n_cell_batches();
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
@@ -420,6 +427,8 @@ private:
   const VectorizedArray<Number> nu;
   const Number                  c_1;
   const Number                  c_2;
+
+  mutable bool valid_system;
 
   AlignedVector<VectorizedArray<Number>> delta_1;
   AlignedVector<VectorizedArray<Number>> delta_2;
@@ -588,13 +597,10 @@ private:
   void
   initialize_system_matrix() const
   {
-    const bool system_matrix_is_empty =
-      system_matrix.m() == 0 || system_matrix.n() == 0;
-
     const auto &dof_handler = matrix_free.get_dof_handler();
     const auto &constraints = matrix_free.get_affine_constraints();
 
-    if (system_matrix_is_empty)
+    if (system_matrix.m() == 0 || system_matrix.n() == 0)
       {
         system_matrix.clear();
 
@@ -608,17 +614,19 @@ private:
         system_matrix.reinit(dsp);
       }
 
-    {
-      if (system_matrix_is_empty == false)
-        system_matrix = 0.0; // clear existing content
+    if (this->valid_system == false)
+      {
+        system_matrix = 0.0;
 
-      MatrixFreeTools::compute_matrix(
-        matrix_free,
-        constraints,
-        system_matrix,
-        &NavierStokesOperator<dim>::do_vmult_cell<false>,
-        this);
-    }
+        MatrixFreeTools::compute_matrix(
+          matrix_free,
+          constraints,
+          system_matrix,
+          &NavierStokesOperator<dim>::do_vmult_cell<false>,
+          this);
+
+        this->valid_system = true;
+      }
   }
 };
 
