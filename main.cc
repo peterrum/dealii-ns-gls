@@ -441,8 +441,6 @@ public:
 
     // move to rhs
     dst *= -1.0;
-
-    rhs_counter++;
   }
 
   void
@@ -497,8 +495,6 @@ private:
 
   std::vector<unsigned int> constrained_indices;
 
-  mutable unsigned int rhs_counter = 0;
-
   template <bool evaluate_residual>
   void
   do_vmult_range(const MatrixFree<dim, Number>               &matrix_free,
@@ -543,8 +539,6 @@ private:
     const auto tau     = this->tau;
     const auto theta   = this->theta;
     const auto nu      = this->nu;
-
-    const bool flag = (rhs_counter == 0) || (evaluate_residual == false);
 
     integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
                         EvaluationFlags::EvaluationFlags::gradients);
@@ -759,8 +753,6 @@ public:
   {
     compute_system_matrix_and_vector();
     dst = system_rhs;
-
-    rhs_counter++;
   }
 
   void
@@ -795,8 +787,6 @@ private:
   mutable bool valid_system;
 
   Number tau;
-
-  mutable unsigned rhs_counter = 0;
 
   VectorType previous_solution;
   VectorType linearization_point;
@@ -843,8 +833,6 @@ private:
 
     const auto &Vu_0    = this->previous_solution;
     const auto &Vu_star = this->linearization_point;
-
-    const bool flag = (rhs_counter == 0);
 
     for (const auto &cell : dof_handler.active_cell_iterators())
       {
