@@ -628,35 +628,63 @@ template <int dim>
 class NavierStokesOperatorMatrixBased : public OperatorBase
 {
 public:
+  NavierStokesOperatorMatrixBased(const Mapping<dim>              &mapping,
+                                  const DoFHandler<dim>           &dof_handler,
+                                  const AffineConstraints<Number> &constraints,
+                                  const Quadrature<dim>           &quadrature,
+                                  const Number                     theta,
+                                  const Number                     nu,
+                                  const Number                     c_1,
+                                  const Number                     c_2)
+    : mapping(mapping)
+    , dof_handler(dof_handler)
+    , constraints(constraints)
+    , quadrature(quadrature)
+    , theta(theta)
+    , nu(nu)
+    , c_1(c_1)
+    , c_2(c_2)
+    , valid_system(false)
+  {
+    // TODO
+  }
+
   void
   set_time_step_size(const Number tau) override
   {
     this->tau = tau;
+
+    this->valid_system = false;
   }
 
   void
   set_previous_solution(const VectorType &vec) override
   {
     this->previous_solution = vec;
+
+    this->valid_system = false;
   }
 
   void
   set_linearization_point(const VectorType &src) override
   {
     this->linearization_point = src;
+
+    this->valid_system = false;
   }
 
   void
   evaluate_rhs(VectorType &dst) const override
   {
-    (void)dst;
+    compute_system_matrix_and_vector();
+    dst = rhs;
   }
 
   void
   vmult(VectorType &dst, const VectorType &src) const override
   {
-    (void)dst;
-    (void)src;
+    compute_system_matrix_and_vector();
+    get_system_matrix().vmult(dst, src);
   }
 
   const SparseMatrixType &
@@ -668,16 +696,34 @@ public:
   void
   initialize_dof_vector(VectorType &src) const override
   {
-    (void)src;
+    src.reinit(partitioner);
   }
 
 private:
+  const Mapping<dim>              &mapping;
+  const DoFHandler<dim>           &dof_handler;
+  const AffineConstraints<Number> &constraints;
+  const Quadrature<dim>           &quadrature;
+  const Number                     theta;
+  const Number                     nu;
+  const Number                     c_1;
+  const Number                     c_2;
+
+  bool valid_system;
+
+  void
+  compute_system_matrix_and_vector() const
+  {}
+
   Number tau;
 
   VectorType previous_solution;
   VectorType linearization_point;
 
   SparseMatrixType sparse_matrix;
+  VectorType       rhs;
+
+  std::shared_ptr<Utilities::MPI::Partitioner> partitioner;
 };
 
 
@@ -840,7 +886,15 @@ public:
                                                     params.c_1,
                                                     params.c_2);
     else
-      ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>();
+      ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
+        mapping,
+        dof_handler,
+        constraints_inhomogeneous,
+        quadrature,
+        params.theta,
+        params.nu,
+        params.c_1,
+        params.c_2);
 
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
