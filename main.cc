@@ -296,7 +296,7 @@ public:
     // compute residual
     op.evaluate_residual(residual, tmp);
 
-    double linfty_norm = residual.linfty_norm();
+    double linfty_norm = residual.l2_norm();
 
     pcout << "    [P] initial; residual (linfty) = " << linfty_norm
           << std::endl;
@@ -325,9 +325,17 @@ public:
         // compute residual
         op.set_linearization_point(tmp);
         op.evaluate_residual(residual, tmp);
-        double new_linfty_norm = residual.linfty_norm();
+        double new_linfty_norm = residual.l2_norm();
 
-        if (new_linfty_norm > picard_reduction_ratio_admissible * linfty_norm)
+        if (new_linfty_norm < picard_tolerance)
+          {
+            // accept new step
+            linfty_norm = new_linfty_norm;
+            pcout << "    [P] step " << i
+                  << " ; residual (linfty) = " << linfty_norm << std::endl;
+          }
+        else if (new_linfty_norm >
+                 picard_reduction_ratio_admissible * linfty_norm)
           {
             // revert to previous step
             tmp -= update;
@@ -568,6 +576,9 @@ public:
 
     // apply constraints
     matrix_free.get_affine_constraints(0).set_zero(dst);
+
+    // move to rhs
+    dst *= -1.0;
   }
 
   void
