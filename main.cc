@@ -132,6 +132,9 @@ public:
   LinearSolverGMRES(const OperatorBase &op, PreconditionerBase &preconditioner)
     : op(op)
     , preconditioner(preconditioner)
+    , n_max_iterations(100) // TODO
+    , abs_tolerance(1e-12)  // TODO
+    , rel_tolerance(1e-8)   // TODO
     , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
@@ -144,7 +147,9 @@ public:
   void
   solve(VectorType &dst, const VectorType &src) const override
   {
-    ReductionControl solver_control(100, 1e-12, 1e-8); // TODO: parameters
+    ReductionControl solver_control(n_max_iterations,
+                                    abs_tolerance,
+                                    rel_tolerance);
 
     SolverGMRES<VectorType> solver(solver_control);
 
@@ -157,6 +162,10 @@ public:
 private:
   const OperatorBase &op;
   PreconditionerBase &preconditioner;
+
+  const unsigned int n_max_iterations;
+  const double       abs_tolerance;
+  const double       rel_tolerance;
 
   const ConditionalOStream pcout;
 };
@@ -214,14 +223,13 @@ public:
   NonLinearSolverPicardSimple(OperatorBase &op, LinearSolverBase &linear_solver)
     : op(op)
     , linear_solver(linear_solver)
+    , picard_tolerance(1.0e-7) // TODO
+    , picard_max_iteration(30) // TODO
   {}
 
   void
   solve(VectorType &solution) const override
   {
-    const double       picard_tolerance     = 1.0e-7; // TODO: make parameter
-    const unsigned int picard_max_iteration = 30;     //
-
     double       l2_norm       = 1e10;
     unsigned int num_iteration = 0;
 
@@ -240,7 +248,9 @@ public:
         op.evaluate_rhs(rhs);
 
         // solve linear system
-        linear_solver.initialize();
+        if (num_iteration == 0)
+          linear_solver.initialize();
+
         linear_solver.solve(solution, rhs);
 
         // check convergence
@@ -258,6 +268,9 @@ public:
 private:
   OperatorBase     &op;
   LinearSolverBase &linear_solver;
+
+  const double       picard_tolerance;
+  const unsigned int picard_max_iteration;
 };
 
 
@@ -265,23 +278,24 @@ private:
 class NonLinearSolverPicard : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverPicard(OperatorBase &op, LinearSolverBase &linear_solver)
+  NonLinearSolverPicard(OperatorBase     &op,
+                        LinearSolverBase &linear_solver,
+                        const double      theta)
     : op(op)
     , linear_solver(linear_solver)
     , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , need_to_recompute_matrix(true)
+    , picard_tolerance(1.0e-7)                  // TODO
+    , picard_max_iteration(30)                  // TODO
+    , linear_always_recompute_matrix(false)     // TODO
+    , picard_reduction_ratio_admissible(1.0e-1) // TODO
+    , picard_reduction_ratio_recompute(1.0e-2)  // TODO
+    , theta(theta)                              // TODO
   {}
 
   void
   solve(VectorType &solution) const override
   {
-    const double       picard_tolerance     = 1.0e-7; // TODO: make parameter
-    const unsigned int picard_max_iteration = 30;     //
-    const bool         linear_always_recompute_matrix    = false;
-    const double       picard_reduction_ratio_admissible = 1.0e-1;
-    const double       picard_reduction_ratio_recompute_ = 1.0e-2;
-    const double       theta                             = 0.5;
-
     VectorType residual, tmp, update;
     residual.reinit(solution);
     tmp.reinit(solution);
@@ -349,7 +363,7 @@ public:
                   << std::endl;
           }
         else if (new_linfty_norm >
-                 picard_reduction_ratio_recompute_ * linfty_norm)
+                 picard_reduction_ratio_recompute * linfty_norm)
           {
             // accept new step
             linfty_norm = new_linfty_norm;
@@ -380,6 +394,13 @@ private:
   const ConditionalOStream pcout;
 
   mutable bool need_to_recompute_matrix;
+
+  const double       picard_tolerance;
+  const unsigned int picard_max_iteration;
+  const bool         linear_always_recompute_matrix;
+  const double       picard_reduction_ratio_admissible;
+  const double       picard_reduction_ratio_recompute;
+  const double       theta;
 };
 
 
@@ -1331,8 +1352,9 @@ public:
         std::make_shared<NonLinearSolverPicardSimple>(*ns_operator,
                                                       *linear_solver);
     else if (params.nonlinear_solver == "Picard")
-      nonlinear_solver =
-        std::make_shared<NonLinearSolverPicard>(*ns_operator, *linear_solver);
+      nonlinear_solver = std::make_shared<NonLinearSolverPicard>(*ns_operator,
+                                                                 *linear_solver,
+                                                                 params.theta);
     else
       AssertThrow(false, ExcNotImplemented());
 
