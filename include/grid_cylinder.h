@@ -49,7 +49,7 @@ namespace ExaDG
   public:
     OneSidedCylindricalManifold(
       const dealii::Triangulation<dim>                         &tria_in,
-      typename const dealii::Triangulation<dim>::cell_iterator &cell_in,
+      const typename dealii::Triangulation<dim>::cell_iterator &cell_in,
       const unsigned int                                        face_in,
       const dealii::Point<dim>                                 &center_in)
       : alpha(1.0)
@@ -385,7 +385,7 @@ namespace ExaDG
   public:
     OneSidedConicalManifold(
       const dealii::Triangulation<dim>                         &tria_in,
-      typename const dealii::Triangulation<dim>::cell_iterator &cell_in,
+      const typename dealii::Triangulation<dim>::cell_iterator &cell_in,
       const unsigned int                                        face_in,
       const dealii::Point<dim>                                 &center_in,
       const double                                              r_0_in,
