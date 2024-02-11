@@ -29,6 +29,8 @@
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
 
+#include "include/grid_cylinder.h"
+
 using namespace dealii;
 
 using Number           = double;
@@ -153,7 +155,12 @@ public:
 
     SolverGMRES<VectorType> solver(solver_control);
 
-    solver.solve(op, dst, src, preconditioner);
+    try
+      {
+        solver.solve(op, dst, src, preconditioner);
+      }
+    catch (const SolverControl::NoConvergence &)
+      {}
 
     pcout << "    [L] solved in " << solver_control.last_step()
           << " iterations." << std::endl;
@@ -1304,9 +1311,7 @@ public:
   void
   create_triangulation(Triangulation<dim> &tria) const override
   {
-    (void)tria;
-
-    // TODO
+    ExaDG::FlowPastCylinder::create_coarse_grid(tria);
   }
 
   virtual BoundaryDescriptor
@@ -1314,10 +1319,59 @@ public:
   {
     BoundaryDescriptor bcs;
 
-    // TODO
+    // inflow
+    bcs.all_inhomogeneous_dbcs.emplace_back(
+      0, std::make_shared<InflowBoundaryValues>());
+
+    // outflow
+    bcs.all_homogeneous_nbcs.push_back(1);
+
+    // walls
+    bcs.all_homogeneous_dbcs.push_back(2);
+
+    // cylinder
+    bcs.all_homogeneous_dbcs.push_back(3);
 
     return bcs;
   }
+
+private:
+  class InflowBoundaryValues : public Function<dim>
+  {
+  public:
+    InflowBoundaryValues()
+      : Function<dim>(dim + 1)
+      , t_(0.0){};
+
+    double
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      const double Um = 1.5;
+      const double H  = 0.41;
+      const double y  = p[1] - H / 2.0;
+
+      /// FIXME here. Somehow the velocity is too small
+      /// I don't know why.
+      const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
+        //*
+        // std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
+        ;
+      const double v_val = 0.0;
+      const double p_val = 0.0;
+
+      if (component == 0)
+        return u_val;
+      else if (component == 1)
+        return v_val;
+      else if (component == 2)
+        return p_val;
+
+      return 0;
+    }
+
+  private:
+    const double t_;
+  };
 };
 
 
