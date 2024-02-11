@@ -1349,6 +1349,10 @@ class SimulationCylinder : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
+  SimulationCylinder()
+    : use_no_slip_cylinder_bc(true)
+  {}
+
   void
   create_triangulation(Triangulation<dim> &tria) const override
   {
@@ -1371,7 +1375,7 @@ public:
     bcs.all_homogeneous_dbcs.push_back(2);
 
     // cylinder
-    if (false)
+    if (use_no_slip_cylinder_bc)
       bcs.all_homogeneous_dbcs.push_back(3);
     else
       bcs.all_slip_bcs.push_back(3);
@@ -1380,6 +1384,8 @@ public:
   }
 
 private:
+  const bool use_no_slip_cylinder_bc;
+
   class InflowBoundaryValues : public Function<dim>
   {
   public:
