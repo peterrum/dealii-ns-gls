@@ -1119,18 +1119,30 @@ private:
 
 struct Parameters
 {
-  unsigned int dim                         = 2;
-  unsigned int fe_degree                   = 1;
-  unsigned int mapping_degree              = 1;
-  double       cfl                         = 0.1;
-  double       t_final                     = 3.0;
-  double       theta                       = 0.5;
-  double       nu                          = 0.1;
-  double       c_1                         = 4.0;
-  double       c_2                         = 2.0;
-  bool         use_matrix_free_ns_operator = true;
-  std::string  paraview_prefix             = "results";
-  std::string  nonlinear_solver            = "linearized";
+  // system
+  unsigned int dim                  = 2;
+  unsigned int fe_degree            = 1;
+  unsigned int mapping_degree       = 1;
+  unsigned int n_global_refinements = 0;
+
+  // system
+  double cfl     = 0.1;
+  double t_final = 3.0;
+  double theta   = 0.5;
+
+  // NSE-GLS parameters
+  double nu  = 0.1;
+  double c_1 = 4.0;
+  double c_2 = 2.0;
+
+  // implmentation of operator evaluation
+  bool use_matrix_free_ns_operator = true;
+
+  // nonlinear solver
+  std::string nonlinear_solver = "linearized";
+
+  // output
+  std::string paraview_prefix = "results";
 
   void
   parse(const std::string file_name)
@@ -1145,22 +1157,34 @@ private:
   void
   add_parameters(ParameterHandler &prm)
   {
+    // system
     prm.add_parameter("dim", dim);
     prm.add_parameter("fe degree", fe_degree);
     prm.add_parameter("mapping degree", mapping_degree);
+    prm.add_parameter("n global refinements", n_global_refinements);
+
+    // time stepping
     prm.add_parameter("cfl", cfl);
     prm.add_parameter("t final", t_final);
     prm.add_parameter("theta", theta);
+
+    // NSE-GLS parameters
     prm.add_parameter("nu", nu);
     prm.add_parameter("c1", c_1);
     prm.add_parameter("c2", c_2);
+
+    // implmentation of operator evaluation
     prm.add_parameter("use matrix free ns operator",
                       use_matrix_free_ns_operator);
-    prm.add_parameter("paraview prefix", paraview_prefix);
+
+    // nonlinear solver
     prm.add_parameter("nonlinear solver",
                       nonlinear_solver,
                       "",
                       Patterns::Selection("linearized|Picard simple|Picard"));
+
+    // output
+    prm.add_parameter("paraview prefix", paraview_prefix);
   }
 };
 
@@ -1284,6 +1308,7 @@ public:
     parallel::distributed::Triangulation<dim> tria(comm);
 
     simulation->create_triangulation(tria);
+    tria.refine_global(params.n_global_refinements);
 
     const auto bcs = simulation->get_boundary_descriptor();
 
