@@ -1125,6 +1125,9 @@ struct Parameters
   unsigned int mapping_degree       = 1;
   unsigned int n_global_refinements = 0;
 
+  // simulation
+  std::string simulation_name = "channel";
+
   // system
   double cfl     = 0.1;
   double t_final = 3.0;
@@ -1162,6 +1165,9 @@ private:
     prm.add_parameter("fe degree", fe_degree);
     prm.add_parameter("mapping degree", mapping_degree);
     prm.add_parameter("n global refinements", n_global_refinements);
+
+    // simulation
+    prm.add_parameter("simulation name", simulation_name);
 
     // time stepping
     prm.add_parameter("cfl", cfl);
@@ -1241,23 +1247,27 @@ class SimulationChannel : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
+  SimulationChannel()
+    : n_stretching(4)
+  {}
+
   void
   create_triangulation(Triangulation<dim> &tria) const override
   {
-    const unsigned int n = 4;
-
-    std::vector<unsigned int> n_subdivisions(dim, n);
-    n_subdivisions[0] *= n;
+    std::vector<unsigned int> n_subdivisions(dim, 1);
+    n_subdivisions[0] *= n_stretching;
 
     Point<dim> p0;
     Point<dim> p1;
 
     for (unsigned int d = 0; d < dim; ++d)
       p1[d] = 1.0;
-    p1[0] *= n;
+    p1[0] *= n_stretching;
 
     GridGenerator::subdivided_hyper_rectangle(
       tria, n_subdivisions, p0, p1, true);
+
+    tria.refine_global(2);
   }
 
   virtual BoundaryDescriptor
@@ -1275,6 +1285,36 @@ public:
         bcs.all_homogeneous_dbcs.push_back(2 * d);
         bcs.all_homogeneous_dbcs.push_back(2 * d + 1);
       }
+
+    return bcs;
+  }
+
+private:
+  const unsigned int n_stretching;
+};
+
+
+
+template <int dim>
+class SimulationCylinder : public SimulationBase<dim>
+{
+public:
+  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
+
+  void
+  create_triangulation(Triangulation<dim> &tria) const override
+  {
+    (void)tria;
+
+    // TODO
+  }
+
+  virtual BoundaryDescriptor
+  get_boundary_descriptor() const override
+  {
+    BoundaryDescriptor bcs;
+
+    // TODO
 
     return bcs;
   }
@@ -1301,8 +1341,12 @@ public:
     // select simulation case
     std::shared_ptr<SimulationBase<dim>> simulation;
 
-    if (true)
+    if (params.simulation_name == "channel")
       simulation = std::make_shared<SimulationChannel<dim>>();
+    else if (params.simulation_name == "cylinder")
+      simulation = std::make_shared<SimulationCylinder<dim>>();
+    else
+      AssertThrow(false, ExcNotImplemented());
 
     // set up system
     parallel::distributed::Triangulation<dim> tria(comm);
