@@ -113,6 +113,34 @@ private:
 
 
 
+class PreconditionerAMG : public PreconditionerBase
+{
+public:
+  PreconditionerAMG(const OperatorBase &op)
+    : op(op)
+  {}
+
+  void
+  initialize() override
+  {
+    const auto &matrix = op.get_system_matrix();
+    precon.initialize(matrix);
+  }
+
+  void
+  vmult(VectorType &dst, const VectorType &src) const override
+  {
+    precon.vmult(dst, src);
+  }
+
+private:
+  const OperatorBase &op;
+
+  TrilinosWrappers::PreconditionAMG precon;
+};
+
+
+
 /**
  * Linear solvers.
  */
@@ -255,7 +283,7 @@ public:
         op.evaluate_rhs(rhs);
 
         // solve linear system
-        if (num_iteration == 0)
+        if (true || (num_iteration == 0))
           linear_solver.initialize();
 
         linear_solver.solve(solution, rhs);
@@ -1148,6 +1176,9 @@ struct Parameters
   // implmentation of operator evaluation
   bool use_matrix_free_ns_operator = true;
 
+  // preconditioner of linear solver
+  std::string preconditioner = "ILU";
+
   // nonlinear solver
   std::string nonlinear_solver = "linearized";
 
@@ -1189,6 +1220,12 @@ private:
     // implmentation of operator evaluation
     prm.add_parameter("use matrix free ns operator",
                       use_matrix_free_ns_operator);
+
+    // preconditioner of linear solver
+    prm.add_parameter("preconditioner",
+                      preconditioner,
+                      "",
+                      Patterns::Selection("AMG|ILU"));
 
     // nonlinear solver
     prm.add_parameter("nonlinear solver",
@@ -1497,7 +1534,13 @@ public:
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
 
-    preconditioner = std::make_shared<PreconditionerILU>(*ns_operator);
+    if (params.preconditioner == "ILU")
+      preconditioner = std::make_shared<PreconditionerILU>(*ns_operator);
+    else if (params.preconditioner == "AMG")
+      preconditioner = std::make_shared<PreconditionerAMG>(*ns_operator);
+    else
+      AssertThrow(false, ExcNotImplemented());
+
 
     // set up linear solver
     std::shared_ptr<LinearSolverBase> linear_solver;
