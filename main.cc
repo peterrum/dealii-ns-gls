@@ -927,6 +927,7 @@ public:
   set_previous_solution(const VectorType &vec) override
   {
     this->previous_solution = vec;
+    this->previous_solution.update_ghost_values();
 
     this->valid_system = false;
   }
@@ -935,6 +936,7 @@ public:
   set_linearization_point(const VectorType &src) override
   {
     this->linearization_point = src;
+    this->linearization_point.update_ghost_values();
 
     this->valid_system = false;
   }
@@ -1274,6 +1276,8 @@ public:
     std::vector<unsigned int> all_homogeneous_nbcs;
     std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim, Number>>>>
       all_inhomogeneous_dbcs;
+
+    std::vector<unsigned int> all_slip_bcs;
   };
 
   virtual void
@@ -1367,7 +1371,10 @@ public:
     bcs.all_homogeneous_dbcs.push_back(2);
 
     // cylinder
-    bcs.all_homogeneous_dbcs.push_back(3);
+    if (false)
+      bcs.all_homogeneous_dbcs.push_back(3);
+    else
+      bcs.all_slip_bcs.push_back(3);
 
     return bcs;
   }
@@ -1445,6 +1452,8 @@ public:
     simulation->create_triangulation(tria);
     tria.refine_global(params.n_global_refinements);
 
+    tria.reset_all_manifolds(); // TODO: problem with ChartManifold
+
     const auto bcs = simulation->get_boundary_descriptor();
 
     FESystem<dim> fe(FE_Q<dim>(params.fe_degree), dim + 1);
@@ -1487,6 +1496,10 @@ public:
                                                bci,
                                                constraints,
                                                mask_p);
+
+    for (const auto bci : bcs.all_slip_bcs)
+      VectorTools::compute_no_normal_flux_constraints(
+        dof_handler, 0, {bci}, constraints, mapping);
 
     constraints_copy.copy_from(constraints);
 
