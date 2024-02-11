@@ -1191,6 +1191,74 @@ private:
 
 
 template <int dim>
+class SimulationBase
+{
+public:
+  struct BoundaryDescriptor
+  {
+    std::vector<unsigned int> all_homogeneous_dbcs;
+    std::vector<unsigned int> all_homogeneous_nbcs;
+    std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim, Number>>>>
+      all_inhomogeneous_dbcs;
+  };
+
+  virtual void
+  create_triangulation(Triangulation<dim> &tria) const = 0;
+
+  virtual BoundaryDescriptor
+  get_boundary_descriptor() const = 0;
+};
+
+
+
+template <int dim>
+class SimulationChannel : public SimulationBase<dim>
+{
+public:
+  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
+
+  void
+  create_triangulation(Triangulation<dim> &tria) const override
+  {
+    const unsigned int n = 4;
+
+    std::vector<unsigned int> n_subdivisions(dim, n);
+    n_subdivisions[0] *= n;
+
+    Point<dim> p0;
+    Point<dim> p1;
+
+    for (unsigned int d = 0; d < dim; ++d)
+      p1[d] = 1.0;
+    p1[0] *= n;
+
+    GridGenerator::subdivided_hyper_rectangle(
+      tria, n_subdivisions, p0, p1, true);
+  }
+
+  virtual BoundaryDescriptor
+  get_boundary_descriptor() const override
+  {
+    BoundaryDescriptor bcs;
+
+    bcs.all_inhomogeneous_dbcs.emplace_back(
+      0, std::make_shared<InflowVelocity<dim, Number>>());
+
+    bcs.all_homogeneous_nbcs.push_back(1);
+
+    for (unsigned d = 1; d < dim; ++d)
+      {
+        bcs.all_homogeneous_dbcs.push_back(2 * d);
+        bcs.all_homogeneous_dbcs.push_back(2 * d + 1);
+      }
+
+    return bcs;
+  }
+};
+
+
+
+template <int dim>
 class Driver
 {
 public:
@@ -1206,44 +1274,18 @@ public:
     ConditionalOStream pcout(std::cout,
                              Utilities::MPI::this_mpi_process(comm) == 0);
 
+    // select simulation case
+    std::shared_ptr<SimulationBase<dim>> simulation;
+
+    if (true)
+      simulation = std::make_shared<SimulationChannel<dim>>();
+
     // set up system
     parallel::distributed::Triangulation<dim> tria(comm);
 
-    std::vector<unsigned int> all_homogeneous_dbcs;
-    std::vector<unsigned int> all_homogeneous_nbcs;
-    std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim, Number>>>>
-      all_inhomogeneous_dbcs;
+    simulation->create_triangulation(tria);
 
-    // TODO: modularize initialization
-    {
-      const unsigned int n = 4;
-
-      std::vector<unsigned int> n_subdivisions(dim, n);
-      n_subdivisions[0] *= n;
-
-      Point<dim> p0;
-      Point<dim> p1;
-
-      for (unsigned int d = 0; d < dim; ++d)
-        p1[d] = 1.0;
-      p1[0] *= n;
-
-      GridGenerator::subdivided_hyper_rectangle(
-        tria, n_subdivisions, p0, p1, true);
-
-      // all_homogeneous_dbcs.push_back(0);
-      all_inhomogeneous_dbcs.emplace_back(
-        0, std::make_shared<InflowVelocity<dim, Number>>());
-
-      // all_homogeneous_dbcs.push_back(1);
-      all_homogeneous_nbcs.push_back(1);
-
-      for (unsigned d = 1; d < dim; ++d)
-        {
-          all_homogeneous_dbcs.push_back(2 * d);
-          all_homogeneous_dbcs.push_back(2 * d + 1);
-        }
-    }
+    const auto bcs = simulation->get_boundary_descriptor();
 
     FESystem<dim> fe(FE_Q<dim>(params.fe_degree), dim + 1);
 
@@ -1274,13 +1316,13 @@ public:
 
     AffineConstraints<Number> constraints_copy;
 
-    for (const auto bci : all_homogeneous_dbcs)
+    for (const auto bci : bcs.all_homogeneous_dbcs)
       DoFTools::make_zero_boundary_constraints(dof_handler,
                                                bci,
                                                constraints,
                                                mask_v);
 
-    for (const auto bci : all_homogeneous_nbcs)
+    for (const auto bci : bcs.all_homogeneous_nbcs)
       DoFTools::make_zero_boundary_constraints(dof_handler,
                                                bci,
                                                constraints,
@@ -1291,7 +1333,7 @@ public:
     AffineConstraints<Number> constraints_homogeneous;
     constraints_homogeneous.copy_from(constraints);
 
-    for (const auto &[bci, _] : all_inhomogeneous_dbcs)
+    for (const auto &[bci, _] : bcs.all_inhomogeneous_dbcs)
       DoFTools::make_zero_boundary_constraints(dof_handler,
                                                bci,
                                                constraints_homogeneous,
@@ -1379,7 +1421,7 @@ public:
         // set time-dependent inhomogeneous DBCs
         constraints_inhomogeneous.clear();
         constraints_inhomogeneous.copy_from(constraints_copy);
-        for (const auto &[bci, fu] : all_inhomogeneous_dbcs)
+        for (const auto &[bci, fu] : bcs.all_inhomogeneous_dbcs)
           {
             fu->set_time(t); // TODO: correct?
             VectorTools::interpolate_boundary_values(mapping,
