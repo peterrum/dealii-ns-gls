@@ -29,6 +29,8 @@
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
 
+#include <fstream>
+
 #include "include/grid_cylinder.h"
 
 using namespace dealii;
@@ -1287,11 +1289,13 @@ public:
   get_boundary_descriptor() const = 0;
 
   virtual void
-  postprocess(const Mapping<dim>    &mapping,
+  postprocess(const double           t,
+              const Mapping<dim>    &mapping,
               const DoFHandler<dim> &dof_handler,
               const VectorType      &vector) const
   {
     // to be implemented in derived classes
+    (void)t;
     (void)mapping;
     (void)dof_handler;
     (void)vector;
@@ -1363,7 +1367,14 @@ public:
   SimulationCylinder(const double nu)
     : use_no_slip_cylinder_bc(true)
     , nu(nu)
-  {}
+  {
+    drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
+  }
+
+  ~SimulationCylinder()
+  {
+    drag_lift_pressure_file.close();
+  }
 
   void
   create_triangulation(Triangulation<dim> &tria) const override
@@ -1396,7 +1407,8 @@ public:
   }
 
   void
-  postprocess(const Mapping<dim>    &mapping,
+  postprocess(const double           t,
+              const Mapping<dim>    &mapping,
               const DoFHandler<dim> &dof_handler,
               const VectorType      &solution) const override
   {
@@ -1407,7 +1419,7 @@ public:
     if (has_ghost_elements == false)
       solution.update_ghost_values();
 
-    double drag, lift, p_diff;
+    double drag = 0, lift = 0, p_diff = 0;
 
     const MPI_Comm comm = dof_handler.get_communicator();
 
@@ -1497,7 +1509,12 @@ public:
       p_diff = values[0] - values[1];
 
     // write to file
-    std::cout << drag << " " << lift << " " << p_diff << std::endl;
+    if (Utilities::MPI::this_mpi_process(comm) == 0)
+      {
+        drag_lift_pressure_file << t << "\t" << drag << "\t" << lift << "\t"
+                                << p_diff << "\n";
+        drag_lift_pressure_file.flush();
+      }
 
     // clean up
     if (has_ghost_elements == false)
@@ -1507,6 +1524,8 @@ public:
 private:
   const bool   use_no_slip_cylinder_bc;
   const double nu;
+
+  mutable std::ofstream drag_lift_pressure_file;
 
   class InflowBoundaryValues : public Function<dim>
   {
@@ -1760,7 +1779,7 @@ public:
 
         // postprocessing
         output(mapping, dof_handler, solution);
-        simulation->postprocess(mapping, dof_handler, solution);
+        simulation->postprocess(t, mapping, dof_handler, solution);
       }
   }
 
