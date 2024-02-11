@@ -1487,23 +1487,31 @@ public:
     // calculate pressure drop
 
     // 1) set up evaluation routine (TODO: can be reused!)
-    Utilities::MPI::RemotePointEvaluation<dim> rpe;
-    Point<dim>                                 p1, p2;
-    p1[0] = ExaDG::FlowPastCylinder::X_C - ExaDG::FlowPastCylinder::D * 0.5;
-    p2[0] = ExaDG::FlowPastCylinder::X_C + ExaDG::FlowPastCylinder::D * 0.5;
+    std::shared_ptr<Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
-    std::vector<Point<dim>> points;
-
-    if (Utilities::MPI::this_mpi_process(comm) == 0)
+    if (rpe == nullptr)
       {
-        points.push_back(p1);
-        points.push_back(p2);
+        Point<dim> p1, p2;
+        p1[0] = ExaDG::FlowPastCylinder::X_C - ExaDG::FlowPastCylinder::D * 0.5;
+        p2[0] = ExaDG::FlowPastCylinder::X_C + ExaDG::FlowPastCylinder::D * 0.5;
+
+        std::vector<Point<dim>> points;
+
+        if (Utilities::MPI::this_mpi_process(comm) == 0)
+          {
+            points.push_back(p1);
+            points.push_back(p2);
+          }
+
+        auto rpe_temp =
+          std::make_shared<Utilities::MPI::RemotePointEvaluation<dim>>();
+        rpe_temp->reinit(points, dof_handler.get_triangulation(), mapping);
+
+        rpe = rpe_temp;
       }
 
-    rpe.reinit(points, dof_handler.get_triangulation(), mapping);
-
     const auto values = VectorTools::point_values<1>(
-      rpe, dof_handler, solution, VectorTools::EvaluationFlags::avg, dim);
+      *rpe, dof_handler, solution, VectorTools::EvaluationFlags::avg, dim);
 
     if (Utilities::MPI::this_mpi_process(comm) == 0)
       p_diff = values[0] - values[1];
@@ -1524,6 +1532,8 @@ public:
 private:
   const bool   use_no_slip_cylinder_bc;
   const double nu;
+
+  std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
   mutable std::ofstream drag_lift_pressure_file;
 
