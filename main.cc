@@ -1360,8 +1360,9 @@ class SimulationCylinder : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinder()
+  SimulationCylinder(const double nu)
     : use_no_slip_cylinder_bc(true)
+    , nu(nu)
   {}
 
   void
@@ -1397,15 +1398,115 @@ public:
   void
   postprocess(const Mapping<dim>    &mapping,
               const DoFHandler<dim> &dof_handler,
-              const VectorType      &vector) const override
+              const VectorType      &solution) const override
   {
-    (void)mapping;
-    (void)dof_handler;
-    (void)vector;
+    const bool has_ghost_elements = solution.has_ghost_elements();
+
+    AssertThrow(has_ghost_elements == false, ExcInternalError());
+
+    if (has_ghost_elements == false)
+      solution.update_ghost_values();
+
+    double drag, lift, p_diff;
+
+    const MPI_Comm comm = dof_handler.get_communicator();
+
+    QGauss<dim - 1> face_quadrature_formula(3);
+    const int       n_q_points = face_quadrature_formula.size();
+
+    FEFaceValues<dim> fe_face_values(dof_handler.get_fe(),
+                                     face_quadrature_formula,
+                                     update_values | update_quadrature_points |
+                                       update_gradients | update_JxW_values |
+                                       update_normal_vectors);
+
+    FEValuesViews::Vector<dim> velocities(fe_face_values, 0);
+    FEValuesViews::Scalar<dim> pressure(fe_face_values, dim);
+
+    std::vector<dealii::SymmetricTensor<2, dim>> eps_u(n_q_points);
+    std::vector<double>                          p(n_q_points);
+
+    Tensor<2, dim> fluid_stress;
+    Tensor<1, dim> forces;
+
+    double drag_local = 0;
+    double lift_local = 0;
+
+    for (const auto &cell : dof_handler.active_cell_iterators())
+      {
+        if (!cell->is_locally_owned())
+          continue;
+
+        for (const auto face : cell->face_indices())
+          if (cell->face(face)->at_boundary() &&
+              (cell->face(face)->boundary_id() == 3))
+            {
+              fe_face_values.reinit(cell, face);
+              std::vector<Point<dim>> q_points =
+                fe_face_values.get_quadrature_points();
+
+              velocities.get_function_symmetric_gradients(solution, eps_u);
+              pressure.get_function_values(solution, p);
+
+              for (int q = 0; q < n_q_points; ++q)
+                {
+                  const Tensor<1, dim> normal_vector =
+                    -fe_face_values.normal_vector(q);
+
+                  Tensor<2, dim> fluid_pressure;
+                  fluid_pressure[0][0] = p[q];
+                  fluid_pressure[1][1] = p[q];
+
+                  const Tensor<2, dim> fluid_stress =
+                    nu * eps_u[q] - fluid_pressure;
+
+                  const Tensor<1, dim> forces =
+                    fluid_stress * normal_vector * fe_face_values.JxW(q);
+
+                  drag_local += forces[0];
+                  lift_local += forces[1];
+                }
+            }
+      }
+
+    drag = Utilities::MPI::sum(drag_local, comm);
+    lift = Utilities::MPI::sum(lift_local, comm);
+
+    // calculate pressure drop
+
+    // 1) set up evaluation routine (TODO: can be reused!)
+    Utilities::MPI::RemotePointEvaluation<dim> rpe;
+    Point<dim>                                 p1, p2;
+    p1[0] = ExaDG::FlowPastCylinder::X_C - ExaDG::FlowPastCylinder::D * 0.5;
+    p2[0] = ExaDG::FlowPastCylinder::X_C + ExaDG::FlowPastCylinder::D * 0.5;
+
+    std::vector<Point<dim>> points;
+
+    if (Utilities::MPI::this_mpi_process(comm) == 0)
+      {
+        points.push_back(p1);
+        points.push_back(p2);
+      }
+
+    rpe.reinit(points, dof_handler.get_triangulation(), mapping);
+
+    const auto values = VectorTools::point_values<1>(
+      rpe, dof_handler, solution, VectorTools::EvaluationFlags::avg, dim);
+
+    if (Utilities::MPI::this_mpi_process(comm) == 0)
+      p_diff = values[0] - values[1];
+
+    // write to file
+    std::cout << drag << " " << lift << " " << p_diff << std::endl;
+
+    // clean up
+    if (has_ghost_elements == false)
+      solution.zero_out_ghost_values();
   }
 
 private:
-  const bool use_no_slip_cylinder_bc;
+  const bool   use_no_slip_cylinder_bc;
+  const double nu;
 
   class InflowBoundaryValues : public Function<dim>
   {
@@ -1469,7 +1570,7 @@ public:
     if (params.simulation_name == "channel")
       simulation = std::make_shared<SimulationChannel<dim>>();
     else if (params.simulation_name == "cylinder")
-      simulation = std::make_shared<SimulationCylinder<dim>>();
+      simulation = std::make_shared<SimulationCylinder<dim>>(params.nu);
     else
       AssertThrow(false, ExcNotImplemented());
 
