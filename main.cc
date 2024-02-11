@@ -1285,6 +1285,17 @@ public:
 
   virtual BoundaryDescriptor
   get_boundary_descriptor() const = 0;
+
+  virtual void
+  postprocess(const Mapping<dim>    &mapping,
+              const DoFHandler<dim> &dof_handler,
+              const VectorType      &vector) const
+  {
+    // to be implemented in derived classes
+    (void)mapping;
+    (void)dof_handler;
+    (void)vector;
+  }
 };
 
 
@@ -1381,6 +1392,16 @@ public:
       bcs.all_slip_bcs.push_back(3);
 
     return bcs;
+  }
+
+  void
+  postprocess(const Mapping<dim>    &mapping,
+              const DoFHandler<dim> &dof_handler,
+              const VectorType      &vector) const override
+  {
+    (void)mapping;
+    (void)dof_handler;
+    (void)vector;
   }
 
 private:
@@ -1636,7 +1657,9 @@ public:
 
         t += dt;
 
+        // postprocessing
         output(mapping, dof_handler, solution);
+        simulation->postprocess(mapping, dof_handler, solution);
       }
   }
 
