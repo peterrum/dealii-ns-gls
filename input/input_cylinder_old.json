@@ -1,0 +1,27 @@
+{
+  "dim"                  : 2,
+  "fe degree"            : 1,
+  "mapping degree"       : 1,
+  "n global refinements" : 2,
+
+  "simulation name" : "cylinder old",
+
+  "cfl"     : 0.1,
+  "t final" : 20.0,
+  "theta"   : 0.5,
+
+  "c1" : 2.00,
+  "c2" : 1.0,
+  "nu" : 0.00,
+
+  "use matrix free ns operator" : true,
+
+  "preconditioner" : "AMG",
+
+  "nonlinear solver" : "linearized",
+
+  "paraview prefix"    : "results_mf",
+  "output granularity" : 0.1,
+  
+  "no slip" : true
+}

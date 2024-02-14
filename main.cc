@@ -32,6 +32,7 @@
 #include <fstream>
 
 #include "include/grid_cylinder.h"
+#include "include/grid_cylinder_old.h"
 
 using namespace dealii;
 
@@ -1187,7 +1188,11 @@ struct Parameters
   std::string nonlinear_solver = "linearized";
 
   // output
-  std::string paraview_prefix = "results";
+  std::string paraview_prefix    = "results";
+  double      output_granularity = 0.0;
+
+  // simulation-specific parameters (TODO)
+  bool no_slip = true;
 
   void
   parse(const std::string file_name)
@@ -1239,6 +1244,10 @@ private:
 
     // output
     prm.add_parameter("paraview prefix", paraview_prefix);
+    prm.add_parameter("output granularity", output_granularity);
+
+    // simulation-specific
+    prm.add_parameter("no slip", no_slip);
   }
 };
 
@@ -1364,8 +1373,8 @@ class SimulationCylinder : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinder(const double nu)
-    : use_no_slip_cylinder_bc(true)
+  SimulationCylinder(const double nu, const bool use_no_slip_cylinder_bc)
+    : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
     , nu(nu)
   {
     drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
@@ -1395,7 +1404,7 @@ public:
     bcs.all_homogeneous_nbcs.push_back(1);
 
     // walls
-    bcs.all_homogeneous_dbcs.push_back(2);
+    bcs.all_slip_bcs.push_back(2);
 
     // cylinder
     if (use_no_slip_cylinder_bc)
@@ -1551,12 +1560,251 @@ private:
       const double H  = 0.41;
       const double y  = p[1] - H / 2.0;
 
+      (void)Um;
+      (void)H;
+      (void)y;
+
       /// FIXME here. Somehow the velocity is too small
       /// I don't know why.
-      const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
-        //*
-        // std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
-        ;
+      const double u_val = 1.0;
+      // const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
+      //*
+      //  std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
+      ;
+      const double v_val = 0.0;
+      const double p_val = 0.0;
+
+      if (component == 0)
+        return u_val;
+      else if (component == 1)
+        return v_val;
+      else if (component == 2)
+        return p_val;
+
+      return 0;
+    }
+
+  private:
+    const double t_;
+  };
+};
+
+
+
+template <int dim>
+class SimulationCylinderOld : public SimulationBase<dim>
+{
+public:
+  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
+
+  SimulationCylinderOld(const double nu, const bool use_no_slip_cylinder_bc)
+    : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
+    , nu(nu)
+  {
+    drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
+  }
+
+  ~SimulationCylinderOld()
+  {
+    drag_lift_pressure_file.close();
+  }
+
+  void
+  create_triangulation(Triangulation<dim> &tria) const override
+  {
+    if (false /* TODO */)
+      cylinder(tria,
+               ExaDG::FlowPastCylinder::L2 - ((dim == 2) ?
+                                                ExaDG::FlowPastCylinder::L1 :
+                                                ExaDG::FlowPastCylinder::X_0),
+               ExaDG::FlowPastCylinder::H,
+               ExaDG::FlowPastCylinder::X_C,
+               ExaDG::FlowPastCylinder::D);
+    else
+      cylinder(tria, 4.0, 2.0, 0.6, 0.5);
+  }
+
+  virtual BoundaryDescriptor
+  get_boundary_descriptor() const override
+  {
+    BoundaryDescriptor bcs;
+
+    // inflow
+    bcs.all_inhomogeneous_dbcs.emplace_back(
+      0, std::make_shared<InflowBoundaryValues>());
+
+    // outflow
+    bcs.all_homogeneous_nbcs.push_back(1);
+
+    // walls
+    bcs.all_slip_bcs.push_back(2);
+
+    // cylinder
+    if (use_no_slip_cylinder_bc)
+      bcs.all_homogeneous_dbcs.push_back(3);
+    else
+      bcs.all_slip_bcs.push_back(3);
+
+    return bcs;
+  }
+
+  void
+  postprocess(const double           t,
+              const Mapping<dim>    &mapping,
+              const DoFHandler<dim> &dof_handler,
+              const VectorType      &solution) const override
+  {
+    const bool has_ghost_elements = solution.has_ghost_elements();
+
+    AssertThrow(has_ghost_elements == false, ExcInternalError());
+
+    if (has_ghost_elements == false)
+      solution.update_ghost_values();
+
+    double drag = 0, lift = 0, p_diff = 0;
+
+    const MPI_Comm comm = dof_handler.get_communicator();
+
+    QGauss<dim - 1> face_quadrature_formula(3);
+    const int       n_q_points = face_quadrature_formula.size();
+
+    FEFaceValues<dim> fe_face_values(dof_handler.get_fe(),
+                                     face_quadrature_formula,
+                                     update_values | update_quadrature_points |
+                                       update_gradients | update_JxW_values |
+                                       update_normal_vectors);
+
+    FEValuesViews::Vector<dim> velocities(fe_face_values, 0);
+    FEValuesViews::Scalar<dim> pressure(fe_face_values, dim);
+
+    std::vector<dealii::SymmetricTensor<2, dim>> eps_u(n_q_points);
+    std::vector<double>                          p(n_q_points);
+
+    Tensor<2, dim> fluid_stress;
+    Tensor<1, dim> forces;
+
+    double drag_local = 0;
+    double lift_local = 0;
+
+    for (const auto &cell : dof_handler.active_cell_iterators())
+      {
+        if (!cell->is_locally_owned())
+          continue;
+
+        for (const auto face : cell->face_indices())
+          if (cell->face(face)->at_boundary() &&
+              (cell->face(face)->boundary_id() == 3))
+            {
+              fe_face_values.reinit(cell, face);
+              std::vector<Point<dim>> q_points =
+                fe_face_values.get_quadrature_points();
+
+              velocities.get_function_symmetric_gradients(solution, eps_u);
+              pressure.get_function_values(solution, p);
+
+              for (int q = 0; q < n_q_points; ++q)
+                {
+                  const Tensor<1, dim> normal_vector =
+                    -fe_face_values.normal_vector(q);
+
+                  Tensor<2, dim> fluid_pressure;
+                  fluid_pressure[0][0] = p[q];
+                  fluid_pressure[1][1] = p[q];
+
+                  const Tensor<2, dim> fluid_stress =
+                    nu * eps_u[q] - fluid_pressure;
+
+                  const Tensor<1, dim> forces =
+                    fluid_stress * normal_vector * fe_face_values.JxW(q);
+
+                  drag_local += forces[0];
+                  lift_local += forces[1];
+                }
+            }
+      }
+
+    drag = Utilities::MPI::sum(drag_local, comm);
+    lift = Utilities::MPI::sum(lift_local, comm);
+
+    // calculate pressure drop
+
+    // 1) set up evaluation routine (TODO: can be reused!)
+    std::shared_ptr<Utilities::MPI::RemotePointEvaluation<dim>> rpe;
+
+    if (rpe == nullptr)
+      {
+        Point<dim> p1, p2;
+        p1[0] = ExaDG::FlowPastCylinder::X_C - ExaDG::FlowPastCylinder::D * 0.5;
+        p2[0] = ExaDG::FlowPastCylinder::X_C + ExaDG::FlowPastCylinder::D * 0.5;
+        p1[1] = p2[1] = ExaDG::FlowPastCylinder::H / 2.0;
+
+        std::vector<Point<dim>> points;
+
+        if (Utilities::MPI::this_mpi_process(comm) == 0)
+          {
+            points.push_back(p1);
+            points.push_back(p2);
+          }
+
+        auto rpe_temp =
+          std::make_shared<Utilities::MPI::RemotePointEvaluation<dim>>();
+        rpe_temp->reinit(points, dof_handler.get_triangulation(), mapping);
+
+        rpe = rpe_temp;
+      }
+
+    const auto values = VectorTools::point_values<1>(
+      *rpe, dof_handler, solution, VectorTools::EvaluationFlags::avg, dim);
+
+    if (Utilities::MPI::this_mpi_process(comm) == 0)
+      p_diff = values[0] - values[1];
+
+    // write to file
+    if (Utilities::MPI::this_mpi_process(comm) == 0)
+      {
+        drag_lift_pressure_file << t << "\t" << drag << "\t" << lift << "\t"
+                                << p_diff << "\n";
+        drag_lift_pressure_file.flush();
+      }
+
+    // clean up
+    if (has_ghost_elements == false)
+      solution.zero_out_ghost_values();
+  }
+
+private:
+  const bool   use_no_slip_cylinder_bc;
+  const double nu;
+
+  std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
+
+  mutable std::ofstream drag_lift_pressure_file;
+
+  class InflowBoundaryValues : public Function<dim>
+  {
+  public:
+    InflowBoundaryValues()
+      : Function<dim>(dim + 1)
+      , t_(0.0){};
+
+    double
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      const double Um = 1.5;
+      const double H  = 0.41;
+      const double y  = p[1];
+
+      (void)Um;
+      (void)H;
+      (void)y;
+
+      /// FIXME here. Somehow the velocity is too small
+      /// I don't know why.
+      const double u_val = 1.0;
+      // const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
+      //*
+      //  std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
+      ;
       const double v_val = 0.0;
       const double p_val = 0.0;
 
@@ -1583,23 +1831,24 @@ class Driver
 public:
   Driver(const Parameters &params)
     : params(params)
+    , comm(MPI_COMM_WORLD)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(comm) == 0)
   {}
 
   void
   run()
   {
-    const MPI_Comm comm = MPI_COMM_WORLD;
-
-    ConditionalOStream pcout(std::cout,
-                             Utilities::MPI::this_mpi_process(comm) == 0);
-
     // select simulation case
     std::shared_ptr<SimulationBase<dim>> simulation;
 
     if (params.simulation_name == "channel")
       simulation = std::make_shared<SimulationChannel<dim>>();
     else if (params.simulation_name == "cylinder")
-      simulation = std::make_shared<SimulationCylinder<dim>>(params.nu);
+      simulation =
+        std::make_shared<SimulationCylinder<dim>>(params.nu, params.no_slip);
+    else if (params.simulation_name == "cylinder old")
+      simulation =
+        std::make_shared<SimulationCylinderOld<dim>>(params.nu, params.no_slip);
     else
       AssertThrow(false, ExcNotImplemented());
 
@@ -1746,7 +1995,7 @@ public:
     double       t       = 0.0;
     unsigned int counter = 1;
 
-    output(mapping, dof_handler, solution);
+    output(t, mapping, dof_handler, solution);
 
     // perform time loop
     for (; t < params.t_final; ++counter)
@@ -1788,20 +2037,38 @@ public:
         t += dt;
 
         // postprocessing
-        output(mapping, dof_handler, solution);
+        output(t, mapping, dof_handler, solution);
         simulation->postprocess(t, mapping, dof_handler, solution);
       }
   }
 
 private:
-  const Parameters params;
+  const Parameters         params;
+  const MPI_Comm           comm;
+  const ConditionalOStream pcout;
 
   void
-  output(const Mapping<dim>    &mapping,
+  output(const double           time,
+         const Mapping<dim>    &mapping,
          const DoFHandler<dim> &dof_handler,
          const VectorType      &vector) const
   {
+    static unsigned int counter = 0;
+
+    if ((time + std::numeric_limits<double>::epsilon()) <
+        counter * params.output_granularity)
+      return;
+
+    counter++;
+
+    pcout << "    [O] output VTU (" << counter << ")" << std::endl;
+
+    DataOutBase::VtkFlags flags;
+    flags.time                     = time;
+    flags.write_higher_order_cells = true;
+
     DataOut<dim> data_out;
+    data_out.set_flags(flags);
     data_out.attach_dof_handler(dof_handler);
 
     std::vector<std::string> labels(dim + 1, "u");
@@ -1820,14 +2087,10 @@ private:
 
     data_out.build_patches(mapping, params.fe_degree);
 
-    static unsigned int counter = 0;
-
     const std::string file_name =
       params.paraview_prefix + "." + std::to_string(counter) + ".vtu";
 
     data_out.write_vtu_in_parallel(file_name, dof_handler.get_communicator());
-
-    counter++;
   }
 };
 
