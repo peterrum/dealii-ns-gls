@@ -1,0 +1,11 @@
+{
+  "use matrix free ns operator" : true,
+  "paraview prefix" : "results_mf",
+  "c1" : 2.00,
+  "c2" : 1.0,
+  "nu" : 0.00,
+  "t final" : 20.0,
+  "nonlinear solver" :  "linearized",
+  "simulation name" : "cylinder old",
+  "n global refinements" : 2
+}
