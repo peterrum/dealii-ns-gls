@@ -1191,6 +1191,9 @@ struct Parameters
   std::string paraview_prefix    = "results";
   double      output_granularity = 0.0;
 
+  // simulation-specific parameters (TODO)
+  bool no_slip = true;
+
   void
   parse(const std::string file_name)
   {
@@ -1242,6 +1245,9 @@ private:
     // output
     prm.add_parameter("paraview prefix", paraview_prefix);
     prm.add_parameter("output granularity", output_granularity);
+
+    // simulation-specific
+    prm.add_parameter("no slip", no_slip);
   }
 };
 
@@ -1367,8 +1373,8 @@ class SimulationCylinder : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinder(const double nu)
-    : use_no_slip_cylinder_bc(true)
+  SimulationCylinder(const double nu, const bool use_no_slip_cylinder_bc)
+    : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
     , nu(nu)
   {
     drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
@@ -1591,8 +1597,8 @@ class SimulationCylinderOld : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinderOld(const double nu)
-    : use_no_slip_cylinder_bc(true)
+  SimulationCylinderOld(const double nu, const bool use_no_slip_cylinder_bc)
+    : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
     , nu(nu)
   {
     drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
@@ -1838,9 +1844,11 @@ public:
     if (params.simulation_name == "channel")
       simulation = std::make_shared<SimulationChannel<dim>>();
     else if (params.simulation_name == "cylinder")
-      simulation = std::make_shared<SimulationCylinder<dim>>(params.nu);
+      simulation =
+        std::make_shared<SimulationCylinder<dim>>(params.nu, params.no_slip);
     else if (params.simulation_name == "cylinder old")
-      simulation = std::make_shared<SimulationCylinderOld<dim>>(params.nu);
+      simulation =
+        std::make_shared<SimulationCylinderOld<dim>>(params.nu, params.no_slip);
     else
       AssertThrow(false, ExcNotImplemented());
 
