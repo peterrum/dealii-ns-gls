@@ -7,5 +7,6 @@
   "t final" : 20.0,
   "nonlinear solver" :  "linearized",
   "simulation name" : "cylinder old",
-  "n global refinements" : 2
+  "n global refinements" : 2,
+  "output granularity" : 0.1
 }

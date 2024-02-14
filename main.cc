@@ -1188,7 +1188,8 @@ struct Parameters
   std::string nonlinear_solver = "linearized";
 
   // output
-  std::string paraview_prefix = "results";
+  std::string paraview_prefix    = "results";
+  double      output_granularity = 0.0;
 
   void
   parse(const std::string file_name)
@@ -1240,6 +1241,7 @@ private:
 
     // output
     prm.add_parameter("paraview prefix", paraview_prefix);
+    prm.add_parameter("output granularity", output_granularity);
   }
 };
 
@@ -1823,16 +1825,13 @@ class Driver
 public:
   Driver(const Parameters &params)
     : params(params)
+    , comm(MPI_COMM_WORLD)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(comm) == 0)
   {}
 
   void
   run()
   {
-    const MPI_Comm comm = MPI_COMM_WORLD;
-
-    ConditionalOStream pcout(std::cout,
-                             Utilities::MPI::this_mpi_process(comm) == 0);
-
     // select simulation case
     std::shared_ptr<SimulationBase<dim>> simulation;
 
@@ -2036,7 +2035,9 @@ public:
   }
 
 private:
-  const Parameters params;
+  const Parameters         params;
+  const MPI_Comm           comm;
+  const ConditionalOStream pcout;
 
   void
   output(const double           time,
@@ -2044,6 +2045,14 @@ private:
          const DoFHandler<dim> &dof_handler,
          const VectorType      &vector) const
   {
+    static unsigned int counter = 0;
+
+    if ((time + std::numeric_limits<double>::epsilon()) <
+        counter * params.output_granularity)
+      return;
+
+    pcout << "    [O] output VTU" << std::endl;
+
     DataOutBase::VtkFlags flags;
     flags.time                     = time;
     flags.write_higher_order_cells = true;
@@ -2067,8 +2076,6 @@ private:
                              data_component_interpretation);
 
     data_out.build_patches(mapping, params.fe_degree);
-
-    static unsigned int counter = 0;
 
     const std::string file_name =
       params.paraview_prefix + "." + std::to_string(counter) + ".vtu";
