@@ -1988,7 +1988,7 @@ public:
     double       t       = 0.0;
     unsigned int counter = 1;
 
-    output(mapping, dof_handler, solution);
+    output(t, mapping, dof_handler, solution);
 
     // perform time loop
     for (; t < params.t_final; ++counter)
@@ -2030,7 +2030,7 @@ public:
         t += dt;
 
         // postprocessing
-        output(mapping, dof_handler, solution);
+        output(t, mapping, dof_handler, solution);
         simulation->postprocess(t, mapping, dof_handler, solution);
       }
   }
@@ -2039,11 +2039,17 @@ private:
   const Parameters params;
 
   void
-  output(const Mapping<dim>    &mapping,
+  output(const double           time,
+         const Mapping<dim>    &mapping,
          const DoFHandler<dim> &dof_handler,
          const VectorType      &vector) const
   {
+    DataOutBase::VtkFlags flags;
+    flags.time                     = time;
+    flags.write_higher_order_cells = true;
+
     DataOut<dim> data_out;
+    data_out.set_flags(flags);
     data_out.attach_dof_handler(dof_handler);
 
     std::vector<std::string> labels(dim + 1, "u");
