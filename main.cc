@@ -1366,7 +1366,7 @@ public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
   SimulationCylinder(const double nu)
-    : use_no_slip_cylinder_bc(false)
+    : use_no_slip_cylinder_bc(true)
     , nu(nu)
   {
     drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
@@ -1396,7 +1396,7 @@ public:
     bcs.all_homogeneous_nbcs.push_back(1);
 
     // walls
-    bcs.all_homogeneous_dbcs.push_back(2);
+    bcs.all_slip_bcs.push_back(2);
 
     // cylinder
     if (use_no_slip_cylinder_bc)
@@ -1552,12 +1552,17 @@ private:
       const double H  = 0.41;
       const double y  = p[1] - H / 2.0;
 
+      (void)Um;
+      (void)H;
+      (void)y;
+
       /// FIXME here. Somehow the velocity is too small
       /// I don't know why.
-      const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
-        //*
-        // std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
-        ;
+      const double u_val = 1.0;
+      // const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
+      //*
+      //  std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
+      ;
       const double v_val = 0.0;
       const double p_val = 0.0;
 
@@ -1585,7 +1590,7 @@ public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
   SimulationCylinderOld(const double nu)
-    : use_no_slip_cylinder_bc(false)
+    : use_no_slip_cylinder_bc(true)
     , nu(nu)
   {
     drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
@@ -1599,13 +1604,16 @@ public:
   void
   create_triangulation(Triangulation<dim> &tria) const override
   {
-    cylinder(tria,
-             ExaDG::FlowPastCylinder::L2 - ((dim == 2) ?
-                                              ExaDG::FlowPastCylinder::L1 :
-                                              ExaDG::FlowPastCylinder::X_0),
-             ExaDG::FlowPastCylinder::H,
-             ExaDG::FlowPastCylinder::X_C,
-             ExaDG::FlowPastCylinder::D);
+    if (false /* TODO */)
+      cylinder(tria,
+               ExaDG::FlowPastCylinder::L2 - ((dim == 2) ?
+                                                ExaDG::FlowPastCylinder::L1 :
+                                                ExaDG::FlowPastCylinder::X_0),
+               ExaDG::FlowPastCylinder::H,
+               ExaDG::FlowPastCylinder::X_C,
+               ExaDG::FlowPastCylinder::D);
+    else
+      cylinder(tria, 4.0, 2.0, 0.6, 0.5);
   }
 
   virtual BoundaryDescriptor
@@ -1621,7 +1629,7 @@ public:
     bcs.all_homogeneous_nbcs.push_back(1);
 
     // walls
-    bcs.all_homogeneous_dbcs.push_back(2);
+    bcs.all_slip_bcs.push_back(2);
 
     // cylinder
     if (use_no_slip_cylinder_bc)
@@ -1776,14 +1784,19 @@ private:
     {
       const double Um = 1.5;
       const double H  = 0.41;
-      const double y  = p[1] - H / 2.0;
+      const double y  = p[1];
+
+      (void)Um;
+      (void)H;
+      (void)y;
 
       /// FIXME here. Somehow the velocity is too small
       /// I don't know why.
-      const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
-        //*
-        // std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
-        ;
+      const double u_val = 1.0;
+      // const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
+      //*
+      //  std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
+      ;
       const double v_val = 0.0;
       const double p_val = 0.0;
 

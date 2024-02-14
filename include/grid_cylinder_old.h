@@ -108,8 +108,11 @@ cylinder(Triangulation<2, 2> &triangulation,
           else if (center[0] < -cylinder_position + 1.e-6)
             // inflow
             face->set_boundary_id(0);
-          else if (std::abs(center[1]) > height / 2. - 1.e-6)
-            // walls
+          else if (std::abs(center[1] - (+height / 2. + 0.01)) < 1.e-6)
+            // wall (top)
+            face->set_boundary_id(2);
+          else if (std::abs(center[1] - (-height / 2. + 0.01)) < 1.e-6)
+            // wall (bottom)
             face->set_boundary_id(2);
           else
             face->set_boundary_id(3);
