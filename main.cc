@@ -735,7 +735,7 @@ private:
 
     const auto delta_1 = this->delta_1[cell];
     const auto delta_2 = this->delta_2[cell];
-    const auto tau     = this->tau;
+    const auto tau_inv = 1.0 / this->tau;
     const auto theta   = this->theta;
     const auto nu      = this->nu;
 
@@ -788,38 +788,38 @@ private:
         // velocity block:
         //  a)  (v, D)
         for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] = u_delta_value[d];
+          value_result[d] = u_delta_value[d] * tau_inv;
 
         //  b)  τ (v, S⋅∇B)
         for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] += s_grad_b[d] * tau;
+          value_result[d] += s_grad_b[d];
 
         //  c)  - τ (div(v), p)
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] -= p_value * tau;
+          gradient_result[d][d] -= p_value;
 
         //  d)  τ (ε(v), νε(B))
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += u_bar_gradient[d][d] * (nu * tau);
+          gradient_result[d][d] += u_bar_gradient[d][d] * nu;
 
         for (unsigned int e = 0, counter = dim; e < dim; ++e)
           for (unsigned int d = e + 1; d < dim; ++d, ++counter)
             {
-              const auto tmp = (u_bar_gradient[d][e] + u_bar_gradient[e][d]) *
-                               (nu * tau * 0.5);
+              const auto tmp =
+                (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
               gradient_result[d][e] += tmp;
               gradient_result[e][d] += tmp;
             }
 
         //  e)  δ_1 τ (S⋅∇v, ∇P + S⋅∇B) -> SUPG stabilization
-        const auto residual = (delta_1 * tau) * (p_bar_gradient + s_grad_b);
+        const auto residual = (delta_1) * (p_bar_gradient + s_grad_b);
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
             gradient_result[d0][d1] += u_star_value[d1] * residual[d0];
 
         //  f) δ_2 τ (div(v), div(B)) -> GD stabilization
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += (delta_2 * tau) * div_bar;
+          gradient_result[d][d] += delta_2 * div_bar;
 
 
 
