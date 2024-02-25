@@ -162,12 +162,16 @@ public:
 class LinearSolverGMRES : public LinearSolverBase
 {
 public:
-  LinearSolverGMRES(const OperatorBase &op, PreconditionerBase &preconditioner)
+  LinearSolverGMRES(const OperatorBase &op,
+                    PreconditionerBase &preconditioner,
+                    const unsigned int  n_max_iterations,
+                    const double        absolute_tolerance,
+                    const double        relative_tolerance)
     : op(op)
     , preconditioner(preconditioner)
-    , n_max_iterations(10000) // TODO
-    , abs_tolerance(1e-12)    // TODO
-    , rel_tolerance(1e-8)     // TODO
+    , n_max_iterations(n_max_iterations)
+    , absolute_tolerance(absolute_tolerance)
+    , relative_tolerance(relative_tolerance)
     , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
@@ -181,8 +185,8 @@ public:
   solve(VectorType &dst, const VectorType &src) const override
   {
     ReductionControl solver_control(n_max_iterations,
-                                    abs_tolerance,
-                                    rel_tolerance);
+                                    absolute_tolerance,
+                                    relative_tolerance);
 
     SolverGMRES<VectorType> solver(solver_control);
 
@@ -202,8 +206,8 @@ private:
   PreconditionerBase &preconditioner;
 
   const unsigned int n_max_iterations;
-  const double       abs_tolerance;
-  const double       rel_tolerance;
+  const double       absolute_tolerance;
+  const double       relative_tolerance;
 
   const ConditionalOStream pcout;
 };
@@ -1181,6 +1185,12 @@ struct Parameters
   // implmentation of operator evaluation
   bool use_matrix_free_ns_operator = true;
 
+  // linear solver
+  unsigned int n_max_iterations   = 10000;
+  double       absolute_tolerance = 1e-12;
+  double       relative_tolerance = 1e-8;
+
+
   // preconditioner of linear solver
   std::string preconditioner = "ILU";
 
@@ -1964,8 +1974,15 @@ public:
     // set up linear solver
     std::shared_ptr<LinearSolverBase> linear_solver;
 
-    linear_solver =
-      std::make_shared<LinearSolverGMRES>(*ns_operator, *preconditioner);
+    if (true)
+      linear_solver =
+        std::make_shared<LinearSolverGMRES>(*ns_operator,
+                                            *preconditioner,
+                                            params.n_max_iterations,
+                                            params.absolute_tolerance,
+                                            params.relative_tolerance);
+    else
+      AssertThrow(false, ExcNotImplemented());
 
     // set up nonlinear solver
     std::shared_ptr<NonLinearSolverBase> nonlinear_solver;
