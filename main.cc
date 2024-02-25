@@ -725,19 +725,19 @@ private:
   }
 
   /**
-   * (v, D) + τ (v, S⋅∇B) - τ (div(v), p) + τ (ε(v), νε(B))
-   *        + δ_1 τ (S⋅∇v, ∇P + S⋅∇B) + δ_2 τ (div(v), div(B)) = 0
-   *          +------- SUPG --------+   +-------- GD --------+
+   * (v, ∂t(u)) + (v, S⋅∇B) - (div(v), p) + (ε(v), νε(B))
+   *            + δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) + δ_2 (div(v), div(B)) = 0
+   *              +----------- SUPG ----------+   +------- GD -------+
    *
-   * (q, div(B)) + δ_1 (∇q, ∇p + S⋅∇B) = 0
-   *               +------ PSPG -----+
+   * (q, div(B)) + δ_1 (∇q, ∂t(u) + ∇p + S⋅∇B) = 0
+   *               +---------- PSPG ---------+
    *
    * with the following nomenclature:
-   *  - S := u^*
-   *  - B := θ u^{n+1} + (1-θ) u^{n}
-   *  - P := θ p^{n+1} + (1-θ) p^{n}
-   *  - D := u^{n+1} - u^{n}
-   *  - p := p^{n+1}.
+   *  - S      := u^*
+   *  - B     := θ u^{n+1} + (1-θ) u^{n}
+   *  - P     := θ p^{n+1} + (1-θ) p^{n}
+   *  - p     := p^{n+1}
+   *  - ∂t(u) := time deriverative (one-step-theta method, BDF)
    */
   template <bool evaluate_residual>
   void
@@ -800,19 +800,19 @@ private:
         const auto s_grad_b = u_bar_gradient * u_star_value;
 
         // velocity block:
-        //  a)  (v, D)
+        //  a)  (v, ∂t(u))
         for (unsigned int d = 0; d < dim; ++d)
           value_result[d] = u_time_derivative[d];
 
-        //  b)  τ (v, S⋅∇B)
+        //  b)  (v, S⋅∇B)
         for (unsigned int d = 0; d < dim; ++d)
           value_result[d] += s_grad_b[d];
 
-        //  c)  - τ (div(v), p)
+        //  c)  - (div(v), p)
         for (unsigned int d = 0; d < dim; ++d)
           gradient_result[d][d] -= p_value;
 
-        //  d)  τ (ε(v), νε(B))
+        //  d)  (ε(v), νε(B))
         for (unsigned int d = 0; d < dim; ++d)
           gradient_result[d][d] += u_bar_gradient[d][d] * nu;
 
@@ -825,7 +825,7 @@ private:
               gradient_result[e][d] += tmp;
             }
 
-        //  e)  δ_1 τ (S⋅∇v, ∇P + S⋅∇B) -> SUPG stabilization
+        //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
         const auto residual =
           (delta_1) * ((consider_time_deriverative ?
                           u_time_derivative :
@@ -835,7 +835,7 @@ private:
           for (unsigned int d1 = 0; d1 < dim; ++d1)
             gradient_result[d0][d1] += u_star_value[d1] * residual[d0];
 
-        //  f) δ_2 τ (div(v), div(B)) -> GD stabilization
+        //  f) δ_2 (div(v), div(B)) -> GD stabilization
         for (unsigned int d = 0; d < dim; ++d)
           gradient_result[d][d] += delta_2 * div_bar;
 
@@ -845,7 +845,7 @@ private:
         //  a)  (q, div(B))
         value_result[dim] = div_bar;
 
-        //  b)  δ_1 (∇q, ∇p + S⋅∇B) -> PSPG stabilization
+        //  b)  δ_1 (∇q, ∂t(u) + ∇p + S⋅∇B) -> PSPG stabilization
         gradient_result[dim] =
           delta_1 * ((consider_time_deriverative ?
                         u_time_derivative :
