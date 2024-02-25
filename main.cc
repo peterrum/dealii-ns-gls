@@ -1186,9 +1186,9 @@ struct Parameters
   bool use_matrix_free_ns_operator = true;
 
   // linear solver
-  unsigned int n_max_iterations   = 10000;
-  double       absolute_tolerance = 1e-12;
-  double       relative_tolerance = 1e-8;
+  unsigned int lin_n_max_iterations   = 10000;
+  double       lin_absolute_tolerance = 1e-12;
+  double       lin_relative_tolerance = 1e-8;
 
 
   // preconditioner of linear solver
@@ -1239,6 +1239,11 @@ private:
     // implmentation of operator evaluation
     prm.add_parameter("use matrix free ns operator",
                       use_matrix_free_ns_operator);
+
+    // linear solver
+    prm.add_parameter("lin n max iterations", lin_n_max_iterations);
+    prm.add_parameter("lin absolute tolerance", lin_absolute_tolerance);
+    prm.add_parameter("lin relative tolerance", lin_relative_tolerance);
 
     // preconditioner of linear solver
     prm.add_parameter("preconditioner",
@@ -1978,9 +1983,9 @@ public:
       linear_solver =
         std::make_shared<LinearSolverGMRES>(*ns_operator,
                                             *preconditioner,
-                                            params.n_max_iterations,
-                                            params.absolute_tolerance,
-                                            params.relative_tolerance);
+                                            params.lin_n_max_iterations,
+                                            params.lin_absolute_tolerance,
+                                            params.lin_relative_tolerance);
     else
       AssertThrow(false, ExcNotImplemented());
 
