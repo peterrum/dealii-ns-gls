@@ -770,24 +770,26 @@ private:
 
         const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
           star_value[cell][q];
-        Tensor<1, dim, VectorizedArray<Number>> u_delta_value;
+        Tensor<1, dim, VectorizedArray<Number>> u_time_derivative;
         Tensor<2, dim, VectorizedArray<Number>> u_bar_gradient;
 
         for (unsigned int d = 0; d < dim; ++d)
           {
-            u_delta_value[d]  = value[d];
-            u_bar_gradient[d] = theta * gradient[d];
+            u_time_derivative[d] = value[d];
+            u_bar_gradient[d]    = theta * gradient[d];
           }
 
         if (evaluate_residual)
           {
-            u_delta_value -= old_value[cell][q];
+            u_time_derivative -= old_value[cell][q];
             u_bar_gradient +=
               (VectorizedArray<Number>(1) - theta) * old_gradient[cell][q];
 
             p_bar_gradient +=
               (VectorizedArray<Number>(1) - theta) * old_gradient_p[cell][q];
           }
+
+        u_time_derivative *= tau_inv;
 
         // precompute: div(B)
         VectorizedArray<Number> div_bar = u_bar_gradient[0][0];
@@ -800,7 +802,7 @@ private:
         // velocity block:
         //  a)  (v, D)
         for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] = u_delta_value[d] * tau_inv;
+          value_result[d] = u_time_derivative[d];
 
         //  b)  τ (v, S⋅∇B)
         for (unsigned int d = 0; d < dim; ++d)
@@ -826,7 +828,7 @@ private:
         //  e)  δ_1 τ (S⋅∇v, ∇P + S⋅∇B) -> SUPG stabilization
         const auto residual =
           (delta_1) * ((consider_time_deriverative ?
-                          (u_delta_value * tau_inv) :
+                          u_time_derivative :
                           Tensor<1, dim, VectorizedArray<Number>>()) +
                        p_bar_gradient + s_grad_b);
         for (unsigned int d0 = 0; d0 < dim; ++d0)
@@ -846,7 +848,7 @@ private:
         //  b)  δ_1 (∇q, ∇p + S⋅∇B) -> PSPG stabilization
         gradient_result[dim] =
           delta_1 * ((consider_time_deriverative ?
-                        (u_delta_value * tau_inv) :
+                        u_time_derivative :
                         Tensor<1, dim, VectorizedArray<Number>>()) +
                      p_gradient + s_grad_b);
 
