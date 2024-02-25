@@ -119,8 +119,10 @@ private:
 class PreconditionerAMG : public PreconditionerBase
 {
 public:
-  PreconditionerAMG(const OperatorBase &op)
+  PreconditionerAMG(const OperatorBase                   &op,
+                    const std::vector<std::vector<bool>> &constant_modes)
     : op(op)
+    , constant_modes(constant_modes)
   {}
 
   void
@@ -134,7 +136,7 @@ public:
     ad.higher_order_elements = false;
     ad.n_cycles              = 1;
     ad.aggregation_threshold = 1e-14;
-    ad.constant_modes        = {}; // TODO
+    ad.constant_modes        = constant_modes;
     ad.smoother_sweeps       = 2;
     ad.smoother_overlap      = 1;
     ad.output_details        = false;
@@ -152,6 +154,8 @@ public:
 
 private:
   const OperatorBase &op;
+
+  const std::vector<std::vector<bool>> constant_modes;
 
   TrilinosWrappers::PreconditionAMG precon;
 };
@@ -2006,7 +2010,17 @@ public:
     if (params.preconditioner == "ILU")
       preconditioner = std::make_shared<PreconditionerILU>(*ns_operator);
     else if (params.preconditioner == "AMG")
-      preconditioner = std::make_shared<PreconditionerAMG>(*ns_operator);
+      {
+        std::vector<std::vector<bool>> constant_modes;
+
+        ComponentMask components(dim + 1, true);
+        DoFTools::extract_constant_modes(dof_handler,
+                                         components,
+                                         constant_modes);
+
+        preconditioner =
+          std::make_shared<PreconditionerAMG>(*ns_operator, constant_modes);
+      }
     else
       AssertThrow(false, ExcNotImplemented());
 
