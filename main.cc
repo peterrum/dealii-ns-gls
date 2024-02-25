@@ -165,9 +165,9 @@ public:
   LinearSolverGMRES(const OperatorBase &op, PreconditionerBase &preconditioner)
     : op(op)
     , preconditioner(preconditioner)
-    , n_max_iterations(100) // TODO
-    , abs_tolerance(1e-12)  // TODO
-    , rel_tolerance(1e-8)   // TODO
+    , n_max_iterations(10000) // TODO
+    , abs_tolerance(1e-12)    // TODO
+    , rel_tolerance(1e-8)     // TODO
     , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
