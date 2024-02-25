@@ -466,12 +466,14 @@ public:
     const Number                     theta,
     const Number                     nu,
     const Number                     c_1,
-    const Number                     c_2)
+    const Number                     c_2,
+    const bool                       consider_time_deriverative)
     : constraints_inhomogeneous(constraints_inhomogeneous)
     , theta(theta)
     , nu(nu)
     , c_1(c_1)
     , c_2(c_2)
+    , consider_time_deriverative(consider_time_deriverative)
     , valid_system(false)
   {
     const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
@@ -488,6 +490,11 @@ public:
 
     for (auto i : this->matrix_free.get_constrained_dofs())
       constrained_indices.push_back(i);
+
+    if (consider_time_deriverative)
+      {
+        AssertThrow(theta == 1.0, ExcInternalError());
+      }
   }
 
   void
@@ -683,6 +690,7 @@ private:
   const VectorizedArray<Number> nu;
   const Number                  c_1;
   const Number                  c_2;
+  const bool                    consider_time_deriverative;
 
   mutable bool valid_system;
 
@@ -816,7 +824,11 @@ private:
             }
 
         //  e)  δ_1 τ (S⋅∇v, ∇P + S⋅∇B) -> SUPG stabilization
-        const auto residual = (delta_1) * (p_bar_gradient + s_grad_b);
+        const auto residual =
+          (delta_1) * ((consider_time_deriverative ?
+                          (u_delta_value * tau_inv) :
+                          Tensor<1, dim, VectorizedArray<Number>>()) +
+                       p_bar_gradient + s_grad_b);
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
             gradient_result[d0][d1] += u_star_value[d1] * residual[d0];
@@ -832,7 +844,11 @@ private:
         value_result[dim] = div_bar;
 
         //  b)  δ_1 (∇q, ∇p + S⋅∇B) -> PSPG stabilization
-        gradient_result[dim] = delta_1 * (p_gradient + s_grad_b);
+        gradient_result[dim] =
+          delta_1 * ((consider_time_deriverative ?
+                        (u_delta_value * tau_inv) :
+                        Tensor<1, dim, VectorizedArray<Number>>()) +
+                     p_gradient + s_grad_b);
 
 
         integrator.submit_value(value_result, q);
@@ -1178,9 +1194,10 @@ struct Parameters
   double theta   = 0.5;
 
   // NSE-GLS parameters
-  double nu  = 0.1;
-  double c_1 = 4.0;
-  double c_2 = 2.0;
+  double nu                         = 0.1;
+  double c_1                        = 4.0;
+  double c_2                        = 2.0;
+  bool   consider_time_deriverative = false;
 
   // implmentation of operator evaluation
   bool use_matrix_free_ns_operator = true;
@@ -1235,6 +1252,7 @@ private:
     prm.add_parameter("nu", nu);
     prm.add_parameter("c1", c_1);
     prm.add_parameter("c2", c_2);
+    prm.add_parameter("consider time deriverative", consider_time_deriverative);
 
     // implmentation of operator evaluation
     prm.add_parameter("use matrix free ns operator",
@@ -1943,17 +1961,18 @@ public:
     std::shared_ptr<OperatorBase> ns_operator;
 
     if (params.use_matrix_free_ns_operator)
-      ns_operator =
-        std::make_shared<NavierStokesOperator<dim>>(mapping,
-                                                    dof_handler,
-                                                    constraints_homogeneous,
-                                                    constraints,
-                                                    constraints_inhomogeneous,
-                                                    quadrature,
-                                                    params.theta,
-                                                    params.nu,
-                                                    params.c_1,
-                                                    params.c_2);
+      ns_operator = std::make_shared<NavierStokesOperator<dim>>(
+        mapping,
+        dof_handler,
+        constraints_homogeneous,
+        constraints,
+        constraints_inhomogeneous,
+        quadrature,
+        params.theta,
+        params.nu,
+        params.c_1,
+        params.c_2,
+        params.consider_time_deriverative);
     else
       ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
         mapping,
