@@ -495,6 +495,68 @@ private:
 
 
 
+class NonLinearSolverNewton : public NonLinearSolverBase
+{
+public:
+  NonLinearSolverNewton(OperatorBase &op, LinearSolverBase &linear_solver)
+    : op(op)
+    , linear_solver(linear_solver)
+    , newton_tolerance(1.0e-7) // TODO
+    , newton_max_iteration(30) // TODO
+  {}
+
+  void
+  solve(VectorType &solution) const override
+  {
+    double       l2_norm       = 1e10;
+    unsigned int num_iteration = 0;
+
+    VectorType rhs, inc;
+    rhs.reinit(solution);
+    inc.reinit(solution);
+
+    // set linearization point
+    op.set_linearization_point(solution);
+
+    // compute right-hans-side vector
+    op.evaluate_rhs(rhs);
+
+    while (l2_norm > newton_tolerance)
+      {
+        inc = 0.0;
+
+        linear_solver.initialize();
+        linear_solver.solve(inc, rhs);
+
+        solution.add(1.0, inc);
+
+        // set linearization point
+        op.set_linearization_point(solution);
+
+        // compute right-hans-side vector
+        op.evaluate_rhs(rhs);
+
+        // check convergence
+        l2_norm = rhs.l2_norm();
+        num_iteration++;
+
+        AssertThrow(num_iteration <= newton_max_iteration,
+                    dealii::ExcMessage(
+                      "Newton iteration did not converge. Final residual is " +
+                      std::to_string(l2_norm) + "."));
+      }
+  }
+
+private:
+  OperatorBase     &op;
+  LinearSolverBase &linear_solver;
+
+  const double       newton_tolerance;
+  const unsigned int newton_max_iteration;
+};
+
+
+
 class NonLinearSolverPicardSimple : public NonLinearSolverBase
 {
 public:
@@ -2305,6 +2367,9 @@ public:
     else if (params.nonlinear_solver == "Picard")
       nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
         *ns_operator, *linear_solver, time_integrator_data->get_theta());
+    else if (params.nonlinear_solver == "Newton")
+      nonlinear_solver = std::make_shared<NonLinearSolverNewton>(
+        *ns_operator, *linear_solver);
     else
       AssertThrow(false, ExcNotImplemented());
 
