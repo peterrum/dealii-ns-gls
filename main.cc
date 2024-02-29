@@ -44,14 +44,36 @@ template <typename Number>
 class TimeIntegratorData
 {
 public:
-  TimeIntegratorData(const unsigned int order)
+  virtual void
+  update_dt(const Number dt_new) = 0;
+
+  virtual Number
+  get_primary_weight() const = 0;
+
+  virtual const std::vector<Number> &
+  get_weights() const = 0;
+
+  virtual unsigned int
+  get_order() const = 0;
+
+  virtual Number
+  get_current_dt() const = 0;
+};
+
+
+
+template <typename Number>
+class TimeIntegratorDataBDF : public TimeIntegratorData<Number>
+{
+public:
+  TimeIntegratorDataBDF(const unsigned int order)
     : order(order)
     , dt(order)
     , weights(order + 1)
   {}
 
   void
-  update_dt(const Number dt_new)
+  update_dt(const Number dt_new) override
   {
     for (int i = get_order() - 2; i >= 0; i--)
       {
@@ -64,25 +86,25 @@ public:
   }
 
   Number
-  get_primary_weight() const
+  get_primary_weight() const override
   {
     return weights[0];
   }
 
   const std::vector<Number> &
-  get_weights() const
+  get_weights() const override
   {
     return weights;
   }
 
   unsigned int
-  get_order() const
+  get_order() const override
   {
     return order;
   }
 
   Number
-  get_current_dt() const
+  get_current_dt() const override
   {
     return dt[0];
   }
@@ -2127,7 +2149,10 @@ public:
     // note: filled during time loop
 
     // set up time integration scheme
-    TimeIntegratorData<Number> time_integrator_data(1);
+    std::shared_ptr<TimeIntegratorData<Number>> time_integrator_data;
+
+    if (true)
+      time_integrator_data = std::make_shared<TimeIntegratorDataBDF<Number>>(1);
 
     // set up Navier-Stokes operator
     std::shared_ptr<OperatorBase> ns_operator;
@@ -2144,7 +2169,7 @@ public:
         params.nu,
         params.c_1,
         params.c_2,
-        time_integrator_data,
+        *time_integrator_data,
         params.consider_time_deriverative);
     else
       ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
@@ -2156,7 +2181,7 @@ public:
         params.nu,
         params.c_1,
         params.c_2,
-        time_integrator_data);
+        *time_integrator_data);
 
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
@@ -2211,7 +2236,7 @@ public:
       AssertThrow(false, ExcNotImplemented());
 
     // initialize solution
-    SolutionHistory<VectorType> solution(time_integrator_data.get_order() + 1);
+    SolutionHistory<VectorType> solution(time_integrator_data->get_order() + 1);
 
     for (auto &vec : solution.get_vectors())
       ns_operator->initialize_dof_vector(vec);
@@ -2250,7 +2275,7 @@ public:
         constraints_inhomogeneous.close();
 
         // set time step size
-        time_integrator_data.update_dt(dt);
+        time_integrator_data->update_dt(dt);
 
         ns_operator->invalidate_system(); // TODO
 
