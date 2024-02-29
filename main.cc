@@ -2394,9 +2394,10 @@ private:
         counter * params.output_granularity)
       return;
 
-    counter++;
+    const std::string file_name =
+      params.paraview_prefix + "." + std::to_string(counter) + ".vtu";
 
-    pcout << "    [O] output VTU (" << counter << ")" << std::endl;
+    pcout << "    [O] output VTU (" << file_name << ")" << std::endl;
 
     DataOutBase::VtkFlags flags;
     flags.time                     = time;
@@ -2422,10 +2423,9 @@ private:
 
     data_out.build_patches(mapping, params.fe_degree);
 
-    const std::string file_name =
-      params.paraview_prefix + "." + std::to_string(counter) + ".vtu";
-
     data_out.write_vtu_in_parallel(file_name, dof_handler.get_communicator());
+
+    counter++;
   }
 };
 
