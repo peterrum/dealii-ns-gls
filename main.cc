@@ -685,7 +685,7 @@ public:
       vec.update_ghost_values();
 
     const auto tau    = this->time_integrator_data.get_current_dt();
-    const auto weight = -1.0 / tau;
+    const auto weight = this->time_integrator_data.get_weights()[1];
 
     for (unsigned int cell = 0; cell < n_cells; ++cell)
       {
@@ -900,7 +900,7 @@ private:
 
     const auto delta_1 = this->delta_1[cell];
     const auto delta_2 = this->delta_2[cell];
-    const auto weight  = 1.0 / this->time_integrator_data.get_current_dt();
+    const auto weight  = this->time_integrator_data.get_primary_weight();
     const auto theta   = this->theta;
     const auto nu      = this->nu;
 
