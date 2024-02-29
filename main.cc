@@ -58,6 +58,9 @@ public:
 
   virtual Number
   get_current_dt() const = 0;
+
+  virtual Number
+  get_theta() const = 0;
 };
 
 
@@ -107,6 +110,12 @@ public:
   get_current_dt() const override
   {
     return dt[0];
+  }
+
+  Number
+  get_theta() const override
+  {
+    return 1.0;
   }
 
 private:
@@ -161,8 +170,9 @@ template <typename Number>
 class TimeIntegratorDataTheta : public TimeIntegratorData<Number>
 {
 public:
-  TimeIntegratorDataTheta()
-    : weights(2)
+  TimeIntegratorDataTheta(const Number theta)
+    : theta(theta)
+    , weights(2)
   {}
 
   void
@@ -198,7 +208,14 @@ public:
     return dt;
   }
 
+  Number
+  get_theta() const override
+  {
+    return theta;
+  }
+
 private:
+  Number              theta;
   Number              dt;
   std::vector<Number> weights;
 };
@@ -682,14 +699,13 @@ public:
     const AffineConstraints<Number>  &constraints,
     const AffineConstraints<Number>  &constraints_inhomogeneous,
     const Quadrature<dim>            &quadrature,
-    const Number                      theta,
     const Number                      nu,
     const Number                      c_1,
     const Number                      c_2,
     const TimeIntegratorData<Number> &time_integrator_data,
     const bool                        consider_time_deriverative)
     : constraints_inhomogeneous(constraints_inhomogeneous)
-    , theta(theta)
+    , theta(time_integrator_data.get_theta())
     , nu(nu)
     , c_1(c_1)
     , c_2(c_2)
@@ -714,7 +730,7 @@ public:
 
     if (consider_time_deriverative)
       {
-        AssertThrow(theta == 1.0, ExcInternalError());
+        AssertThrow(theta[0] == 1.0, ExcInternalError());
       }
   }
 
@@ -1143,7 +1159,6 @@ public:
     const DoFHandler<dim>            &dof_handler,
     const AffineConstraints<Number>  &constraints,
     const Quadrature<dim>            &quadrature,
-    const Number                      theta,
     const Number                      nu,
     const Number                      c_1,
     const Number                      c_2,
@@ -1152,7 +1167,7 @@ public:
     , dof_handler(dof_handler)
     , constraints(constraints)
     , quadrature(quadrature)
-    , theta(theta)
+    , theta(time_integrator_data.get_theta())
     , nu(nu)
     , c_1(c_1)
     , c_2(c_2)
@@ -2211,7 +2226,7 @@ public:
         std::make_shared<TimeIntegratorDataBDF<Number>>(params.bdf_order);
     else if (params.time_intration == "theta")
       time_integrator_data =
-        std::make_shared<TimeIntegratorDataTheta<Number>>();
+        std::make_shared<TimeIntegratorDataTheta<Number>>(params.theta);
     else
       AssertThrow(false, ExcNotImplemented());
 
@@ -2226,7 +2241,6 @@ public:
         constraints,
         constraints_inhomogeneous,
         quadrature,
-        params.theta,
         params.nu,
         params.c_1,
         params.c_2,
@@ -2238,7 +2252,6 @@ public:
         dof_handler,
         constraints_inhomogeneous,
         quadrature,
-        params.theta,
         params.nu,
         params.c_1,
         params.c_2,
@@ -2290,9 +2303,8 @@ public:
         std::make_shared<NonLinearSolverPicardSimple>(*ns_operator,
                                                       *linear_solver);
     else if (params.nonlinear_solver == "Picard")
-      nonlinear_solver = std::make_shared<NonLinearSolverPicard>(*ns_operator,
-                                                                 *linear_solver,
-                                                                 params.theta);
+      nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
+        *ns_operator, *linear_solver, time_integrator_data->get_theta());
     else
       AssertThrow(false, ExcNotImplemented());
 
