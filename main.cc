@@ -157,6 +157,54 @@ private:
 
 
 
+template <typename Number>
+class TimeIntegratorDataTheta : public TimeIntegratorData<Number>
+{
+public:
+  TimeIntegratorDataTheta()
+    : weights(2)
+  {}
+
+  void
+  update_dt(const Number dt_new) override
+  {
+    this->dt = dt_new;
+
+    weights[0] = +1.0 / this->dt;
+    weights[1] = -1.0 / this->dt;
+  }
+
+  Number
+  get_primary_weight() const override
+  {
+    return weights[0];
+  }
+
+  const std::vector<Number> &
+  get_weights() const override
+  {
+    return weights;
+  }
+
+  unsigned int
+  get_order() const override
+  {
+    return 1;
+  }
+
+  Number
+  get_current_dt() const override
+  {
+    return dt;
+  }
+
+private:
+  Number              dt;
+  std::vector<Number> weights;
+};
+
+
+
 template <typename VectorType>
 class SolutionHistory
 {
@@ -1380,9 +1428,11 @@ struct Parameters
   std::string simulation_name = "channel";
 
   // system
-  double cfl     = 0.1;
-  double t_final = 3.0;
-  double theta   = 0.5;
+  double       cfl            = 0.1;
+  double       t_final        = 3.0;
+  double       theta          = 0.5;
+  unsigned int bdf_order      = 1;
+  std::string  time_intration = "theta";
 
   // NSE-GLS parameters
   double nu                         = 0.1;
@@ -1438,6 +1488,11 @@ private:
     prm.add_parameter("cfl", cfl);
     prm.add_parameter("t final", t_final);
     prm.add_parameter("theta", theta);
+    prm.add_parameter("bdf order", bdf_order);
+    prm.add_parameter("time intration",
+                      time_intration,
+                      "",
+                      Patterns::Selection("bdf|theta"));
 
     // NSE-GLS parameters
     prm.add_parameter("nu", nu);
@@ -2151,8 +2206,14 @@ public:
     // set up time integration scheme
     std::shared_ptr<TimeIntegratorData<Number>> time_integrator_data;
 
-    if (true)
-      time_integrator_data = std::make_shared<TimeIntegratorDataBDF<Number>>(1);
+    if (params.time_intration == "bdf")
+      time_integrator_data =
+        std::make_shared<TimeIntegratorDataBDF<Number>>(params.bdf_order);
+    else if (params.time_intration == "theta")
+      time_integrator_data =
+        std::make_shared<TimeIntegratorDataTheta<Number>>();
+    else
+      AssertThrow(false, ExcNotImplemented());
 
     // set up Navier-Stokes operator
     std::shared_ptr<OperatorBase> ns_operator;
