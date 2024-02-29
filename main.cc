@@ -531,7 +531,7 @@ public:
     const unsigned n_cells             = matrix_free.n_cell_batches();
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
-    old_value.reinit(n_cells, n_quadrature_points);
+    u_time_derivative_old.reinit(n_cells, n_quadrature_points);
     old_gradient.reinit(n_cells, n_quadrature_points);
     old_gradient_p.reinit(n_cells, n_quadrature_points);
 
@@ -551,6 +551,8 @@ public:
     if (has_ghost_elements == false)
       vec.update_ghost_values();
 
+    const auto weight = -1.0 / this->tau;
+
     for (unsigned int cell = 0; cell < n_cells; ++cell)
       {
         integrator.reinit(cell);
@@ -565,8 +567,8 @@ public:
         // precompute value/gradient of linearization point at quadrature points
         for (const auto q : integrator.quadrature_point_indices())
           {
-            old_value[cell][q]    = integrator.get_value(q);
-            old_gradient[cell][q] = integrator.get_gradient(q);
+            u_time_derivative_old[cell][q] = integrator.get_value(q) * weight;
+            old_gradient[cell][q]          = integrator.get_gradient(q);
 
             old_gradient_p[cell][q] = integrator_scalar.get_gradient(q);
           }
@@ -716,7 +718,7 @@ private:
   AlignedVector<VectorizedArray<Number>> delta_2;
 
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> star_value;
-  Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_value;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> u_time_derivative_old;
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> old_gradient;
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_gradient_p;
 
@@ -765,7 +767,7 @@ private:
 
     const auto delta_1 = this->delta_1[cell];
     const auto delta_2 = this->delta_2[cell];
-    const auto tau_inv = 1.0 / this->tau;
+    const auto weight  = 1.0 / this->tau;
     const auto theta   = this->theta;
     const auto nu      = this->nu;
 
@@ -793,18 +795,19 @@ private:
 
         for (unsigned int d = 0; d < dim; ++d)
           {
-            u_time_derivative[d] = value[d] * tau_inv;
+            u_time_derivative[d] = value[d] * weight;
             u_bar_gradient[d]    = theta * gradient[d];
           }
 
         if (evaluate_residual)
-          {
-            u_time_derivative -= old_value[cell][q] * tau_inv;
-            u_bar_gradient +=
-              (VectorizedArray<Number>(1) - theta) * old_gradient[cell][q];
+          u_time_derivative += u_time_derivative_old[cell][q];
 
+        if (evaluate_residual && (theta[0] != 1.0))
+          {
+            u_bar_gradient +=
+              (VectorizedArray<Number>(1.0) - theta) * old_gradient[cell][q];
             p_bar_gradient +=
-              (VectorizedArray<Number>(1) - theta) * old_gradient_p[cell][q];
+              (VectorizedArray<Number>(1.0) - theta) * old_gradient_p[cell][q];
           }
 
         // precompute: div(B)
