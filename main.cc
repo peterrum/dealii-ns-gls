@@ -793,21 +793,19 @@ private:
 
         for (unsigned int d = 0; d < dim; ++d)
           {
-            u_time_derivative[d] = value[d];
+            u_time_derivative[d] = value[d] * tau_inv;
             u_bar_gradient[d]    = theta * gradient[d];
           }
 
         if (evaluate_residual)
           {
-            u_time_derivative -= old_value[cell][q];
+            u_time_derivative -= old_value[cell][q] * tau_inv;
             u_bar_gradient +=
               (VectorizedArray<Number>(1) - theta) * old_gradient[cell][q];
 
             p_bar_gradient +=
               (VectorizedArray<Number>(1) - theta) * old_gradient_p[cell][q];
           }
-
-        u_time_derivative *= tau_inv;
 
         // precompute: div(B)
         VectorizedArray<Number> div_bar = u_bar_gradient[0][0];
