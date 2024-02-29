@@ -765,7 +765,8 @@ public:
     const Number                      c_1,
     const Number                      c_2,
     const TimeIntegratorData<Number> &time_integrator_data,
-    const bool                        consider_time_deriverative)
+    const bool                        consider_time_deriverative,
+    const bool                        increment_form)
     : constraints_inhomogeneous(constraints_inhomogeneous)
     , theta(time_integrator_data.get_theta())
     , nu(nu)
@@ -773,6 +774,7 @@ public:
     , c_2(c_2)
     , time_integrator_data(time_integrator_data)
     , consider_time_deriverative(consider_time_deriverative)
+    , increment_form(increment_form)
     , valid_system(false)
   {
     const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
@@ -1005,6 +1007,7 @@ private:
   const Number                      c_2;
   const TimeIntegratorData<Number> &time_integrator_data;
   const bool                        consider_time_deriverative;
+  const bool                        increment_form;
 
   mutable bool valid_system;
 
@@ -2296,28 +2299,37 @@ public:
     std::shared_ptr<OperatorBase> ns_operator;
 
     if (params.use_matrix_free_ns_operator)
-      ns_operator = std::make_shared<NavierStokesOperator<dim>>(
-        mapping,
-        dof_handler,
-        constraints_homogeneous,
-        constraints,
-        constraints_inhomogeneous,
-        quadrature,
-        params.nu,
-        params.c_1,
-        params.c_2,
-        *time_integrator_data,
-        params.consider_time_deriverative);
+      {
+        const bool increment_form = params.nonlinear_solver == "Newton";
+
+        ns_operator = std::make_shared<NavierStokesOperator<dim>>(
+          mapping,
+          dof_handler,
+          constraints_homogeneous,
+          constraints,
+          constraints_inhomogeneous,
+          quadrature,
+          params.nu,
+          params.c_1,
+          params.c_2,
+          *time_integrator_data,
+          params.consider_time_deriverative,
+          increment_form);
+      }
     else
-      ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
-        mapping,
-        dof_handler,
-        constraints_inhomogeneous,
-        quadrature,
-        params.nu,
-        params.c_1,
-        params.c_2,
-        *time_integrator_data);
+      {
+        AssertThrow(params.nonlinear_solver != "Newton", ExcInternalError());
+
+        ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
+          mapping,
+          dof_handler,
+          constraints_inhomogeneous,
+          quadrature,
+          params.nu,
+          params.c_1,
+          params.c_2,
+          *time_integrator_data);
+      }
 
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
@@ -2368,8 +2380,8 @@ public:
       nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
         *ns_operator, *linear_solver, time_integrator_data->get_theta());
     else if (params.nonlinear_solver == "Newton")
-      nonlinear_solver = std::make_shared<NonLinearSolverNewton>(
-        *ns_operator, *linear_solver);
+      nonlinear_solver =
+        std::make_shared<NonLinearSolverNewton>(*ns_operator, *linear_solver);
     else
       AssertThrow(false, ExcNotImplemented());
 
