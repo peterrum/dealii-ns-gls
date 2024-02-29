@@ -40,6 +40,224 @@ using Number           = double;
 using VectorType       = LinearAlgebra::distributed::Vector<Number>;
 using SparseMatrixType = TrilinosWrappers::SparseMatrix;
 
+template <typename Number>
+class TimeIntegratorData
+{
+public:
+  virtual void
+  update_dt(const Number dt_new) = 0;
+
+  virtual Number
+  get_primary_weight() const = 0;
+
+  virtual const std::vector<Number> &
+  get_weights() const = 0;
+
+  virtual unsigned int
+  get_order() const = 0;
+
+  virtual Number
+  get_current_dt() const = 0;
+
+  virtual Number
+  get_theta() const = 0;
+};
+
+
+
+template <typename Number>
+class TimeIntegratorDataBDF : public TimeIntegratorData<Number>
+{
+public:
+  TimeIntegratorDataBDF(const unsigned int order)
+    : order(order)
+    , dt(order)
+    , weights(order + 1)
+  {}
+
+  void
+  update_dt(const Number dt_new) override
+  {
+    for (int i = get_order() - 2; i >= 0; i--)
+      {
+        dt[i + 1] = dt[i];
+      }
+
+    dt[0] = dt_new;
+
+    update_weights();
+  }
+
+  Number
+  get_primary_weight() const override
+  {
+    return weights[0];
+  }
+
+  const std::vector<Number> &
+  get_weights() const override
+  {
+    return weights;
+  }
+
+  unsigned int
+  get_order() const override
+  {
+    return order;
+  }
+
+  Number
+  get_current_dt() const override
+  {
+    return dt[0];
+  }
+
+  Number
+  get_theta() const override
+  {
+    return 1.0;
+  }
+
+private:
+  unsigned int
+  effective_order() const
+  {
+    return std::count_if(dt.begin(), dt.end(), [](const auto &v) {
+      return v > 0;
+    });
+  }
+
+  void
+  update_weights()
+  {
+    std::fill(weights.begin(), weights.end(), 0);
+
+    if (effective_order() == 3)
+      {
+        weights[1] = -(dt[0] + dt[1]) * (dt[0] + dt[1] + dt[2]) /
+                     (dt[0] * dt[1] * (dt[1] + dt[2]));
+        weights[2] =
+          dt[0] * (dt[0] + dt[1] + dt[2]) / (dt[1] * dt[2] * (dt[0] + dt[1]));
+        weights[3] = -dt[0] * (dt[0] + dt[1]) /
+                     (dt[2] * (dt[1] + dt[2]) * (dt[0] + dt[1] + dt[2]));
+        weights[0] = -(weights[1] + weights[2] + weights[3]);
+      }
+    else if (effective_order() == 2)
+      {
+        weights[0] = (2 * dt[0] + dt[1]) / (dt[0] * (dt[0] + dt[1]));
+        weights[1] = -(dt[0] + dt[1]) / (dt[0] * dt[1]);
+        weights[2] = dt[0] / (dt[1] * (dt[0] + dt[1]));
+      }
+    else if (effective_order() == 1)
+      {
+        weights[0] = 1.0 / dt[0];
+        weights[1] = -1.0 / dt[0];
+      }
+    else
+      {
+        AssertThrow(effective_order() <= 3, ExcMessage("Not implemented"));
+      }
+  }
+
+  unsigned int        order;
+  std::vector<Number> dt;
+  std::vector<Number> weights;
+};
+
+
+
+template <typename Number>
+class TimeIntegratorDataTheta : public TimeIntegratorData<Number>
+{
+public:
+  TimeIntegratorDataTheta(const Number theta)
+    : theta(theta)
+    , weights(2)
+  {}
+
+  void
+  update_dt(const Number dt_new) override
+  {
+    this->dt = dt_new;
+
+    weights[0] = +1.0 / this->dt;
+    weights[1] = -1.0 / this->dt;
+  }
+
+  Number
+  get_primary_weight() const override
+  {
+    return weights[0];
+  }
+
+  const std::vector<Number> &
+  get_weights() const override
+  {
+    return weights;
+  }
+
+  unsigned int
+  get_order() const override
+  {
+    return 1;
+  }
+
+  Number
+  get_current_dt() const override
+  {
+    return dt;
+  }
+
+  Number
+  get_theta() const override
+  {
+    return theta;
+  }
+
+private:
+  Number              theta;
+  Number              dt;
+  std::vector<Number> weights;
+};
+
+
+
+template <typename VectorType>
+class SolutionHistory
+{
+public:
+  SolutionHistory(const unsigned int size)
+    : solutions(size)
+  {}
+
+  VectorType &
+  get_current_solution()
+  {
+    return solutions[0];
+  }
+
+  std::vector<VectorType> &
+  get_vectors()
+  {
+    return solutions;
+  }
+
+  const std::vector<VectorType> &
+  get_vectors() const
+  {
+    return solutions;
+  }
+
+  void
+  commit_solution()
+  {
+    for (int i = solutions.size() - 2; i >= 0; --i)
+      solutions[i + 1].copy_locally_owned_data_from(solutions[i]);
+  }
+
+  std::vector<VectorType> solutions;
+};
+
 /**
  * Linear/nonlinear operator.
  */
@@ -47,10 +265,10 @@ class OperatorBase
 {
 public:
   virtual void
-  set_time_step_size(const Number tau) = 0;
+  invalidate_system() = 0;
 
   virtual void
-  set_previous_solution(const VectorType &vec) = 0;
+  set_previous_solution(const SolutionHistory<VectorType> &vec) = 0;
 
   virtual void
   set_linearization_point(const VectorType &src) = 0;
@@ -475,22 +693,23 @@ public:
   using FECellIntegrator = FEEvaluation<dim, -1, 0, dim + 1, Number>;
 
   NavierStokesOperator(
-    const Mapping<dim>              &mapping,
-    const DoFHandler<dim>           &dof_handler,
-    const AffineConstraints<Number> &constraints_homogeneous,
-    const AffineConstraints<Number> &constraints,
-    const AffineConstraints<Number> &constraints_inhomogeneous,
-    const Quadrature<dim>           &quadrature,
-    const Number                     theta,
-    const Number                     nu,
-    const Number                     c_1,
-    const Number                     c_2,
-    const bool                       consider_time_deriverative)
+    const Mapping<dim>               &mapping,
+    const DoFHandler<dim>            &dof_handler,
+    const AffineConstraints<Number>  &constraints_homogeneous,
+    const AffineConstraints<Number>  &constraints,
+    const AffineConstraints<Number>  &constraints_inhomogeneous,
+    const Quadrature<dim>            &quadrature,
+    const Number                      nu,
+    const Number                      c_1,
+    const Number                      c_2,
+    const TimeIntegratorData<Number> &time_integrator_data,
+    const bool                        consider_time_deriverative)
     : constraints_inhomogeneous(constraints_inhomogeneous)
-    , theta(theta)
+    , theta(time_integrator_data.get_theta())
     , nu(nu)
     , c_1(c_1)
     , c_2(c_2)
+    , time_integrator_data(time_integrator_data)
     , consider_time_deriverative(consider_time_deriverative)
     , valid_system(false)
   {
@@ -511,27 +730,25 @@ public:
 
     if (consider_time_deriverative)
       {
-        AssertThrow(theta == 1.0, ExcInternalError());
+        AssertThrow(theta[0] == 1.0, ExcInternalError());
       }
   }
 
   void
-  set_time_step_size(const Number tau) override
+  invalidate_system() override
   {
     this->valid_system = false;
-
-    this->tau = tau;
   }
 
   void
-  set_previous_solution(const VectorType &vec) override
+  set_previous_solution(const SolutionHistory<VectorType> &history) override
   {
     this->valid_system = false;
 
     const unsigned n_cells             = matrix_free.n_cell_batches();
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
-    old_value.reinit(n_cells, n_quadrature_points);
+    u_time_derivative_old.reinit(n_cells, n_quadrature_points);
     old_gradient.reinit(n_cells, n_quadrature_points);
     old_gradient_p.reinit(n_cells, n_quadrature_points);
 
@@ -544,6 +761,8 @@ public:
                                                           0,
                                                           dim);
 
+    const auto &vec = history.get_vectors()[1];
+
     const bool has_ghost_elements = vec.has_ghost_elements();
 
     AssertThrow(has_ghost_elements == false, ExcInternalError());
@@ -551,12 +770,29 @@ public:
     if (has_ghost_elements == false)
       vec.update_ghost_values();
 
+    const auto tau = this->time_integrator_data.get_current_dt();
+
+    VectorType vec_old;
+    vec_old.reinit(vec);
+
+    for (unsigned int i = 1; i <= time_integrator_data.get_order(); ++i)
+      vec_old.add(time_integrator_data.get_weights()[i],
+                  history.get_vectors()[i]);
+
+    vec_old.update_ghost_values();
+
     for (unsigned int cell = 0; cell < n_cells; ++cell)
       {
         integrator.reinit(cell);
+
+        integrator.read_dof_values_plain(vec_old);
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
+
+        for (const auto q : integrator.quadrature_point_indices())
+          u_time_derivative_old[cell][q] = integrator.get_value(q);
+
         integrator.read_dof_values_plain(vec);
-        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
-                            EvaluationFlags::EvaluationFlags::gradients);
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::gradients);
 
         integrator_scalar.reinit(cell);
         integrator_scalar.read_dof_values_plain(vec);
@@ -565,7 +801,6 @@ public:
         // precompute value/gradient of linearization point at quadrature points
         for (const auto q : integrator.quadrature_point_indices())
           {
-            old_value[cell][q]    = integrator.get_value(q);
             old_gradient[cell][q] = integrator.get_gradient(q);
 
             old_gradient_p[cell][q] = integrator_scalar.get_gradient(q);
@@ -586,8 +821,8 @@ public:
             if (nu[0] < h)
               {
                 delta_1[cell][v] =
-                  c_1 / std::sqrt(1. / (tau[0] * tau[0]) +
-                                  u_max[v] * u_max[v] / (h * h));
+                  c_1 /
+                  std::sqrt(1. / (tau * tau) + u_max[v] * u_max[v] / (h * h));
                 delta_2[cell][v] = c_2 * h;
               }
             else
@@ -702,13 +937,12 @@ private:
   VectorType               linearization_point;
   mutable SparseMatrixType system_matrix;
 
-  VectorizedArray<Number> tau;
-
-  const VectorizedArray<Number> theta;
-  const VectorizedArray<Number> nu;
-  const Number                  c_1;
-  const Number                  c_2;
-  const bool                    consider_time_deriverative;
+  const VectorizedArray<Number>     theta;
+  const VectorizedArray<Number>     nu;
+  const Number                      c_1;
+  const Number                      c_2;
+  const TimeIntegratorData<Number> &time_integrator_data;
+  const bool                        consider_time_deriverative;
 
   mutable bool valid_system;
 
@@ -716,7 +950,7 @@ private:
   AlignedVector<VectorizedArray<Number>> delta_2;
 
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> star_value;
-  Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_value;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> u_time_derivative_old;
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> old_gradient;
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_gradient_p;
 
@@ -765,7 +999,7 @@ private:
 
     const auto delta_1 = this->delta_1[cell];
     const auto delta_2 = this->delta_2[cell];
-    const auto tau_inv = 1.0 / this->tau;
+    const auto weight  = this->time_integrator_data.get_primary_weight();
     const auto theta   = this->theta;
     const auto nu      = this->nu;
 
@@ -793,21 +1027,20 @@ private:
 
         for (unsigned int d = 0; d < dim; ++d)
           {
-            u_time_derivative[d] = value[d];
+            u_time_derivative[d] = value[d] * weight;
             u_bar_gradient[d]    = theta * gradient[d];
           }
 
         if (evaluate_residual)
+          u_time_derivative += u_time_derivative_old[cell][q];
+
+        if (evaluate_residual && (theta[0] != 1.0))
           {
-            u_time_derivative -= old_value[cell][q];
             u_bar_gradient +=
-              (VectorizedArray<Number>(1) - theta) * old_gradient[cell][q];
-
+              (VectorizedArray<Number>(1.0) - theta) * old_gradient[cell][q];
             p_bar_gradient +=
-              (VectorizedArray<Number>(1) - theta) * old_gradient_p[cell][q];
+              (VectorizedArray<Number>(1.0) - theta) * old_gradient_p[cell][q];
           }
-
-        u_time_derivative *= tau_inv;
 
         // precompute: div(B)
         VectorizedArray<Number> div_bar = u_bar_gradient[0][0];
@@ -921,22 +1154,24 @@ template <int dim>
 class NavierStokesOperatorMatrixBased : public OperatorBase
 {
 public:
-  NavierStokesOperatorMatrixBased(const Mapping<dim>              &mapping,
-                                  const DoFHandler<dim>           &dof_handler,
-                                  const AffineConstraints<Number> &constraints,
-                                  const Quadrature<dim>           &quadrature,
-                                  const Number                     theta,
-                                  const Number                     nu,
-                                  const Number                     c_1,
-                                  const Number                     c_2)
+  NavierStokesOperatorMatrixBased(
+    const Mapping<dim>               &mapping,
+    const DoFHandler<dim>            &dof_handler,
+    const AffineConstraints<Number>  &constraints,
+    const Quadrature<dim>            &quadrature,
+    const Number                      nu,
+    const Number                      c_1,
+    const Number                      c_2,
+    const TimeIntegratorData<Number> &time_integrator_data)
     : mapping(mapping)
     , dof_handler(dof_handler)
     , constraints(constraints)
     , quadrature(quadrature)
-    , theta(theta)
+    , theta(time_integrator_data.get_theta())
     , nu(nu)
     , c_1(c_1)
     , c_2(c_2)
+    , time_integrator_data(time_integrator_data)
     , valid_system(false)
   {
     this->partitioner = std::make_shared<Utilities::MPI::Partitioner>(
@@ -959,17 +1194,15 @@ public:
   }
 
   void
-  set_time_step_size(const Number tau) override
+  invalidate_system() override
   {
-    this->tau = tau;
-
     this->valid_system = false;
   }
 
   void
-  set_previous_solution(const VectorType &vec) override
+  set_previous_solution(const SolutionHistory<VectorType> &vec) override
   {
-    this->previous_solution = vec;
+    this->previous_solution = vec.get_vectors()[1];
     this->previous_solution.update_ghost_values();
 
     this->valid_system = false;
@@ -1018,18 +1251,17 @@ public:
   }
 
 private:
-  const Mapping<dim>              &mapping;
-  const DoFHandler<dim>           &dof_handler;
-  const AffineConstraints<Number> &constraints;
-  const Quadrature<dim>           &quadrature;
-  const Number                     theta;
-  const Number                     nu;
-  const Number                     c_1;
-  const Number                     c_2;
+  const Mapping<dim>               &mapping;
+  const DoFHandler<dim>            &dof_handler;
+  const AffineConstraints<Number>  &constraints;
+  const Quadrature<dim>            &quadrature;
+  const Number                      theta;
+  const Number                      nu;
+  const Number                      c_1;
+  const Number                      c_2;
+  const TimeIntegratorData<Number> &time_integrator_data;
 
   mutable bool valid_system;
-
-  Number tau;
 
   VectorType previous_solution;
   VectorType linearization_point;
@@ -1076,6 +1308,8 @@ private:
 
     const auto &Vu_0    = this->previous_solution;
     const auto &Vu_star = this->linearization_point;
+
+    const auto tau = time_integrator_data.get_current_dt();
 
     for (const auto &cell : dof_handler.active_cell_iterators())
       {
@@ -1209,9 +1443,11 @@ struct Parameters
   std::string simulation_name = "channel";
 
   // system
-  double cfl     = 0.1;
-  double t_final = 3.0;
-  double theta   = 0.5;
+  double       cfl            = 0.1;
+  double       t_final        = 3.0;
+  double       theta          = 0.5;
+  unsigned int bdf_order      = 1;
+  std::string  time_intration = "theta";
 
   // NSE-GLS parameters
   double nu                         = 0.1;
@@ -1267,6 +1503,11 @@ private:
     prm.add_parameter("cfl", cfl);
     prm.add_parameter("t final", t_final);
     prm.add_parameter("theta", theta);
+    prm.add_parameter("bdf order", bdf_order);
+    prm.add_parameter("time intration",
+                      time_intration,
+                      "",
+                      Patterns::Selection("bdf|theta"));
 
     // NSE-GLS parameters
     prm.add_parameter("nu", nu);
@@ -1977,6 +2218,18 @@ public:
     AffineConstraints<Number> constraints_inhomogeneous;
     // note: filled during time loop
 
+    // set up time integration scheme
+    std::shared_ptr<TimeIntegratorData<Number>> time_integrator_data;
+
+    if (params.time_intration == "bdf")
+      time_integrator_data =
+        std::make_shared<TimeIntegratorDataBDF<Number>>(params.bdf_order);
+    else if (params.time_intration == "theta")
+      time_integrator_data =
+        std::make_shared<TimeIntegratorDataTheta<Number>>(params.theta);
+    else
+      AssertThrow(false, ExcNotImplemented());
+
     // set up Navier-Stokes operator
     std::shared_ptr<OperatorBase> ns_operator;
 
@@ -1988,10 +2241,10 @@ public:
         constraints,
         constraints_inhomogeneous,
         quadrature,
-        params.theta,
         params.nu,
         params.c_1,
         params.c_2,
+        *time_integrator_data,
         params.consider_time_deriverative);
     else
       ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
@@ -1999,10 +2252,10 @@ public:
         dof_handler,
         constraints_inhomogeneous,
         quadrature,
-        params.theta,
         params.nu,
         params.c_1,
-        params.c_2);
+        params.c_2,
+        *time_integrator_data);
 
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
@@ -2050,15 +2303,16 @@ public:
         std::make_shared<NonLinearSolverPicardSimple>(*ns_operator,
                                                       *linear_solver);
     else if (params.nonlinear_solver == "Picard")
-      nonlinear_solver = std::make_shared<NonLinearSolverPicard>(*ns_operator,
-                                                                 *linear_solver,
-                                                                 params.theta);
+      nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
+        *ns_operator, *linear_solver, time_integrator_data->get_theta());
     else
       AssertThrow(false, ExcNotImplemented());
 
     // initialize solution
-    VectorType solution;
-    ns_operator->initialize_dof_vector(solution);
+    SolutionHistory<VectorType> solution(time_integrator_data->get_order() + 1);
+
+    for (auto &vec : solution.get_vectors())
+      ns_operator->initialize_dof_vector(vec);
 
     const double dt =
       GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
@@ -2066,7 +2320,11 @@ public:
     double       t       = 0.0;
     unsigned int counter = 1;
 
-    output(t, mapping, dof_handler, solution);
+    output(t, mapping, dof_handler, solution.get_current_solution());
+    simulation->postprocess(t,
+                            mapping,
+                            dof_handler,
+                            solution.get_current_solution());
 
     // perform time loop
     for (; t < params.t_final; ++counter)
@@ -2090,26 +2348,32 @@ public:
         constraints_inhomogeneous.close();
 
         // set time step size
-        ns_operator->set_time_step_size(dt);
+        time_integrator_data->update_dt(dt);
+
+        ns_operator->invalidate_system(); // TODO
 
         // set previous solution
+        solution.commit_solution();
+
         ns_operator->set_previous_solution(solution);
 
+        auto &current_solution = solution.get_current_solution();
+
         // solve nonlinear problem
-        nonlinear_solver->solve(solution);
+        nonlinear_solver->solve(current_solution);
 
         // apply constraints
-        constraints_inhomogeneous.distribute(solution);
-        constraints.distribute(solution);
+        constraints_inhomogeneous.distribute(current_solution);
+        constraints.distribute(current_solution);
 
-        pcout << "    [S] l2-norm of solution: " << solution.l2_norm()
+        pcout << "    [S] l2-norm of solution: " << current_solution.l2_norm()
               << std::endl;
 
         t += dt;
 
         // postprocessing
-        output(t, mapping, dof_handler, solution);
-        simulation->postprocess(t, mapping, dof_handler, solution);
+        output(t, mapping, dof_handler, current_solution);
+        simulation->postprocess(t, mapping, dof_handler, current_solution);
       }
   }
 
@@ -2130,9 +2394,10 @@ private:
         counter * params.output_granularity)
       return;
 
-    counter++;
+    const std::string file_name =
+      params.paraview_prefix + "." + std::to_string(counter) + ".vtu";
 
-    pcout << "    [O] output VTU (" << counter << ")" << std::endl;
+    pcout << "    [O] output VTU (" << file_name << ")" << std::endl;
 
     DataOutBase::VtkFlags flags;
     flags.time                     = time;
@@ -2158,10 +2423,9 @@ private:
 
     data_out.build_patches(mapping, params.fe_degree);
 
-    const std::string file_name =
-      params.paraview_prefix + "." + std::to_string(counter) + ".vtu";
-
     data_out.write_vtu_in_parallel(file_name, dof_handler.get_communicator());
+
+    counter++;
   }
 };
 

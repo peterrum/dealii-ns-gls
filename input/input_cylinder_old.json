@@ -6,13 +6,16 @@
 
   "simulation name" : "cylinder old",
 
-  "cfl"     : 0.1,
-  "t final" : 20.0,
-  "theta"   : 0.5,
+  "cfl"            : 0.1,
+  "t final"        : 20.0,
+  "theta"          : 1.0,
+  "bdf order"      : 1,
+  "time intration" : "bdf",
 
   "c1" : 2.00,
   "c2" : 1.0,
   "nu" : 0.00,
+  "consider time deriverative" : true,
 
   "use matrix free ns operator" : true,
 
