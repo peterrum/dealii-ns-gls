@@ -44,14 +44,14 @@ template <typename Number>
 class TimeIntegratorData
 {
 public:
-  TimeIntegratorData(unsigned int order)
+  TimeIntegratorData(const unsigned int order)
     : order(order)
     , dt(order)
     , weights(order + 1)
   {}
 
   void
-  update_dt(Number dt_new)
+  update_dt(const Number dt_new)
   {
     for (int i = get_order() - 2; i >= 0; i--)
       {
@@ -684,15 +684,29 @@ public:
     if (has_ghost_elements == false)
       vec.update_ghost_values();
 
-    const auto tau    = this->time_integrator_data.get_current_dt();
-    const auto weight = this->time_integrator_data.get_weights()[1];
+    const auto tau = this->time_integrator_data.get_current_dt();
+
+    VectorType vec_old;
+    vec_old.reinit(vec);
+
+    for (unsigned int i = 1; i <= time_integrator_data.get_order(); ++i)
+      vec_old.add(time_integrator_data.get_weights()[i],
+                  history.get_vectors()[i]);
+
+    vec_old.update_ghost_values();
 
     for (unsigned int cell = 0; cell < n_cells; ++cell)
       {
         integrator.reinit(cell);
+
+        integrator.read_dof_values_plain(vec_old);
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
+
+        for (const auto q : integrator.quadrature_point_indices())
+          u_time_derivative_old[cell][q] = integrator.get_value(q);
+
         integrator.read_dof_values_plain(vec);
-        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
-                            EvaluationFlags::EvaluationFlags::gradients);
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::gradients);
 
         integrator_scalar.reinit(cell);
         integrator_scalar.read_dof_values_plain(vec);
@@ -701,8 +715,7 @@ public:
         // precompute value/gradient of linearization point at quadrature points
         for (const auto q : integrator.quadrature_point_indices())
           {
-            u_time_derivative_old[cell][q] = integrator.get_value(q) * weight;
-            old_gradient[cell][q]          = integrator.get_gradient(q);
+            old_gradient[cell][q] = integrator.get_gradient(q);
 
             old_gradient_p[cell][q] = integrator_scalar.get_gradient(q);
           }
