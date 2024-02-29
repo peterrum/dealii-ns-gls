@@ -40,6 +40,42 @@ using Number           = double;
 using VectorType       = LinearAlgebra::distributed::Vector<Number>;
 using SparseMatrixType = TrilinosWrappers::SparseMatrix;
 
+template <typename VectorType>
+class SolutionHistory
+{
+public:
+  SolutionHistory(const unsigned int size)
+    : solutions(size)
+  {}
+
+  VectorType &
+  get_current_solution()
+  {
+    return solutions[0];
+  }
+
+  std::vector<VectorType> &
+  get_vectors()
+  {
+    return solutions;
+  }
+
+  const std::vector<VectorType> &
+  get_vectors() const
+  {
+    return solutions;
+  }
+
+  void
+  commit_solution()
+  {
+    for (int i = solutions.size() - 2; i >= 0; --i)
+      solutions[i + 1] = solutions[i];
+  }
+
+  std::vector<VectorType> solutions;
+};
+
 /**
  * Linear/nonlinear operator.
  */
@@ -50,7 +86,7 @@ public:
   set_time_step_size(const Number tau) = 0;
 
   virtual void
-  set_previous_solution(const VectorType &vec) = 0;
+  set_previous_solution(const SolutionHistory<VectorType> &vec) = 0;
 
   virtual void
   set_linearization_point(const VectorType &src) = 0;
@@ -524,7 +560,7 @@ public:
   }
 
   void
-  set_previous_solution(const VectorType &vec) override
+  set_previous_solution(const SolutionHistory<VectorType> &history) override
   {
     this->valid_system = false;
 
@@ -543,6 +579,8 @@ public:
                                                           0,
                                                           0,
                                                           dim);
+
+    const auto &vec = history.get_vectors()[1];
 
     const bool has_ghost_elements = vec.has_ghost_elements();
 
@@ -968,9 +1006,9 @@ public:
   }
 
   void
-  set_previous_solution(const VectorType &vec) override
+  set_previous_solution(const SolutionHistory<VectorType> &vec) override
   {
-    this->previous_solution = vec;
+    this->previous_solution = vec.get_vectors()[1];
     this->previous_solution.update_ghost_values();
 
     this->valid_system = false;
@@ -2058,8 +2096,10 @@ public:
       AssertThrow(false, ExcNotImplemented());
 
     // initialize solution
-    VectorType solution;
-    ns_operator->initialize_dof_vector(solution);
+    SolutionHistory<VectorType> solution(2);
+
+    for (auto &vec : solution.get_vectors())
+      ns_operator->initialize_dof_vector(vec);
 
     const double dt =
       GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
@@ -2067,8 +2107,11 @@ public:
     double       t       = 0.0;
     unsigned int counter = 1;
 
-    output(t, mapping, dof_handler, solution);
-    simulation->postprocess(t, mapping, dof_handler, solution);
+    output(t, mapping, dof_handler, solution.get_current_solution());
+    simulation->postprocess(t,
+                            mapping,
+                            dof_handler,
+                            solution.get_current_solution());
 
     // perform time loop
     for (; t < params.t_final; ++counter)
@@ -2095,23 +2138,27 @@ public:
         ns_operator->set_time_step_size(dt);
 
         // set previous solution
+        solution.commit_solution();
+
         ns_operator->set_previous_solution(solution);
 
+        auto &current_solution = solution.get_current_solution();
+
         // solve nonlinear problem
-        nonlinear_solver->solve(solution);
+        nonlinear_solver->solve(current_solution);
 
         // apply constraints
-        constraints_inhomogeneous.distribute(solution);
-        constraints.distribute(solution);
+        constraints_inhomogeneous.distribute(current_solution);
+        constraints.distribute(current_solution);
 
-        pcout << "    [S] l2-norm of solution: " << solution.l2_norm()
+        pcout << "    [S] l2-norm of solution: " << current_solution.l2_norm()
               << std::endl;
 
         t += dt;
 
         // postprocessing
-        output(t, mapping, dof_handler, solution);
-        simulation->postprocess(t, mapping, dof_handler, solution);
+        output(t, mapping, dof_handler, current_solution);
+        simulation->postprocess(t, mapping, dof_handler, current_solution);
       }
   }
 
