@@ -119,15 +119,31 @@ private:
 class PreconditionerAMG : public PreconditionerBase
 {
 public:
-  PreconditionerAMG(const OperatorBase &op)
+  PreconditionerAMG(const OperatorBase                   &op,
+                    const std::vector<std::vector<bool>> &constant_modes)
     : op(op)
+    , constant_modes(constant_modes)
   {}
 
   void
   initialize() override
   {
     const auto &matrix = op.get_system_matrix();
-    precon.initialize(matrix);
+
+    typename TrilinosWrappers::PreconditionAMG::AdditionalData ad;
+
+    ad.elliptic              = false;
+    ad.higher_order_elements = false;
+    ad.n_cycles              = 1;
+    ad.aggregation_threshold = 1e-14;
+    ad.constant_modes        = constant_modes;
+    ad.smoother_sweeps       = 2;
+    ad.smoother_overlap      = 1;
+    ad.output_details        = false;
+    ad.smoother_type         = "ILU";
+    ad.coarse_type           = "ILU";
+
+    precon.initialize(matrix, ad);
   }
 
   void
@@ -138,6 +154,8 @@ public:
 
 private:
   const OperatorBase &op;
+
+  const std::vector<std::vector<bool>> constant_modes;
 
   TrilinosWrappers::PreconditionAMG precon;
 };
@@ -162,12 +180,16 @@ public:
 class LinearSolverGMRES : public LinearSolverBase
 {
 public:
-  LinearSolverGMRES(const OperatorBase &op, PreconditionerBase &preconditioner)
+  LinearSolverGMRES(const OperatorBase &op,
+                    PreconditionerBase &preconditioner,
+                    const unsigned int  n_max_iterations,
+                    const double        absolute_tolerance,
+                    const double        relative_tolerance)
     : op(op)
     , preconditioner(preconditioner)
-    , n_max_iterations(100) // TODO
-    , abs_tolerance(1e-12)  // TODO
-    , rel_tolerance(1e-8)   // TODO
+    , n_max_iterations(n_max_iterations)
+    , absolute_tolerance(absolute_tolerance)
+    , relative_tolerance(relative_tolerance)
     , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
@@ -181,8 +203,8 @@ public:
   solve(VectorType &dst, const VectorType &src) const override
   {
     ReductionControl solver_control(n_max_iterations,
-                                    abs_tolerance,
-                                    rel_tolerance);
+                                    absolute_tolerance,
+                                    relative_tolerance);
 
     SolverGMRES<VectorType> solver(solver_control);
 
@@ -202,8 +224,8 @@ private:
   PreconditionerBase &preconditioner;
 
   const unsigned int n_max_iterations;
-  const double       abs_tolerance;
-  const double       rel_tolerance;
+  const double       absolute_tolerance;
+  const double       relative_tolerance;
 
   const ConditionalOStream pcout;
 };
@@ -462,12 +484,14 @@ public:
     const Number                     theta,
     const Number                     nu,
     const Number                     c_1,
-    const Number                     c_2)
+    const Number                     c_2,
+    const bool                       consider_time_deriverative)
     : constraints_inhomogeneous(constraints_inhomogeneous)
     , theta(theta)
     , nu(nu)
     , c_1(c_1)
     , c_2(c_2)
+    , consider_time_deriverative(consider_time_deriverative)
     , valid_system(false)
   {
     const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
@@ -484,6 +508,11 @@ public:
 
     for (auto i : this->matrix_free.get_constrained_dofs())
       constrained_indices.push_back(i);
+
+    if (consider_time_deriverative)
+      {
+        AssertThrow(theta == 1.0, ExcInternalError());
+      }
   }
 
   void
@@ -679,6 +708,7 @@ private:
   const VectorizedArray<Number> nu;
   const Number                  c_1;
   const Number                  c_2;
+  const bool                    consider_time_deriverative;
 
   mutable bool valid_system;
 
@@ -713,19 +743,19 @@ private:
   }
 
   /**
-   * (v, D) + τ (v, S⋅∇B) - τ (div(v), p) + τ (ε(v), νε(B))
-   *        + δ_1 τ (S⋅∇v, ∇P + S⋅∇B) + δ_2 τ (div(v), div(B)) = 0
-   *          +------- SUPG --------+   +-------- GD --------+
+   * (v, ∂t(u)) + (v, S⋅∇B) - (div(v), p) + (ε(v), νε(B))
+   *            + δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) + δ_2 (div(v), div(B)) = 0
+   *              +----------- SUPG ----------+   +------- GD -------+
    *
-   * (q, div(B)) + δ_1 (∇q, ∇p + S⋅∇B) = 0
-   *               +------ PSPG -----+
+   * (q, div(B)) + δ_1 (∇q, ∂t(u) + ∇p + S⋅∇B) = 0
+   *               +---------- PSPG ---------+
    *
    * with the following nomenclature:
-   *  - S := u^*
-   *  - B := θ u^{n+1} + (1-θ) u^{n}
-   *  - P := θ p^{n+1} + (1-θ) p^{n}
-   *  - D := u^{n+1} - u^{n}
-   *  - p := p^{n+1}.
+   *  - S      := u^*
+   *  - B     := θ u^{n+1} + (1-θ) u^{n}
+   *  - P     := θ p^{n+1} + (1-θ) p^{n}
+   *  - p     := p^{n+1}
+   *  - ∂t(u) := time deriverative (one-step-theta method, BDF)
    */
   template <bool evaluate_residual>
   void
@@ -735,7 +765,7 @@ private:
 
     const auto delta_1 = this->delta_1[cell];
     const auto delta_2 = this->delta_2[cell];
-    const auto tau     = this->tau;
+    const auto tau_inv = 1.0 / this->tau;
     const auto theta   = this->theta;
     const auto nu      = this->nu;
 
@@ -758,24 +788,26 @@ private:
 
         const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
           star_value[cell][q];
-        Tensor<1, dim, VectorizedArray<Number>> u_delta_value;
+        Tensor<1, dim, VectorizedArray<Number>> u_time_derivative;
         Tensor<2, dim, VectorizedArray<Number>> u_bar_gradient;
 
         for (unsigned int d = 0; d < dim; ++d)
           {
-            u_delta_value[d]  = value[d];
-            u_bar_gradient[d] = theta * gradient[d];
+            u_time_derivative[d] = value[d];
+            u_bar_gradient[d]    = theta * gradient[d];
           }
 
         if (evaluate_residual)
           {
-            u_delta_value -= old_value[cell][q];
+            u_time_derivative -= old_value[cell][q];
             u_bar_gradient +=
               (VectorizedArray<Number>(1) - theta) * old_gradient[cell][q];
 
             p_bar_gradient +=
               (VectorizedArray<Number>(1) - theta) * old_gradient_p[cell][q];
           }
+
+        u_time_derivative *= tau_inv;
 
         // precompute: div(B)
         VectorizedArray<Number> div_bar = u_bar_gradient[0][0];
@@ -786,40 +818,44 @@ private:
         const auto s_grad_b = u_bar_gradient * u_star_value;
 
         // velocity block:
-        //  a)  (v, D)
+        //  a)  (v, ∂t(u))
         for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] = u_delta_value[d];
+          value_result[d] = u_time_derivative[d];
 
-        //  b)  τ (v, S⋅∇B)
+        //  b)  (v, S⋅∇B)
         for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] += s_grad_b[d] * tau;
+          value_result[d] += s_grad_b[d];
 
-        //  c)  - τ (div(v), p)
+        //  c)  - (div(v), p)
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] -= p_value * tau;
+          gradient_result[d][d] -= p_value;
 
-        //  d)  τ (ε(v), νε(B))
+        //  d)  (ε(v), νε(B))
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += u_bar_gradient[d][d] * (nu * tau);
+          gradient_result[d][d] += u_bar_gradient[d][d] * nu;
 
         for (unsigned int e = 0, counter = dim; e < dim; ++e)
           for (unsigned int d = e + 1; d < dim; ++d, ++counter)
             {
-              const auto tmp = (u_bar_gradient[d][e] + u_bar_gradient[e][d]) *
-                               (nu * tau * 0.5);
+              const auto tmp =
+                (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
               gradient_result[d][e] += tmp;
               gradient_result[e][d] += tmp;
             }
 
-        //  e)  δ_1 τ (S⋅∇v, ∇P + S⋅∇B) -> SUPG stabilization
-        const auto residual = (delta_1 * tau) * (p_bar_gradient + s_grad_b);
+        //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
+        const auto residual =
+          (delta_1) * ((consider_time_deriverative ?
+                          u_time_derivative :
+                          Tensor<1, dim, VectorizedArray<Number>>()) +
+                       p_bar_gradient + s_grad_b);
         for (unsigned int d0 = 0; d0 < dim; ++d0)
           for (unsigned int d1 = 0; d1 < dim; ++d1)
             gradient_result[d0][d1] += u_star_value[d1] * residual[d0];
 
-        //  f) δ_2 τ (div(v), div(B)) -> GD stabilization
+        //  f) δ_2 (div(v), div(B)) -> GD stabilization
         for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += (delta_2 * tau) * div_bar;
+          gradient_result[d][d] += delta_2 * div_bar;
 
 
 
@@ -827,8 +863,12 @@ private:
         //  a)  (q, div(B))
         value_result[dim] = div_bar;
 
-        //  b)  δ_1 (∇q, ∇p + S⋅∇B) -> PSPG stabilization
-        gradient_result[dim] = delta_1 * (p_gradient + s_grad_b);
+        //  b)  δ_1 (∇q, ∂t(u) + ∇p + S⋅∇B) -> PSPG stabilization
+        gradient_result[dim] =
+          delta_1 * ((consider_time_deriverative ?
+                        u_time_derivative :
+                        Tensor<1, dim, VectorizedArray<Number>>()) +
+                     p_gradient + s_grad_b);
 
 
         integrator.submit_value(value_result, q);
@@ -1174,12 +1214,19 @@ struct Parameters
   double theta   = 0.5;
 
   // NSE-GLS parameters
-  double nu  = 0.1;
-  double c_1 = 4.0;
-  double c_2 = 2.0;
+  double nu                         = 0.1;
+  double c_1                        = 4.0;
+  double c_2                        = 2.0;
+  bool   consider_time_deriverative = false;
 
   // implmentation of operator evaluation
   bool use_matrix_free_ns_operator = true;
+
+  // linear solver
+  unsigned int lin_n_max_iterations   = 10000;
+  double       lin_absolute_tolerance = 1e-12;
+  double       lin_relative_tolerance = 1e-8;
+
 
   // preconditioner of linear solver
   std::string preconditioner = "ILU";
@@ -1225,10 +1272,16 @@ private:
     prm.add_parameter("nu", nu);
     prm.add_parameter("c1", c_1);
     prm.add_parameter("c2", c_2);
+    prm.add_parameter("consider time deriverative", consider_time_deriverative);
 
     // implmentation of operator evaluation
     prm.add_parameter("use matrix free ns operator",
                       use_matrix_free_ns_operator);
+
+    // linear solver
+    prm.add_parameter("lin n max iterations", lin_n_max_iterations);
+    prm.add_parameter("lin absolute tolerance", lin_absolute_tolerance);
+    prm.add_parameter("lin relative tolerance", lin_relative_tolerance);
 
     // preconditioner of linear solver
     prm.add_parameter("preconditioner",
@@ -1928,17 +1981,18 @@ public:
     std::shared_ptr<OperatorBase> ns_operator;
 
     if (params.use_matrix_free_ns_operator)
-      ns_operator =
-        std::make_shared<NavierStokesOperator<dim>>(mapping,
-                                                    dof_handler,
-                                                    constraints_homogeneous,
-                                                    constraints,
-                                                    constraints_inhomogeneous,
-                                                    quadrature,
-                                                    params.theta,
-                                                    params.nu,
-                                                    params.c_1,
-                                                    params.c_2);
+      ns_operator = std::make_shared<NavierStokesOperator<dim>>(
+        mapping,
+        dof_handler,
+        constraints_homogeneous,
+        constraints,
+        constraints_inhomogeneous,
+        quadrature,
+        params.theta,
+        params.nu,
+        params.c_1,
+        params.c_2,
+        params.consider_time_deriverative);
     else
       ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
         mapping,
@@ -1956,7 +2010,17 @@ public:
     if (params.preconditioner == "ILU")
       preconditioner = std::make_shared<PreconditionerILU>(*ns_operator);
     else if (params.preconditioner == "AMG")
-      preconditioner = std::make_shared<PreconditionerAMG>(*ns_operator);
+      {
+        std::vector<std::vector<bool>> constant_modes;
+
+        ComponentMask components(dim + 1, true);
+        DoFTools::extract_constant_modes(dof_handler,
+                                         components,
+                                         constant_modes);
+
+        preconditioner =
+          std::make_shared<PreconditionerAMG>(*ns_operator, constant_modes);
+      }
     else
       AssertThrow(false, ExcNotImplemented());
 
@@ -1964,8 +2028,15 @@ public:
     // set up linear solver
     std::shared_ptr<LinearSolverBase> linear_solver;
 
-    linear_solver =
-      std::make_shared<LinearSolverGMRES>(*ns_operator, *preconditioner);
+    if (true)
+      linear_solver =
+        std::make_shared<LinearSolverGMRES>(*ns_operator,
+                                            *preconditioner,
+                                            params.lin_n_max_iterations,
+                                            params.lin_absolute_tolerance,
+                                            params.lin_relative_tolerance);
+    else
+      AssertThrow(false, ExcNotImplemented());
 
     // set up nonlinear solver
     std::shared_ptr<NonLinearSolverBase> nonlinear_solver;
