@@ -1042,6 +1042,8 @@ private:
   }
 
   /**
+   * Fixed-point system:
+   *
    * (v, ∂t(u)) + (v, S⋅∇B) - (div(v), p) + (ε(v), νε(B))
    *            + δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) + δ_2 (div(v), div(B)) = 0
    *              +----------- SUPG ----------+   +------- GD -------+
@@ -1055,6 +1057,17 @@ private:
    *  - P     := θ p^{n+1} + (1-θ) p^{n}
    *  - p     := p^{n+1}
    *  - ∂t(u) := time deriverative (one-step-theta method, BDF)
+   *
+   *
+   * Linearized system:
+   *
+   * (v, ∂t'(u)) + (v, S⋅∇u) + (v, u⋅∇S) - (div(v), p) + (ε(v), νε(u))
+   *             + δ_1 (S⋅∇v, ∂t'(u) + S⋅∇u + u⋅∇S + ∇P) -> SUPG (1)
+   *             + δ_1 (u⋅∇v, ∂t'(U) + S⋅∇S + ∇SP)       -> SUPG (2)
+   *             + δ_2 (div(v), div(u))                  -> GD
+   *
+   * (q, div(u)) + δ_1 (∇q, ∂t'(u) + S⋅∇u + u⋅∇S + ∇p)
+   *               +-------------- PSPG -------------+
    */
   template <bool evaluate_residual>
   void
