@@ -2068,6 +2068,7 @@ public:
     unsigned int counter = 1;
 
     output(t, mapping, dof_handler, solution);
+    simulation->postprocess(t, mapping, dof_handler, solution);
 
     // perform time loop
     for (; t < params.t_final; ++counter)
