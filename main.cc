@@ -1193,7 +1193,121 @@ private:
       }
     else
       {
-        AssertThrow(false, ExcInternalError());
+        const unsigned int cell = integrator.get_current_cell_index();
+
+        const auto delta_1 = this->delta_1[cell];
+        const auto delta_2 = this->delta_2[cell];
+        const auto weight  = this->time_integrator_data.get_primary_weight();
+        const auto theta   = this->theta;
+        const auto nu      = this->nu;
+
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                            EvaluationFlags::EvaluationFlags::gradients);
+
+        for (const auto q : integrator.quadrature_point_indices())
+          {
+            typename FECellIntegrator::value_type    value_result    = {};
+            typename FECellIntegrator::gradient_type gradient_result = {};
+
+            const auto value    = integrator.get_value(q);
+            const auto gradient = integrator.get_gradient(q);
+
+            const VectorizedArray<Number>                 p_value = value[dim];
+            const Tensor<1, dim, VectorizedArray<Number>> p_gradient =
+              gradient[dim];
+            Tensor<1, dim, VectorizedArray<Number>> p_bar_gradient =
+              theta * gradient[dim];
+
+            const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
+              star_value[cell][q];
+            Tensor<1, dim, VectorizedArray<Number>> u_time_derivative;
+            Tensor<2, dim, VectorizedArray<Number>> u_bar_gradient;
+
+            for (unsigned int d = 0; d < dim; ++d)
+              {
+                u_time_derivative[d] = value[d] * weight;
+                u_bar_gradient[d]    = theta * gradient[d];
+              }
+
+            if (evaluate_residual)
+              u_time_derivative += u_time_derivative_old[cell][q];
+
+            if (evaluate_residual && (theta[0] != 1.0))
+              {
+                u_bar_gradient += (VectorizedArray<Number>(1.0) - theta) *
+                                  old_gradient[cell][q];
+                p_bar_gradient += (VectorizedArray<Number>(1.0) - theta) *
+                                  old_gradient_p[cell][q];
+              }
+
+            // precompute: div(B)
+            VectorizedArray<Number> div_bar = u_bar_gradient[0][0];
+            for (unsigned int d = 1; d < dim; ++d)
+              div_bar += u_bar_gradient[d][d];
+
+            // precompute: S⋅∇B
+            const auto s_grad_b = u_bar_gradient * u_star_value;
+
+            // velocity block:
+            //  a)  (v, ∂t(u))
+            for (unsigned int d = 0; d < dim; ++d)
+              value_result[d] = u_time_derivative[d];
+
+            //  b)  (v, S⋅∇B)
+            for (unsigned int d = 0; d < dim; ++d)
+              value_result[d] += s_grad_b[d];
+
+            //  c)  - (div(v), p)
+            for (unsigned int d = 0; d < dim; ++d)
+              gradient_result[d][d] -= p_value;
+
+            //  d)  (ε(v), νε(B))
+            for (unsigned int d = 0; d < dim; ++d)
+              gradient_result[d][d] += u_bar_gradient[d][d] * nu;
+
+            for (unsigned int e = 0, counter = dim; e < dim; ++e)
+              for (unsigned int d = e + 1; d < dim; ++d, ++counter)
+                {
+                  const auto tmp =
+                    (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
+                  gradient_result[d][e] += tmp;
+                  gradient_result[e][d] += tmp;
+                }
+
+            //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
+            const auto residual =
+              (delta_1) * ((consider_time_deriverative ?
+                              u_time_derivative :
+                              Tensor<1, dim, VectorizedArray<Number>>()) +
+                           p_bar_gradient + s_grad_b);
+            for (unsigned int d0 = 0; d0 < dim; ++d0)
+              for (unsigned int d1 = 0; d1 < dim; ++d1)
+                gradient_result[d0][d1] += u_star_value[d1] * residual[d0];
+
+            //  f) δ_2 (div(v), div(B)) -> GD stabilization
+            for (unsigned int d = 0; d < dim; ++d)
+              gradient_result[d][d] += delta_2 * div_bar;
+
+
+
+            // pressure block:
+            //  a)  (q, div(B))
+            value_result[dim] = div_bar;
+
+            //  b)  δ_1 (∇q, ∂t(u) + ∇p + S⋅∇B) -> PSPG stabilization
+            gradient_result[dim] =
+              delta_1 * ((consider_time_deriverative ?
+                            u_time_derivative :
+                            Tensor<1, dim, VectorizedArray<Number>>()) +
+                         p_gradient + s_grad_b);
+
+
+            integrator.submit_value(value_result, q);
+            integrator.submit_gradient(gradient_result, q);
+          }
+
+        integrator.integrate(EvaluationFlags::EvaluationFlags::values |
+                             EvaluationFlags::EvaluationFlags::gradients);
       }
   }
 
