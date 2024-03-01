@@ -508,9 +508,6 @@ public:
   void
   solve(VectorType &solution) const override
   {
-    double       l2_norm       = 1e10;
-    unsigned int num_iteration = 0;
-
     VectorType rhs, inc;
     rhs.reinit(solution);
     inc.reinit(solution);
@@ -519,7 +516,10 @@ public:
     op.set_linearization_point(solution);
 
     // compute right-hans-side vector
-    op.evaluate_rhs(rhs);
+    op.evaluate_residual_0(rhs, solution);
+
+    double       l2_norm       = rhs.l2_norm();
+    unsigned int num_iteration = 0;
 
     while (l2_norm > newton_tolerance)
       {
@@ -534,7 +534,7 @@ public:
         op.set_linearization_point(solution);
 
         // compute right-hans-side vector
-        op.evaluate_rhs(rhs);
+        op.evaluate_residual_0(rhs, solution);
 
         // check convergence
         l2_norm = rhs.l2_norm();
