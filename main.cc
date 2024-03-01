@@ -1121,14 +1121,14 @@ private:
    *               +---------- PSPG ---------+
    *
    * with the following nomenclature:
-   *  - S      := u^*
+   *  - S     := u^*
    *  - B     := θ u^{n+1} + (1-θ) u^{n}
    *  - P     := θ p^{n+1} + (1-θ) p^{n}
    *  - p     := p^{n+1}
    *  - ∂t(u) := time deriverative (one-step-theta method, BDF)
    *
    *
-   * Linearized system:
+   * Linearized system (only BDF):
    *
    * (v, ∂t'(u) + U⋅∇u + u⋅∇U) - (div(v), p) + (ε(v), νε(u))
    *            + δ_1 (U⋅∇v, ∂t'(u) + U⋅∇u + u⋅∇U + ∇p) -> SUPG (1)
@@ -1138,7 +1138,7 @@ private:
    * (q, div(u)) + δ_1 (∇q, ∂t'(u) + U⋅∇u + u⋅∇U + ∇p)
    *               +-------------- PSPG -------------+
    *
-   *                       ... with U/P being the linearizatin point
+   *                       ... with U/P being the linearization point
    */
   template <bool evaluate_residual>
   void
