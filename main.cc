@@ -827,8 +827,8 @@ public:
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
     u_time_derivative_old.reinit(n_cells, n_quadrature_points);
-    old_gradient.reinit(n_cells, n_quadrature_points);
-    old_gradient_p.reinit(n_cells, n_quadrature_points);
+    u_old_gradient.reinit(n_cells, n_quadrature_points);
+    p_old_gradient.reinit(n_cells, n_quadrature_points);
 
     delta_1.resize(n_cells);
     delta_2.resize(n_cells);
@@ -879,9 +879,9 @@ public:
         // precompute value/gradient of linearization point at quadrature points
         for (const auto q : integrator.quadrature_point_indices())
           {
-            old_gradient[cell][q] = integrator.get_gradient(q);
+            u_old_gradient[cell][q] = integrator.get_gradient(q);
 
-            old_gradient_p[cell][q] = integrator_scalar.get_gradient(q);
+            p_old_gradient[cell][q] = integrator_scalar.get_gradient(q);
           }
 
         // compute stabilization parameters
@@ -923,8 +923,8 @@ public:
     const unsigned n_cells             = matrix_free.n_cell_batches();
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
-    star_value.reinit(n_cells, n_quadrature_points);
-    star_gradient.reinit(n_cells, n_quadrature_points);
+    u_star_value.reinit(n_cells, n_quadrature_points);
+    u_star_gradient.reinit(n_cells, n_quadrature_points);
     p_star_gradient.reinit(n_cells, n_quadrature_points);
 
     FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
@@ -953,8 +953,8 @@ public:
 
         for (const auto q : integrator.quadrature_point_indices())
           {
-            star_value[cell][q]      = integrator.get_value(q);
-            star_gradient[cell][q]   = integrator.get_gradient(q);
+            u_star_value[cell][q]    = integrator.get_value(q);
+            u_star_gradient[cell][q] = integrator.get_gradient(q);
             p_star_gradient[cell][q] = integrator_scalar.get_gradient(q);
           }
       }
@@ -1041,13 +1041,13 @@ private:
   AlignedVector<VectorizedArray<Number>> delta_1;
   AlignedVector<VectorizedArray<Number>> delta_2;
 
-  Table<2, Tensor<1, dim, VectorizedArray<Number>>> star_value;
-  Table<2, Tensor<2, dim, VectorizedArray<Number>>> star_gradient;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> u_star_value;
+  Table<2, Tensor<2, dim, VectorizedArray<Number>>> u_star_gradient;
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> p_star_gradient;
 
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> u_time_derivative_old;
-  Table<2, Tensor<2, dim, VectorizedArray<Number>>> old_gradient;
-  Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_gradient_p;
+  Table<2, Tensor<2, dim, VectorizedArray<Number>>> u_old_gradient;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> p_old_gradient;
 
   std::vector<unsigned int> constrained_indices;
 
@@ -1133,7 +1133,7 @@ private:
               theta * gradient[dim];
 
             const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
-              star_value[cell][q];
+              this->u_star_value[cell][q];
             Tensor<1, dim, VectorizedArray<Number>> u_time_derivative;
             Tensor<2, dim, VectorizedArray<Number>> u_bar_gradient;
 
@@ -1144,14 +1144,14 @@ private:
               }
 
             if (evaluate_residual)
-              u_time_derivative += u_time_derivative_old[cell][q];
+              u_time_derivative += this->u_time_derivative_old[cell][q];
 
             if (evaluate_residual && (theta[0] != 1.0))
               {
                 u_bar_gradient += (VectorizedArray<Number>(1.0) - theta) *
-                                  old_gradient[cell][q];
+                                  this->u_old_gradient[cell][q];
                 p_bar_gradient += (VectorizedArray<Number>(1.0) - theta) *
-                                  old_gradient_p[cell][q];
+                                  this->p_old_gradient[cell][q];
               }
 
             // precompute: div(B)
@@ -1250,9 +1250,9 @@ private:
               this->p_star_gradient[cell][q];
 
             const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
-              star_value[cell][q];
+              this->u_star_value[cell][q];
             const Tensor<2, dim, VectorizedArray<Number>> u_star_gradient =
-              star_gradient[cell][q];
+              this->u_star_gradient[cell][q];
             Tensor<1, dim, VectorizedArray<Number>> u_time_derivative;
             Tensor<1, dim, VectorizedArray<Number>> u_value;
             Tensor<2, dim, VectorizedArray<Number>> u_gradient;
