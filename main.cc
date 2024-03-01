@@ -40,6 +40,11 @@ using Number           = double;
 using VectorType       = LinearAlgebra::distributed::Vector<Number>;
 using SparseMatrixType = TrilinosWrappers::SparseMatrix;
 
+
+
+/**
+ * Base class for BDF and θ-method.
+ */
 template <typename Number>
 class TimeIntegratorData
 {
@@ -65,6 +70,9 @@ public:
 
 
 
+/**
+ * BDF implementation.
+ */
 template <typename Number>
 class TimeIntegratorDataBDF : public TimeIntegratorData<Number>
 {
@@ -166,6 +174,9 @@ private:
 
 
 
+/**
+ * θ-method implementation.
+ */
 template <typename Number>
 class TimeIntegratorDataTheta : public TimeIntegratorData<Number>
 {
@@ -222,6 +233,9 @@ private:
 
 
 
+/**
+ * A container storing solution vectors of multiple time steps.
+ */
 template <typename VectorType>
 class SolutionHistory
 {
@@ -257,6 +271,8 @@ public:
 
   std::vector<VectorType> solutions;
 };
+
+
 
 /**
  * Linear/nonlinear operator.
@@ -350,16 +366,16 @@ public:
 
     typename TrilinosWrappers::PreconditionAMG::AdditionalData ad;
 
-    ad.elliptic              = false;
-    ad.higher_order_elements = false;
-    ad.n_cycles              = 1;
-    ad.aggregation_threshold = 1e-14;
-    ad.constant_modes        = constant_modes;
-    ad.smoother_sweeps       = 2;
-    ad.smoother_overlap      = 1;
-    ad.output_details        = false;
-    ad.smoother_type         = "ILU";
-    ad.coarse_type           = "ILU";
+    ad.elliptic              = false;          // TODO
+    ad.higher_order_elements = false;          //
+    ad.n_cycles              = 1;              //
+    ad.aggregation_threshold = 1e-14;          //
+    ad.constant_modes        = constant_modes; //
+    ad.smoother_sweeps       = 2;              //
+    ad.smoother_overlap      = 1;              //
+    ad.output_details        = false;          //
+    ad.smoother_type         = "ILU";          //
+    ad.coarse_type           = "ILU";          //
 
     precon.initialize(matrix, ad);
   }
@@ -395,6 +411,9 @@ public:
 
 
 
+/**
+ * Wrapper class around dealii::GMRES.
+ */
 class LinearSolverGMRES : public LinearSolverBase
 {
 public:
@@ -462,6 +481,9 @@ public:
 
 
 
+/**
+ * One step of fixed point iteration.
+ */
 class NonLinearSolverLinearized : public NonLinearSolverBase
 {
 public:
@@ -495,6 +517,9 @@ private:
 
 
 
+/**
+ * Basic Newton solver.
+ */
 class NonLinearSolverNewton : public NonLinearSolverBase
 {
 public:
@@ -570,6 +595,9 @@ private:
 
 
 
+/**
+ * Simple Picard fixed-point iteration solver.
+ */
 class NonLinearSolverPicardSimple : public NonLinearSolverBase
 {
 public:
@@ -635,6 +663,11 @@ private:
 
 
 
+/**
+ * Advanced Picard fixed-point iteration solver.
+ *
+ * TODO: Not working yet.
+ */
 class NonLinearSolverPicard : public NonLinearSolverBase
 {
 public:
@@ -766,7 +799,7 @@ private:
 
 
 /**
- * Navier-Stokes operator.
+ * Matrix-free Navier-Stokes operator.
  */
 template <int dim>
 class NavierStokesOperator : public OperatorBase
@@ -1389,6 +1422,9 @@ private:
 
 
 
+/**
+ * Matrix-based Navier-Stokes operator.
+ */
 template <int dim>
 class NavierStokesOperatorMatrixBased : public OperatorBase
 {
@@ -1670,6 +1706,9 @@ private:
 
 
 
+/**
+ * Collection of parameters.
+ */
 struct Parameters
 {
   // system
@@ -1787,30 +1826,9 @@ private:
 
 
 
-template <int dim, typename Number>
-class InflowVelocity : public Function<dim, Number>
-{
-public:
-  InflowVelocity()
-    : Function<dim>(dim + 1)
-  {}
-
-  Number
-  value(const Point<dim> &p, const unsigned int component) const override
-  {
-    (void)p;
-
-    if (component == 0)
-      return 1.0;
-    else
-      return 0.0;
-  }
-
-private:
-};
-
-
-
+/**
+ * Base class for simulations.
+ */
 template <int dim>
 class SimulationBase
 {
@@ -1847,6 +1865,9 @@ public:
 
 
 
+/**
+ * Channel simulation.
+ */
 template <int dim>
 class SimulationChannel : public SimulationBase<dim>
 {
@@ -1897,10 +1918,36 @@ public:
 
 private:
   const unsigned int n_stretching;
+
+
+  template <int dim, typename Number>
+  class InflowVelocity : public Function<dim, Number>
+  {
+  public:
+    InflowVelocity()
+      : Function<dim>(dim + 1)
+    {}
+
+    Number
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      (void)p;
+
+      if (component == 0)
+        return 1.0;
+      else
+        return 0.0;
+    }
+
+  private:
+  };
 };
 
 
 
+/**
+ * Flow-past cylinder simulation.
+ */
 template <int dim>
 class SimulationCylinder : public SimulationBase<dim>
 {
@@ -2125,6 +2172,9 @@ private:
 
 
 
+/**
+ * Flow-past cylinder simulation with alternative mesh.
+ */
 template <int dim>
 class SimulationCylinderOld : public SimulationBase<dim>
 {
@@ -2359,6 +2409,9 @@ private:
 
 
 
+/**
+ * Driver class for executing the simulation.
+ */
 template <int dim>
 class Driver
 {
