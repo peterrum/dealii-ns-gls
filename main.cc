@@ -522,7 +522,7 @@ public:
     double       l2_norm       = rhs.l2_norm();
     unsigned int num_iteration = 0;
 
-    pcout << "    [N] step " << num_iteration << " ; residual = " << l2_norm
+    pcout << "    [N] step " << num_iteration << "; residual = " << l2_norm
           << std::endl;
 
     while (l2_norm > newton_tolerance)
@@ -1091,13 +1091,15 @@ private:
    *
    * Linearized system:
    *
-   * (v, ∂t'(u) + S⋅∇u + u⋅∇S) - (div(v), p) + (ε(v), νε(u))
-   *            + δ_1 (S⋅∇v, ∂t'(u) + S⋅∇u + u⋅∇S + ∇P) -> SUPG (1)
-   *            + δ_1 (u⋅∇v, ∂t'(U) + S⋅∇S + ∇SP)       -> SUPG (2)
+   * (v, ∂t'(u) + U⋅∇u + u⋅∇U) - (div(v), p) + (ε(v), νε(u))
+   *            + δ_1 (U⋅∇v, ∂t'(u) + U⋅∇u + u⋅∇U + ∇p) -> SUPG (1)
+   *            + δ_1 (u⋅∇v, ∂t'(U) + U⋅∇U + ∇P)        -> SUPG (2)
    *            + δ_2 (div(v), div(u))                  -> GD
    *
-   * (q, div(u)) + δ_1 (∇q, ∂t'(u) + S⋅∇u + u⋅∇S + ∇p)
+   * (q, div(u)) + δ_1 (∇q, ∂t'(u) + U⋅∇u + u⋅∇U + ∇p)
    *               +-------------- PSPG -------------+
+   *
+   *                       ... with U/P being the linearizatin point
    */
   template <bool evaluate_residual_0>
   void
