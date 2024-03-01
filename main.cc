@@ -1299,13 +1299,13 @@ private:
                   gradient_result[e][d] += tmp;
                 }
 
-            //  d)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇u) +
+            //  d)  δ_1 (S⋅∇v, ∂t'(u) + ∇P + S⋅∇u + u⋅∇S) +
             //      δ_1 (u⋅∇v, ∂t'(U) + S⋅∇S + ∇SP) -> SUPG stabilization
             const auto residual_0 =
               (delta_1) * ((consider_time_deriverative ?
                               u_time_derivative :
                               Tensor<1, dim, VectorizedArray<Number>>()) +
-                           p_gradient + s_grad_u);
+                           p_gradient + s_grad_u + u_grad_s);
             const auto residual_1 =
               (delta_1) * ((consider_time_deriverative ?
                               (u_star_value * weight) :
@@ -1316,7 +1316,7 @@ private:
                 gradient_result[d0][d1] += u_star_value[d1] * residual_0[d0] +
                                            u_value[d1] * residual_1[d0];
 
-            //  e) δ_2 (div(v), div(u)) -> GD stabilization
+            //  e)  δ_2 (div(v), div(u)) -> GD stabilization
             for (unsigned int d = 0; d < dim; ++d)
               gradient_result[d][d] += delta_2 * div_u;
 
