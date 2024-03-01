@@ -913,6 +913,7 @@ public:
 
     star_value.reinit(n_cells, n_quadrature_points);
     star_gradient.reinit(n_cells, n_quadrature_points);
+    p_star_gradient.reinit(n_cells, n_quadrature_points);
 
     FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
     FEEvaluation<dim, -1, 0, 1, Number>   integrator_scalar(matrix_free,
@@ -1752,7 +1753,8 @@ private:
     prm.add_parameter("nonlinear solver",
                       nonlinear_solver,
                       "",
-                      Patterns::Selection("linearized|Picard simple|Picard"));
+                      Patterns::Selection(
+                        "linearized|Picard simple|Picard|Newton"));
 
     // output
     prm.add_parameter("paraview prefix", paraview_prefix);
