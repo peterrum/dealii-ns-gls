@@ -498,8 +498,6 @@ public:
     // set linearization point
     op.set_linearization_point(solution);
 
-    // linear_solver.initialize();
-
     // compute right-hans-side vector
     VectorType rhs;
     rhs.reinit(solution);
