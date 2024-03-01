@@ -628,8 +628,7 @@ public:
         op.evaluate_rhs(rhs);
 
         // solve linear system
-        if (true || (num_iteration == 0))
-          linear_solver.initialize();
+        linear_solver.initialize();
 
         linear_solver.solve(solution, rhs);
 
