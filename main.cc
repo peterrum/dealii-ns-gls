@@ -576,6 +576,7 @@ public:
   NonLinearSolverPicardSimple(OperatorBase &op, LinearSolverBase &linear_solver)
     : op(op)
     , linear_solver(linear_solver)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , picard_tolerance(1.0e-7) // TODO
     , picard_max_iteration(30) // TODO
   {}
@@ -617,11 +618,16 @@ public:
             "Picard iteration did not converge. Final residual_0 is " +
             std::to_string(l2_norm) + "."));
       }
+
+    pcout << "    [P] solved in " << num_iteration << " iterations."
+          << std::endl;
   }
 
 private:
   OperatorBase     &op;
   LinearSolverBase &linear_solver;
+
+  const ConditionalOStream pcout;
 
   const double       picard_tolerance;
   const unsigned int picard_max_iteration;
