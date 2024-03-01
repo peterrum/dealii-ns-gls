@@ -277,7 +277,7 @@ public:
   evaluate_rhs(VectorType &dst) const = 0;
 
   virtual void
-  evaluate_residual(VectorType &dst, const VectorType &src) const = 0;
+  evaluate_residual_0(VectorType &dst, const VectorType &src) const = 0;
 
   virtual void
   vmult(VectorType &dst, const VectorType &src) const = 0;
@@ -540,10 +540,11 @@ public:
         l2_norm = rhs.l2_norm();
         num_iteration++;
 
-        AssertThrow(num_iteration <= newton_max_iteration,
-                    dealii::ExcMessage(
-                      "Newton iteration did not converge. Final residual is " +
-                      std::to_string(l2_norm) + "."));
+        AssertThrow(
+          num_iteration <= newton_max_iteration,
+          dealii::ExcMessage(
+            "Newton iteration did not converge. Final residual_0 is " +
+            std::to_string(l2_norm) + "."));
       }
   }
 
@@ -598,10 +599,11 @@ public:
         l2_norm = tmp.l2_norm();
         num_iteration++;
 
-        AssertThrow(num_iteration <= picard_max_iteration,
-                    dealii::ExcMessage(
-                      "Picard iteration did not converge. Final residual is " +
-                      std::to_string(l2_norm) + "."));
+        AssertThrow(
+          num_iteration <= picard_max_iteration,
+          dealii::ExcMessage(
+            "Picard iteration did not converge. Final residual_0 is " +
+            std::to_string(l2_norm) + "."));
       }
   }
 
@@ -636,8 +638,8 @@ public:
   void
   solve(VectorType &solution) const override
   {
-    VectorType residual, tmp, update;
-    residual.reinit(solution);
+    VectorType residual_0, tmp, update;
+    residual_0.reinit(solution);
     tmp.reinit(solution);
     update.reinit(solution);
 
@@ -647,12 +649,12 @@ public:
     // set linearization point
     op.set_linearization_point(tmp);
 
-    // compute residual
-    op.evaluate_residual(residual, tmp);
+    // compute residual_0
+    op.evaluate_residual_0(residual_0, tmp);
 
-    double linfty_norm = residual.l2_norm();
+    double linfty_norm = residual_0.l2_norm();
 
-    pcout << "    [P] initial; residual (linfty) = " << linfty_norm
+    pcout << "    [P] initial; residual_0 (linfty) = " << linfty_norm
           << std::endl;
 
     for (unsigned int i = 1; linfty_norm > picard_tolerance; ++i)
@@ -661,7 +663,7 @@ public:
           {
             const auto error_string =
               std::string(
-                "Picard iteration did not converge. Final residual is ") +
+                "Picard iteration did not converge. Final residual_0 is ") +
               std::to_string(linfty_norm);
             AssertThrow(false, dealii::ExcMessage(error_string));
           }
@@ -673,20 +675,20 @@ public:
             need_to_recompute_matrix = false;
           }
 
-        linear_solver.solve(update, residual);
+        linear_solver.solve(update, residual_0);
         tmp += update;
 
-        // compute residual
+        // compute residual_0
         op.set_linearization_point(tmp);
-        op.evaluate_residual(residual, tmp);
-        double new_linfty_norm = residual.l2_norm();
+        op.evaluate_residual_0(residual_0, tmp);
+        double new_linfty_norm = residual_0.l2_norm();
 
         if (new_linfty_norm < picard_tolerance)
           {
             // accept new step
             linfty_norm = new_linfty_norm;
             pcout << "    [P] step " << i
-                  << " ; residual (linfty) = " << linfty_norm << std::endl;
+                  << " ; residual_0 (linfty) = " << linfty_norm << std::endl;
           }
         else if (new_linfty_norm >
                  picard_reduction_ratio_admissible * linfty_norm)
@@ -698,7 +700,7 @@ public:
             need_to_recompute_matrix = true;
 
             pcout << "    [P] step " << i
-                  << " ; inadmissible residual reduction (" << new_linfty_norm
+                  << " ; inadmissible residual_0 reduction (" << new_linfty_norm
                   << " > " << linfty_norm << " ), recompute matrix\n"
                   << std::endl;
           }
@@ -708,7 +710,7 @@ public:
             // accept new step
             linfty_norm = new_linfty_norm;
             pcout << "    [P] step " << i
-                  << " ; residual (linfty) = " << linfty_norm
+                  << " ; residual_0 (linfty) = " << linfty_norm
                   << ", recompute matrix" << std::endl;
             need_to_recompute_matrix = true;
           }
@@ -717,7 +719,7 @@ public:
             // accept new step
             linfty_norm = new_linfty_norm;
             pcout << "    [P] step " << i
-                  << " ; residual (linfty) = " << linfty_norm << std::endl;
+                  << " ; residual_0 (linfty) = " << linfty_norm << std::endl;
           }
       }
 
@@ -910,6 +912,7 @@ public:
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
     star_value.reinit(n_cells, n_quadrature_points);
+    star_gradient.reinit(n_cells, n_quadrature_points);
 
     FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
 
@@ -929,7 +932,10 @@ public:
         integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
 
         for (const auto q : integrator.quadrature_point_indices())
-          star_value[cell][q] = integrator.get_value(q);
+          {
+            star_value[cell][q]    = integrator.get_value(q);
+            star_gradient[cell][q] = integrator.get_gradient(q);
+          }
       }
 
     if (has_ghost_elements == false)
@@ -956,7 +962,7 @@ public:
   }
 
   virtual void
-  evaluate_residual(VectorType &dst, const VectorType &src) const override
+  evaluate_residual_0(VectorType &dst, const VectorType &src) const override
   {
     this->matrix_free.cell_loop(
       &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
@@ -1015,27 +1021,29 @@ private:
   AlignedVector<VectorizedArray<Number>> delta_2;
 
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> star_value;
+  Table<2, Tensor<2, dim, VectorizedArray<Number>>> star_gradient;
+
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> u_time_derivative_old;
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> old_gradient;
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_gradient_p;
 
   std::vector<unsigned int> constrained_indices;
 
-  template <bool evaluate_residual>
+  template <bool evaluate_residual_0>
   void
   do_vmult_range(const MatrixFree<dim, Number>               &matrix_free,
                  VectorType                                  &dst,
                  const VectorType                            &src,
                  const std::pair<unsigned int, unsigned int> &range) const
   {
-    FECellIntegrator phi(matrix_free, evaluate_residual ? 1 : 0);
+    FECellIntegrator phi(matrix_free, evaluate_residual_0 ? 1 : 0);
 
     for (auto cell = range.first; cell < range.second; ++cell)
       {
         phi.reinit(cell);
         phi.read_dof_values(src);
 
-        do_vmult_cell<evaluate_residual>(phi);
+        do_vmult_cell<evaluate_residual_0>(phi);
 
         phi.distribute_local_to_global(dst);
       }
@@ -1061,19 +1069,19 @@ private:
    *
    * Linearized system:
    *
-   * (v, ∂t'(u)) + (v, S⋅∇u) + (v, u⋅∇S) - (div(v), p) + (ε(v), νε(u))
-   *             + δ_1 (S⋅∇v, ∂t'(u) + S⋅∇u + u⋅∇S + ∇P) -> SUPG (1)
-   *             + δ_1 (u⋅∇v, ∂t'(U) + S⋅∇S + ∇SP)       -> SUPG (2)
-   *             + δ_2 (div(v), div(u))                  -> GD
+   * (v, ∂t'(u) + S⋅∇u + u⋅∇S) - (div(v), p) + (ε(v), νε(u))
+   *            + δ_1 (S⋅∇v, ∂t'(u) + S⋅∇u + u⋅∇S + ∇P) -> SUPG (1)
+   *            + δ_1 (u⋅∇v, ∂t'(U) + S⋅∇S + ∇SP)       -> SUPG (2)
+   *            + δ_2 (div(v), div(u))                  -> GD
    *
    * (q, div(u)) + δ_1 (∇q, ∂t'(u) + S⋅∇u + u⋅∇S + ∇p)
    *               +-------------- PSPG -------------+
    */
-  template <bool evaluate_residual>
+  template <bool evaluate_residual_0>
   void
   do_vmult_cell(FECellIntegrator &integrator) const
   {
-    if (evaluate_residual || !this->increment_form)
+    if (evaluate_residual_0 || !this->increment_form)
       {
         const unsigned int cell = integrator.get_current_cell_index();
 
@@ -1111,10 +1119,10 @@ private:
                 u_bar_gradient[d]    = theta * gradient[d];
               }
 
-            if (evaluate_residual)
+            if (evaluate_residual_0)
               u_time_derivative += u_time_derivative_old[cell][q];
 
-            if (evaluate_residual && (theta[0] != 1.0))
+            if (evaluate_residual_0 && (theta[0] != 1.0))
               {
                 u_bar_gradient += (VectorizedArray<Number>(1.0) - theta) *
                                   old_gradient[cell][q];
@@ -1157,14 +1165,14 @@ private:
                 }
 
             //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
-            const auto residual =
+            const auto residual_0 =
               (delta_1) * ((consider_time_deriverative ?
                               u_time_derivative :
                               Tensor<1, dim, VectorizedArray<Number>>()) +
                            p_bar_gradient + s_grad_b);
             for (unsigned int d0 = 0; d0 < dim; ++d0)
               for (unsigned int d1 = 0; d1 < dim; ++d1)
-                gradient_result[d0][d1] += u_star_value[d1] * residual[d0];
+                gradient_result[d0][d1] += u_star_value[d1] * residual_0[d0];
 
             //  f) δ_2 (div(v), div(B)) -> GD stabilization
             for (unsigned int d = 0; d < dim; ++d)
@@ -1217,37 +1225,41 @@ private:
 
             const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
               star_value[cell][q];
+            const Tensor<2, dim, VectorizedArray<Number>> u_star_gradient =
+              star_gradient[cell][q];
             Tensor<1, dim, VectorizedArray<Number>> u_time_derivative;
+            Tensor<1, dim, VectorizedArray<Number>> u_value;
             Tensor<2, dim, VectorizedArray<Number>> u_gradient;
 
             for (unsigned int d = 0; d < dim; ++d)
               {
                 u_time_derivative[d] = value[d] * weight;
+                u_value[d]           = value[d];
                 u_gradient[d]        = gradient[d];
               }
 
-            // precompute: div(B)
-            VectorizedArray<Number> div_bar = u_gradient[0][0];
+            // precompute: div(u)
+            VectorizedArray<Number> div_u = u_gradient[0][0];
             for (unsigned int d = 1; d < dim; ++d)
-              div_bar += u_gradient[d][d];
+              div_u += u_gradient[d][d];
 
-            // precompute: S⋅∇B
-            const auto s_grad_b = u_gradient * u_star_value;
+            // precompute: S⋅∇u
+            const auto s_grad_u = u_gradient * u_star_value;
+
+            // precompute: u⋅∇S
+            const auto u_grad_s = u_star_gradient * u_value;
 
             // velocity block:
-            //  a)  (v, ∂t(u))
+            //  a)  (v, ∂t'(u) + S⋅∇u + u⋅∇S)
             for (unsigned int d = 0; d < dim; ++d)
-              value_result[d] = u_time_derivative[d];
+              value_result[d] =
+                u_time_derivative[d] + s_grad_u[d] + u_grad_s[d];
 
-            //  b)  (v, S⋅∇B)
-            for (unsigned int d = 0; d < dim; ++d)
-              value_result[d] += s_grad_b[d];
-
-            //  c)  - (div(v), p)
+            //  b)  - (div(v), p)
             for (unsigned int d = 0; d < dim; ++d)
               gradient_result[d][d] -= p_value;
 
-            //  d)  (ε(v), νε(B))
+            //  c)  (ε(v), νε(u))
             for (unsigned int d = 0; d < dim; ++d)
               gradient_result[d][d] += u_gradient[d][d] * nu;
 
@@ -1260,32 +1272,39 @@ private:
                   gradient_result[e][d] += tmp;
                 }
 
-            //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
-            const auto residual =
+            //  d)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇u) + δ_1 (u⋅∇v, ∂t'(U) + S⋅∇S +
+            //  ∇SP) -> SUPG stabilization
+            const auto residual_0 =
               (delta_1) * ((consider_time_deriverative ?
                               u_time_derivative :
                               Tensor<1, dim, VectorizedArray<Number>>()) +
-                           p_gradient + s_grad_b);
+                           p_gradient + s_grad_u);
+            const auto residual_1 =
+              (delta_1) * ((consider_time_deriverative ?
+                              u_time_derivative :
+                              Tensor<1, dim, VectorizedArray<Number>>()) +
+                           p_gradient + s_grad_u);
             for (unsigned int d0 = 0; d0 < dim; ++d0)
               for (unsigned int d1 = 0; d1 < dim; ++d1)
-                gradient_result[d0][d1] += u_star_value[d1] * residual[d0];
+                gradient_result[d0][d1] += u_star_value[d1] * residual_0[d0] +
+                                           u_value[d1] * residual_1[d0];
 
-            //  f) δ_2 (div(v), div(B)) -> GD stabilization
+            //  e) δ_2 (div(v), div(u)) -> GD stabilization
             for (unsigned int d = 0; d < dim; ++d)
-              gradient_result[d][d] += delta_2 * div_bar;
+              gradient_result[d][d] += delta_2 * div_u;
 
 
 
             // pressure block:
-            //  a)  (q, div(B))
-            value_result[dim] = div_bar;
+            //  a)  (q, div(u))
+            value_result[dim] = div_u;
 
-            //  b)  δ_1 (∇q, ∂t(u) + ∇p + S⋅∇B) -> PSPG stabilization
+            //  b)  δ_1 (∇q, ∂t'(u) + ∇p + S⋅∇u + u⋅∇S) -> PSPG stabilization
             gradient_result[dim] =
               delta_1 * ((consider_time_deriverative ?
                             u_time_derivative :
                             Tensor<1, dim, VectorizedArray<Number>>()) +
-                         p_gradient + s_grad_b);
+                         p_gradient + s_grad_u + u_grad_s);
 
 
             integrator.submit_value(value_result, q);
@@ -1410,7 +1429,7 @@ public:
   }
 
   virtual void
-  evaluate_residual(VectorType &dst, const VectorType &src) const override
+  evaluate_residual_0(VectorType &dst, const VectorType &src) const override
   {
     (void)dst;
     (void)src;
