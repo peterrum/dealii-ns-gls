@@ -1267,17 +1267,17 @@ private:
             for (unsigned int d = 1; d < dim; ++d)
               div_u += u_gradient[d][d];
 
-            // precompute: S⋅∇u
+            // precompute: U⋅∇u
             const auto s_grad_u = u_gradient * u_star_value;
 
-            // precompute: u⋅∇S
+            // precompute: u⋅∇U
             const auto u_grad_s = u_star_gradient * u_value;
 
-            // precompute: S⋅∇S
+            // precompute: U⋅∇U
             const auto s_grad_s = u_star_gradient * u_star_value;
 
             // velocity block:
-            //  a)  (v, ∂t'(u) + S⋅∇u + u⋅∇S)
+            //  a)  (v, ∂t'(u) + U⋅∇u + u⋅∇U)
             for (unsigned int d = 0; d < dim; ++d)
               value_result[d] =
                 u_time_derivative[d] + s_grad_u[d] + u_grad_s[d];
@@ -1299,8 +1299,8 @@ private:
                   gradient_result[e][d] += tmp;
                 }
 
-            //  d)  δ_1 (S⋅∇v, ∂t'(u) + ∇P + S⋅∇u + u⋅∇S) +
-            //      δ_1 (u⋅∇v, ∂t'(U) + S⋅∇S + ∇SP) -> SUPG stabilization
+            //  d)  δ_1 (U⋅∇v, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) +
+            //      δ_1 (u⋅∇v, ∂t'(U) + ∇P + U⋅∇U) -> SUPG stabilization
             const auto residual_0 =
               (delta_1) * ((consider_time_deriverative ?
                               u_time_derivative :
@@ -1326,7 +1326,7 @@ private:
             //  a)  (q, div(u))
             value_result[dim] = div_u;
 
-            //  b)  δ_1 (∇q, ∂t'(u) + ∇p + S⋅∇u + u⋅∇S) -> PSPG stabilization
+            //  b)  δ_1 (∇q, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) -> PSPG stabilization
             gradient_result[dim] =
               delta_1 * ((consider_time_deriverative ?
                             u_time_derivative :
