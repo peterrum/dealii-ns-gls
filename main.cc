@@ -915,6 +915,10 @@ public:
     star_gradient.reinit(n_cells, n_quadrature_points);
 
     FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+    FEEvaluation<dim, -1, 0, 1, Number>   integrator_scalar(matrix_free,
+                                                          0,
+                                                          0,
+                                                          dim);
 
     const bool has_ghost_elements = vec.has_ghost_elements();
 
@@ -926,15 +930,19 @@ public:
     for (unsigned int cell = 0; cell < n_cells; ++cell)
       {
         integrator.reinit(cell);
-
         integrator.read_dof_values_plain(vec);
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                            EvaluationFlags::EvaluationFlags::gradients);
 
-        integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
+        integrator_scalar.reinit(cell);
+        integrator_scalar.read_dof_values_plain(vec);
+        integrator_scalar.evaluate(EvaluationFlags::EvaluationFlags::gradients);
 
         for (const auto q : integrator.quadrature_point_indices())
           {
-            star_value[cell][q]    = integrator.get_value(q);
-            star_gradient[cell][q] = integrator.get_gradient(q);
+            star_value[cell][q]      = integrator.get_value(q);
+            star_gradient[cell][q]   = integrator.get_gradient(q);
+            p_star_gradient[cell][q] = integrator_scalar.get_gradient(q);
           }
       }
 
@@ -1022,6 +1030,7 @@ private:
 
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> star_value;
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> star_gradient;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> p_star_gradient;
 
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> u_time_derivative_old;
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> old_gradient;
@@ -1222,6 +1231,8 @@ private:
             const VectorizedArray<Number>                 p_value = value[dim];
             const Tensor<1, dim, VectorizedArray<Number>> p_gradient =
               gradient[dim];
+            const Tensor<1, dim, VectorizedArray<Number>> p_star_gradient =
+              this->p_star_gradient[cell][q];
 
             const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
               star_value[cell][q];
@@ -1249,6 +1260,9 @@ private:
             // precompute: u⋅∇S
             const auto u_grad_s = u_star_gradient * u_value;
 
+            // precompute: S⋅∇S
+            const auto s_grad_s = u_star_gradient * u_star_value;
+
             // velocity block:
             //  a)  (v, ∂t'(u) + S⋅∇u + u⋅∇S)
             for (unsigned int d = 0; d < dim; ++d)
@@ -1272,8 +1286,8 @@ private:
                   gradient_result[e][d] += tmp;
                 }
 
-            //  d)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇u) + δ_1 (u⋅∇v, ∂t'(U) + S⋅∇S +
-            //  ∇SP) -> SUPG stabilization
+            //  d)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇u) +
+            //      δ_1 (u⋅∇v, ∂t'(U) + S⋅∇S + ∇SP) -> SUPG stabilization
             const auto residual_0 =
               (delta_1) * ((consider_time_deriverative ?
                               u_time_derivative :
@@ -1281,9 +1295,9 @@ private:
                            p_gradient + s_grad_u);
             const auto residual_1 =
               (delta_1) * ((consider_time_deriverative ?
-                              u_time_derivative :
+                              (u_star_value * weight) :
                               Tensor<1, dim, VectorizedArray<Number>>()) +
-                           p_gradient + s_grad_u);
+                           p_star_gradient + s_grad_s);
             for (unsigned int d0 = 0; d0 < dim; ++d0)
               for (unsigned int d1 = 0; d1 < dim; ++d1)
                 gradient_result[d0][d1] += u_star_value[d1] * residual_0[d0] +
