@@ -2551,6 +2551,8 @@ public:
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
 
+    MGLevelObject<std::shared_ptr<OperatorBase>> mg_ns_operators;
+
     if (params.preconditioner == "ILU")
       preconditioner = std::make_shared<PreconditionerILU>(*ns_operator);
     else if (params.preconditioner == "AMG")
@@ -2597,12 +2599,27 @@ public:
     else
       AssertThrow(false, ExcNotImplemented());
 
+    const auto set_previous_solution =
+      [&](const SolutionHistory<VectorType> &solution) {
+        ns_operator->set_previous_solution(solution);
+      };
+
     nonlinear_solver->setup_jacobian = [&](const VectorType &src) {
       ns_operator->set_linearization_point(src);
     };
 
     nonlinear_solver->setup_preconditioner = [&](const VectorType &src) {
       (void)src;
+
+      if (params.preconditioner == "GMG")
+        {
+          // TODO: transfer solution
+
+          for (unsigned int l = mg_ns_operators.min_level();
+               l <= mg_ns_operators.max_level();
+               ++l)
+            mg_ns_operators[l]->set_linearization_point(src);
+        }
 
       if (preconditioner)
         preconditioner->initialize();
@@ -2673,7 +2690,7 @@ public:
         // set previous solution
         solution.commit_solution();
 
-        ns_operator->set_previous_solution(solution);
+        set_previous_solution(solution);
 
         auto &current_solution = solution.get_current_solution();
 
