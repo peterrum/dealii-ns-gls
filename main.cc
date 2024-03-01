@@ -1011,8 +1011,12 @@ public:
   virtual void
   evaluate_residual(VectorType &dst, const VectorType &src) const override
   {
+    // apply inhomogeneous DBC
+    VectorType tmp = src;                      // TODO: needed?
+    constraints_inhomogeneous.distribute(tmp); //
+
     this->matrix_free.cell_loop(
-      &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
+      &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, tmp, true);
 
     // apply constraints
     matrix_free.get_affine_constraints(0).set_zero(dst);
@@ -2625,6 +2629,8 @@ public:
 
     for (auto &vec : solution.get_vectors())
       ns_operator->initialize_dof_vector(vec);
+
+
 
     const double dt =
       GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
