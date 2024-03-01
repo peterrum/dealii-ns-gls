@@ -433,7 +433,7 @@ public:
   void
   initialize() override
   {
-    preconditioner.initialize();
+    // nothing to do
   }
 
   void
@@ -477,6 +477,17 @@ class NonLinearSolverBase
 public:
   virtual void
   solve(VectorType &solution) const = 0;
+
+  std::function<void(const VectorType &src)> setup_jacobian;
+
+  std::function<void(const VectorType &src)> setup_preconditioner;
+
+  std::function<void(VectorType &dst, const VectorType &src)> evaluate_residual;
+
+  std::function<void(VectorType &dst)> evaluate_rhs;
+
+  std::function<void(VectorType &dst, const VectorType &src)>
+    solve_with_jacobian;
 };
 
 
@@ -487,30 +498,26 @@ public:
 class NonLinearSolverLinearized : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverLinearized(OperatorBase &op, LinearSolverBase &linear_solver)
-    : op(op)
-    , linear_solver(linear_solver)
+  NonLinearSolverLinearized()
   {}
 
   void
   solve(VectorType &solution) const override
   {
     // set linearization point
-    op.set_linearization_point(solution);
+    this->setup_jacobian(solution);
 
     // compute right-hans-side vector
     VectorType rhs;
     rhs.reinit(solution);
-    op.evaluate_rhs(rhs);
+    this->evaluate_rhs(rhs);
 
     // solve linear system
-    linear_solver.initialize();
-    linear_solver.solve(solution, rhs);
+    this->setup_preconditioner(solution);
+    this->solve_with_jacobian(solution, rhs);
   }
 
 private:
-  OperatorBase     &op;
-  LinearSolverBase &linear_solver;
 };
 
 
@@ -521,10 +528,8 @@ private:
 class NonLinearSolverNewton : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverNewton(OperatorBase &op, LinearSolverBase &linear_solver)
-    : op(op)
-    , linear_solver(linear_solver)
-    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+  NonLinearSolverNewton()
+    : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , newton_tolerance(1.0e-7) // TODO
     , newton_max_iteration(30) // TODO
   {}
@@ -537,10 +542,10 @@ public:
     inc.reinit(solution);
 
     // set linearization point
-    op.set_linearization_point(solution);
+    this->setup_jacobian(solution);
 
     // compute right-hans-side vector
-    op.evaluate_residual(rhs, solution);
+    this->evaluate_residual(rhs, solution);
 
     double       l2_norm       = rhs.l2_norm();
     unsigned int num_iteration = 0;
@@ -552,16 +557,16 @@ public:
       {
         inc = 0.0;
 
-        linear_solver.initialize();
-        linear_solver.solve(inc, rhs);
+        this->setup_preconditioner(solution);
+        this->solve_with_jacobian(inc, rhs);
 
         solution.add(1.0, inc);
 
         // set linearization point
-        op.set_linearization_point(solution);
+        this->setup_jacobian(solution);
 
         // compute right-hans-side vector
-        op.evaluate_residual(rhs, solution);
+        this->evaluate_residual(rhs, solution);
 
         // check convergence
         l2_norm = rhs.l2_norm();
@@ -582,9 +587,6 @@ public:
   }
 
 private:
-  OperatorBase     &op;
-  LinearSolverBase &linear_solver;
-
   const ConditionalOStream pcout;
 
   const double       newton_tolerance;
@@ -599,10 +601,8 @@ private:
 class NonLinearSolverPicardSimple : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverPicardSimple(OperatorBase &op, LinearSolverBase &linear_solver)
-    : op(op)
-    , linear_solver(linear_solver)
-    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+  NonLinearSolverPicardSimple()
+    : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , picard_tolerance(1.0e-7) // TODO
     , picard_max_iteration(30) // TODO
   {}
@@ -622,15 +622,15 @@ public:
         tmp = solution;
 
         // set linearization point
-        op.set_linearization_point(solution);
+        this->setup_jacobian(solution);
 
         // compute right-hans-side vector
-        op.evaluate_rhs(rhs);
+        this->evaluate_rhs(rhs);
 
         // solve linear system
-        linear_solver.initialize();
+        this->setup_preconditioner(solution);
 
-        linear_solver.solve(solution, rhs);
+        this->solve_with_jacobian(solution, rhs);
 
         // check convergence
         tmp -= solution;
@@ -649,9 +649,6 @@ public:
   }
 
 private:
-  OperatorBase     &op;
-  LinearSolverBase &linear_solver;
-
   const ConditionalOStream pcout;
 
   const double       picard_tolerance;
@@ -668,12 +665,8 @@ private:
 class NonLinearSolverPicard : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverPicard(OperatorBase     &op,
-                        LinearSolverBase &linear_solver,
-                        const double      theta)
-    : op(op)
-    , linear_solver(linear_solver)
-    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+  NonLinearSolverPicard(const double theta)
+    : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , need_to_recompute_matrix(true)
     , picard_tolerance(1.0e-7)                  // TODO
     , picard_max_iteration(30)                  // TODO
@@ -695,10 +688,10 @@ public:
     tmp = solution;
 
     // set linearization point
-    op.set_linearization_point(tmp);
+    this->setup_jacobian(tmp);
 
     // compute residual_0
-    op.evaluate_residual(residual_0, tmp);
+    this->evaluate_residual(residual_0, tmp);
 
     double linfty_norm = residual_0.l2_norm();
 
@@ -719,16 +712,16 @@ public:
         if (need_to_recompute_matrix || linear_always_recompute_matrix)
           {
             pcout << "    [P] step " << i << " ; recompute matrix" << std::endl;
-            linear_solver.initialize();
+            this->setup_preconditioner(tmp);
             need_to_recompute_matrix = false;
           }
 
-        linear_solver.solve(update, residual_0);
+        this->solve_with_jacobian(update, residual_0);
         tmp += update;
 
         // compute residual_0
-        op.set_linearization_point(tmp);
-        op.evaluate_residual(residual_0, tmp);
+        this->setup_jacobian(tmp);
+        this->evaluate_residual(residual_0, tmp);
         double new_linfty_norm = residual_0.l2_norm();
 
         if (new_linfty_norm < picard_tolerance)
@@ -743,7 +736,7 @@ public:
           {
             // revert to previous step
             tmp -= update;
-            op.set_linearization_point(tmp);
+            this->setup_jacobian(tmp);
 
             need_to_recompute_matrix = true;
 
@@ -778,9 +771,6 @@ public:
   }
 
 private:
-  OperatorBase     &op;
-  LinearSolverBase &linear_solver;
-
   const ConditionalOStream pcout;
 
   mutable bool need_to_recompute_matrix;
@@ -1899,8 +1889,8 @@ public:
   {
     BoundaryDescriptor bcs;
 
-    bcs.all_inhomogeneous_dbcs.emplace_back(
-      0, std::make_shared<InflowVelocity<dim, Number>>());
+    bcs.all_inhomogeneous_dbcs.emplace_back(0,
+                                            std::make_shared<InflowVelocity>());
 
     bcs.all_homogeneous_nbcs.push_back(1);
 
@@ -1916,8 +1906,6 @@ public:
 private:
   const unsigned int n_stretching;
 
-
-  template <int dim, typename Number>
   class InflowVelocity : public Function<dim, Number>
   {
   public:
@@ -2594,21 +2582,43 @@ public:
     std::shared_ptr<NonLinearSolverBase> nonlinear_solver;
 
     if (params.nonlinear_solver == "linearized")
-      nonlinear_solver =
-        std::make_shared<NonLinearSolverLinearized>(*ns_operator,
-                                                    *linear_solver);
+      nonlinear_solver = std::make_shared<NonLinearSolverLinearized>();
     else if (params.nonlinear_solver == "Picard simple")
-      nonlinear_solver =
-        std::make_shared<NonLinearSolverPicardSimple>(*ns_operator,
-                                                      *linear_solver);
+      nonlinear_solver = std::make_shared<NonLinearSolverPicardSimple>();
     else if (params.nonlinear_solver == "Picard")
       nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
-        *ns_operator, *linear_solver, time_integrator_data->get_theta());
+        time_integrator_data->get_theta());
     else if (params.nonlinear_solver == "Newton")
-      nonlinear_solver =
-        std::make_shared<NonLinearSolverNewton>(*ns_operator, *linear_solver);
+      nonlinear_solver = std::make_shared<NonLinearSolverNewton>();
     else
       AssertThrow(false, ExcNotImplemented());
+
+    nonlinear_solver->setup_jacobian = [&](const VectorType &src) {
+      ns_operator->set_linearization_point(src);
+    };
+
+    nonlinear_solver->setup_preconditioner = [&](const VectorType &src) {
+      (void)src;
+
+      if (preconditioner)
+        preconditioner->initialize();
+
+      linear_solver->initialize();
+    };
+
+    nonlinear_solver->evaluate_rhs = [&](VectorType &dst) {
+      ns_operator->evaluate_rhs(dst);
+    };
+
+    nonlinear_solver->evaluate_residual = [&](VectorType       &dst,
+                                              const VectorType &src) {
+      ns_operator->evaluate_residual(dst, src);
+    };
+
+    nonlinear_solver->solve_with_jacobian = [&](VectorType       &dst,
+                                                const VectorType &src) {
+      linear_solver->solve(dst, src);
+    };
 
     // initialize solution
     SolutionHistory<VectorType> solution(time_integrator_data->get_order() + 1);
