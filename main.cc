@@ -40,6 +40,11 @@ using Number           = double;
 using VectorType       = LinearAlgebra::distributed::Vector<Number>;
 using SparseMatrixType = TrilinosWrappers::SparseMatrix;
 
+
+
+/**
+ * Base class for BDF and θ-method.
+ */
 template <typename Number>
 class TimeIntegratorData
 {
@@ -65,6 +70,9 @@ public:
 
 
 
+/**
+ * BDF implementation.
+ */
 template <typename Number>
 class TimeIntegratorDataBDF : public TimeIntegratorData<Number>
 {
@@ -166,6 +174,9 @@ private:
 
 
 
+/**
+ * θ-method implementation.
+ */
 template <typename Number>
 class TimeIntegratorDataTheta : public TimeIntegratorData<Number>
 {
@@ -222,6 +233,9 @@ private:
 
 
 
+/**
+ * A container storing solution vectors of multiple time steps.
+ */
 template <typename VectorType>
 class SolutionHistory
 {
@@ -257,6 +271,8 @@ public:
 
   std::vector<VectorType> solutions;
 };
+
+
 
 /**
  * Linear/nonlinear operator.
@@ -350,16 +366,16 @@ public:
 
     typename TrilinosWrappers::PreconditionAMG::AdditionalData ad;
 
-    ad.elliptic              = false;
-    ad.higher_order_elements = false;
-    ad.n_cycles              = 1;
-    ad.aggregation_threshold = 1e-14;
-    ad.constant_modes        = constant_modes;
-    ad.smoother_sweeps       = 2;
-    ad.smoother_overlap      = 1;
-    ad.output_details        = false;
-    ad.smoother_type         = "ILU";
-    ad.coarse_type           = "ILU";
+    ad.elliptic              = false;          // TODO
+    ad.higher_order_elements = false;          //
+    ad.n_cycles              = 1;              //
+    ad.aggregation_threshold = 1e-14;          //
+    ad.constant_modes        = constant_modes; //
+    ad.smoother_sweeps       = 2;              //
+    ad.smoother_overlap      = 1;              //
+    ad.output_details        = false;          //
+    ad.smoother_type         = "ILU";          //
+    ad.coarse_type           = "ILU";          //
 
     precon.initialize(matrix, ad);
   }
@@ -395,6 +411,9 @@ public:
 
 
 
+/**
+ * Wrapper class around dealii::GMRES.
+ */
 class LinearSolverGMRES : public LinearSolverBase
 {
 public:
@@ -462,6 +481,9 @@ public:
 
 
 
+/**
+ * One step of fixed point iteration.
+ */
 class NonLinearSolverLinearized : public NonLinearSolverBase
 {
 public:
@@ -475,8 +497,6 @@ public:
   {
     // set linearization point
     op.set_linearization_point(solution);
-
-    // linear_solver.initialize();
 
     // compute right-hans-side vector
     VectorType rhs;
@@ -495,12 +515,94 @@ private:
 
 
 
+/**
+ * Basic Newton solver.
+ */
+class NonLinearSolverNewton : public NonLinearSolverBase
+{
+public:
+  NonLinearSolverNewton(OperatorBase &op, LinearSolverBase &linear_solver)
+    : op(op)
+    , linear_solver(linear_solver)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    , newton_tolerance(1.0e-7) // TODO
+    , newton_max_iteration(30) // TODO
+  {}
+
+  void
+  solve(VectorType &solution) const override
+  {
+    VectorType rhs, inc;
+    rhs.reinit(solution);
+    inc.reinit(solution);
+
+    // set linearization point
+    op.set_linearization_point(solution);
+
+    // compute right-hans-side vector
+    op.evaluate_residual(rhs, solution);
+
+    double       l2_norm       = rhs.l2_norm();
+    unsigned int num_iteration = 0;
+
+    pcout << "    [N] step " << num_iteration << "; residual = " << l2_norm
+          << std::endl;
+
+    while (l2_norm > newton_tolerance)
+      {
+        inc = 0.0;
+
+        linear_solver.initialize();
+        linear_solver.solve(inc, rhs);
+
+        solution.add(1.0, inc);
+
+        // set linearization point
+        op.set_linearization_point(solution);
+
+        // compute right-hans-side vector
+        op.evaluate_residual(rhs, solution);
+
+        // check convergence
+        l2_norm = rhs.l2_norm();
+        num_iteration++;
+
+        pcout << "    [N] step " << num_iteration << " ; residual = " << l2_norm
+              << std::endl;
+
+        AssertThrow(
+          num_iteration <= newton_max_iteration,
+          dealii::ExcMessage(
+            "Newton iteration did not converge. Final residual_0 is " +
+            std::to_string(l2_norm) + "."));
+      }
+
+    pcout << "    [N] solved in " << num_iteration << " iterations."
+          << std::endl;
+  }
+
+private:
+  OperatorBase     &op;
+  LinearSolverBase &linear_solver;
+
+  const ConditionalOStream pcout;
+
+  const double       newton_tolerance;
+  const unsigned int newton_max_iteration;
+};
+
+
+
+/**
+ * Simple Picard fixed-point iteration solver.
+ */
 class NonLinearSolverPicardSimple : public NonLinearSolverBase
 {
 public:
   NonLinearSolverPicardSimple(OperatorBase &op, LinearSolverBase &linear_solver)
     : op(op)
     , linear_solver(linear_solver)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , picard_tolerance(1.0e-7) // TODO
     , picard_max_iteration(30) // TODO
   {}
@@ -536,16 +638,22 @@ public:
         l2_norm = tmp.l2_norm();
         num_iteration++;
 
-        AssertThrow(num_iteration <= picard_max_iteration,
-                    dealii::ExcMessage(
-                      "Picard iteration did not converge. Final residual is " +
-                      std::to_string(l2_norm) + "."));
+        AssertThrow(
+          num_iteration <= picard_max_iteration,
+          dealii::ExcMessage(
+            "Picard iteration did not converge. Final residual_0 is " +
+            std::to_string(l2_norm) + "."));
       }
+
+    pcout << "    [P] solved in " << num_iteration << " iterations."
+          << std::endl;
   }
 
 private:
   OperatorBase     &op;
   LinearSolverBase &linear_solver;
+
+  const ConditionalOStream pcout;
 
   const double       picard_tolerance;
   const unsigned int picard_max_iteration;
@@ -553,6 +661,11 @@ private:
 
 
 
+/**
+ * Advanced Picard fixed-point iteration solver.
+ *
+ * TODO: Not working yet.
+ */
 class NonLinearSolverPicard : public NonLinearSolverBase
 {
 public:
@@ -574,8 +687,8 @@ public:
   void
   solve(VectorType &solution) const override
   {
-    VectorType residual, tmp, update;
-    residual.reinit(solution);
+    VectorType residual_0, tmp, update;
+    residual_0.reinit(solution);
     tmp.reinit(solution);
     update.reinit(solution);
 
@@ -585,12 +698,12 @@ public:
     // set linearization point
     op.set_linearization_point(tmp);
 
-    // compute residual
-    op.evaluate_residual(residual, tmp);
+    // compute residual_0
+    op.evaluate_residual(residual_0, tmp);
 
-    double linfty_norm = residual.l2_norm();
+    double linfty_norm = residual_0.l2_norm();
 
-    pcout << "    [P] initial; residual (linfty) = " << linfty_norm
+    pcout << "    [P] initial; residual_0 (linfty) = " << linfty_norm
           << std::endl;
 
     for (unsigned int i = 1; linfty_norm > picard_tolerance; ++i)
@@ -599,7 +712,7 @@ public:
           {
             const auto error_string =
               std::string(
-                "Picard iteration did not converge. Final residual is ") +
+                "Picard iteration did not converge. Final residual_0 is ") +
               std::to_string(linfty_norm);
             AssertThrow(false, dealii::ExcMessage(error_string));
           }
@@ -611,20 +724,20 @@ public:
             need_to_recompute_matrix = false;
           }
 
-        linear_solver.solve(update, residual);
+        linear_solver.solve(update, residual_0);
         tmp += update;
 
-        // compute residual
+        // compute residual_0
         op.set_linearization_point(tmp);
-        op.evaluate_residual(residual, tmp);
-        double new_linfty_norm = residual.l2_norm();
+        op.evaluate_residual(residual_0, tmp);
+        double new_linfty_norm = residual_0.l2_norm();
 
         if (new_linfty_norm < picard_tolerance)
           {
             // accept new step
             linfty_norm = new_linfty_norm;
             pcout << "    [P] step " << i
-                  << " ; residual (linfty) = " << linfty_norm << std::endl;
+                  << " ; residual_0 (linfty) = " << linfty_norm << std::endl;
           }
         else if (new_linfty_norm >
                  picard_reduction_ratio_admissible * linfty_norm)
@@ -636,7 +749,7 @@ public:
             need_to_recompute_matrix = true;
 
             pcout << "    [P] step " << i
-                  << " ; inadmissible residual reduction (" << new_linfty_norm
+                  << " ; inadmissible residual_0 reduction (" << new_linfty_norm
                   << " > " << linfty_norm << " ), recompute matrix\n"
                   << std::endl;
           }
@@ -646,7 +759,7 @@ public:
             // accept new step
             linfty_norm = new_linfty_norm;
             pcout << "    [P] step " << i
-                  << " ; residual (linfty) = " << linfty_norm
+                  << " ; residual_0 (linfty) = " << linfty_norm
                   << ", recompute matrix" << std::endl;
             need_to_recompute_matrix = true;
           }
@@ -655,7 +768,7 @@ public:
             // accept new step
             linfty_norm = new_linfty_norm;
             pcout << "    [P] step " << i
-                  << " ; residual (linfty) = " << linfty_norm << std::endl;
+                  << " ; residual_0 (linfty) = " << linfty_norm << std::endl;
           }
       }
 
@@ -684,7 +797,7 @@ private:
 
 
 /**
- * Navier-Stokes operator.
+ * Matrix-free Navier-Stokes operator.
  */
 template <int dim>
 class NavierStokesOperator : public OperatorBase
@@ -703,7 +816,8 @@ public:
     const Number                      c_1,
     const Number                      c_2,
     const TimeIntegratorData<Number> &time_integrator_data,
-    const bool                        consider_time_deriverative)
+    const bool                        consider_time_deriverative,
+    const bool                        increment_form)
     : constraints_inhomogeneous(constraints_inhomogeneous)
     , theta(time_integrator_data.get_theta())
     , nu(nu)
@@ -711,6 +825,7 @@ public:
     , c_2(c_2)
     , time_integrator_data(time_integrator_data)
     , consider_time_deriverative(consider_time_deriverative)
+    , increment_form(increment_form)
     , valid_system(false)
   {
     const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
@@ -749,8 +864,8 @@ public:
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
     u_time_derivative_old.reinit(n_cells, n_quadrature_points);
-    old_gradient.reinit(n_cells, n_quadrature_points);
-    old_gradient_p.reinit(n_cells, n_quadrature_points);
+    u_old_gradient.reinit(n_cells, n_quadrature_points);
+    p_old_gradient.reinit(n_cells, n_quadrature_points);
 
     delta_1.resize(n_cells);
     delta_2.resize(n_cells);
@@ -801,9 +916,9 @@ public:
         // precompute value/gradient of linearization point at quadrature points
         for (const auto q : integrator.quadrature_point_indices())
           {
-            old_gradient[cell][q] = integrator.get_gradient(q);
+            u_old_gradient[cell][q] = integrator.get_gradient(q);
 
-            old_gradient_p[cell][q] = integrator_scalar.get_gradient(q);
+            p_old_gradient[cell][q] = integrator_scalar.get_gradient(q);
           }
 
         // compute stabilization parameters
@@ -845,9 +960,15 @@ public:
     const unsigned n_cells             = matrix_free.n_cell_batches();
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
-    star_value.reinit(n_cells, n_quadrature_points);
+    u_star_value.reinit(n_cells, n_quadrature_points);
+    u_star_gradient.reinit(n_cells, n_quadrature_points);
+    p_star_gradient.reinit(n_cells, n_quadrature_points);
 
     FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+    FEEvaluation<dim, -1, 0, 1, Number>   integrator_scalar(matrix_free,
+                                                          0,
+                                                          0,
+                                                          dim);
 
     const bool has_ghost_elements = vec.has_ghost_elements();
 
@@ -859,13 +980,20 @@ public:
     for (unsigned int cell = 0; cell < n_cells; ++cell)
       {
         integrator.reinit(cell);
-
         integrator.read_dof_values_plain(vec);
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                            EvaluationFlags::EvaluationFlags::gradients);
 
-        integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
+        integrator_scalar.reinit(cell);
+        integrator_scalar.read_dof_values_plain(vec);
+        integrator_scalar.evaluate(EvaluationFlags::EvaluationFlags::gradients);
 
         for (const auto q : integrator.quadrature_point_indices())
-          star_value[cell][q] = integrator.get_value(q);
+          {
+            u_star_value[cell][q]    = integrator.get_value(q);
+            u_star_gradient[cell][q] = integrator.get_gradient(q);
+            p_star_gradient[cell][q] = integrator_scalar.get_gradient(q);
+          }
       }
 
     if (has_ghost_elements == false)
@@ -943,16 +1071,20 @@ private:
   const Number                      c_2;
   const TimeIntegratorData<Number> &time_integrator_data;
   const bool                        consider_time_deriverative;
+  const bool                        increment_form;
 
   mutable bool valid_system;
 
   AlignedVector<VectorizedArray<Number>> delta_1;
   AlignedVector<VectorizedArray<Number>> delta_2;
 
-  Table<2, Tensor<1, dim, VectorizedArray<Number>>> star_value;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> u_star_value;
+  Table<2, Tensor<2, dim, VectorizedArray<Number>>> u_star_gradient;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> p_star_gradient;
+
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> u_time_derivative_old;
-  Table<2, Tensor<2, dim, VectorizedArray<Number>>> old_gradient;
-  Table<2, Tensor<1, dim, VectorizedArray<Number>>> old_gradient_p;
+  Table<2, Tensor<2, dim, VectorizedArray<Number>>> u_old_gradient;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> p_old_gradient;
 
   std::vector<unsigned int> constrained_indices;
 
@@ -977,6 +1109,8 @@ private:
   }
 
   /**
+   * Fixed-point system:
+   *
    * (v, ∂t(u)) + (v, S⋅∇B) - (div(v), p) + (ε(v), νε(B))
    *            + δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) + δ_2 (div(v), div(B)) = 0
    *              +----------- SUPG ----------+   +------- GD -------+
@@ -985,131 +1119,267 @@ private:
    *               +---------- PSPG ---------+
    *
    * with the following nomenclature:
-   *  - S      := u^*
+   *  - S     := u^*
    *  - B     := θ u^{n+1} + (1-θ) u^{n}
    *  - P     := θ p^{n+1} + (1-θ) p^{n}
    *  - p     := p^{n+1}
    *  - ∂t(u) := time deriverative (one-step-theta method, BDF)
+   *
+   *
+   * Linearized system (only BDF):
+   *
+   * (v, ∂t'(u) + U⋅∇u + u⋅∇U) - (div(v), p) + (ε(v), νε(u))
+   *            + δ_1 (U⋅∇v, ∂t'(u) + U⋅∇u + u⋅∇U + ∇p) -> SUPG (1)
+   *            + δ_1 (u⋅∇v, ∂t'(U) + U⋅∇U + ∇P)        -> SUPG (2)
+   *            + δ_2 (div(v), div(u))                  -> GD
+   *
+   * (q, div(u)) + δ_1 (∇q, ∂t'(u) + U⋅∇u + u⋅∇U + ∇p)
+   *               +-------------- PSPG -------------+
+   *
+   *                       ... with U/P being the linearization point
    */
   template <bool evaluate_residual>
   void
   do_vmult_cell(FECellIntegrator &integrator) const
   {
-    const unsigned int cell = integrator.get_current_cell_index();
-
-    const auto delta_1 = this->delta_1[cell];
-    const auto delta_2 = this->delta_2[cell];
-    const auto weight  = this->time_integrator_data.get_primary_weight();
-    const auto theta   = this->theta;
-    const auto nu      = this->nu;
-
-    integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
-                        EvaluationFlags::EvaluationFlags::gradients);
-
-    for (const auto q : integrator.quadrature_point_indices())
+    if (evaluate_residual || !this->increment_form)
       {
-        typename FECellIntegrator::value_type    value_result    = {};
-        typename FECellIntegrator::gradient_type gradient_result = {};
+        const unsigned int cell = integrator.get_current_cell_index();
 
-        const auto value    = integrator.get_value(q);
-        const auto gradient = integrator.get_gradient(q);
+        const auto delta_1 = this->delta_1[cell];
+        const auto delta_2 = this->delta_2[cell];
+        const auto weight  = this->time_integrator_data.get_primary_weight();
+        const auto theta   = this->theta;
+        const auto nu      = this->nu;
 
-        const VectorizedArray<Number>                 p_value = value[dim];
-        const Tensor<1, dim, VectorizedArray<Number>> p_gradient =
-          gradient[dim];
-        Tensor<1, dim, VectorizedArray<Number>> p_bar_gradient =
-          theta * gradient[dim];
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                            EvaluationFlags::EvaluationFlags::gradients);
 
-        const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
-          star_value[cell][q];
-        Tensor<1, dim, VectorizedArray<Number>> u_time_derivative;
-        Tensor<2, dim, VectorizedArray<Number>> u_bar_gradient;
-
-        for (unsigned int d = 0; d < dim; ++d)
+        for (const auto q : integrator.quadrature_point_indices())
           {
-            u_time_derivative[d] = value[d] * weight;
-            u_bar_gradient[d]    = theta * gradient[d];
+            typename FECellIntegrator::value_type    value_result    = {};
+            typename FECellIntegrator::gradient_type gradient_result = {};
+
+            const auto value    = integrator.get_value(q);
+            const auto gradient = integrator.get_gradient(q);
+
+            const VectorizedArray<Number>                 p_value = value[dim];
+            const Tensor<1, dim, VectorizedArray<Number>> p_gradient =
+              gradient[dim];
+            Tensor<1, dim, VectorizedArray<Number>> p_bar_gradient =
+              theta * gradient[dim];
+
+            const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
+              this->u_star_value[cell][q];
+            Tensor<1, dim, VectorizedArray<Number>> u_time_derivative;
+            Tensor<2, dim, VectorizedArray<Number>> u_bar_gradient;
+
+            for (unsigned int d = 0; d < dim; ++d)
+              {
+                u_time_derivative[d] = value[d] * weight;
+                u_bar_gradient[d]    = theta * gradient[d];
+              }
+
+            if (evaluate_residual)
+              u_time_derivative += this->u_time_derivative_old[cell][q];
+
+            if (evaluate_residual && (theta[0] != 1.0))
+              {
+                u_bar_gradient += (VectorizedArray<Number>(1.0) - theta) *
+                                  this->u_old_gradient[cell][q];
+                p_bar_gradient += (VectorizedArray<Number>(1.0) - theta) *
+                                  this->p_old_gradient[cell][q];
+              }
+
+            // precompute: div(B)
+            VectorizedArray<Number> div_bar = u_bar_gradient[0][0];
+            for (unsigned int d = 1; d < dim; ++d)
+              div_bar += u_bar_gradient[d][d];
+
+            // precompute: S⋅∇B
+            const auto s_grad_b = u_bar_gradient * u_star_value;
+
+            // velocity block:
+            //  a)  (v, ∂t(u))
+            for (unsigned int d = 0; d < dim; ++d)
+              value_result[d] = u_time_derivative[d];
+
+            //  b)  (v, S⋅∇B)
+            for (unsigned int d = 0; d < dim; ++d)
+              value_result[d] += s_grad_b[d];
+
+            //  c)  - (div(v), p)
+            for (unsigned int d = 0; d < dim; ++d)
+              gradient_result[d][d] -= p_value;
+
+            //  d)  (ε(v), νε(B))
+            for (unsigned int d = 0; d < dim; ++d)
+              gradient_result[d][d] += u_bar_gradient[d][d] * nu;
+
+            for (unsigned int e = 0, counter = dim; e < dim; ++e)
+              for (unsigned int d = e + 1; d < dim; ++d, ++counter)
+                {
+                  const auto tmp =
+                    (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
+                  gradient_result[d][e] += tmp;
+                  gradient_result[e][d] += tmp;
+                }
+
+            //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
+            const auto residual_0 =
+              (delta_1) * ((consider_time_deriverative ?
+                              u_time_derivative :
+                              Tensor<1, dim, VectorizedArray<Number>>()) +
+                           p_bar_gradient + s_grad_b);
+            for (unsigned int d0 = 0; d0 < dim; ++d0)
+              for (unsigned int d1 = 0; d1 < dim; ++d1)
+                gradient_result[d0][d1] += u_star_value[d1] * residual_0[d0];
+
+            //  f) δ_2 (div(v), div(B)) -> GD stabilization
+            for (unsigned int d = 0; d < dim; ++d)
+              gradient_result[d][d] += delta_2 * div_bar;
+
+
+
+            // pressure block:
+            //  a)  (q, div(B))
+            value_result[dim] = div_bar;
+
+            //  b)  δ_1 (∇q, ∂t(u) + ∇p + S⋅∇B) -> PSPG stabilization
+            gradient_result[dim] =
+              delta_1 * ((consider_time_deriverative ?
+                            u_time_derivative :
+                            Tensor<1, dim, VectorizedArray<Number>>()) +
+                         p_gradient + s_grad_b);
+
+
+            integrator.submit_value(value_result, q);
+            integrator.submit_gradient(gradient_result, q);
           }
 
-        if (evaluate_residual)
-          u_time_derivative += u_time_derivative_old[cell][q];
-
-        if (evaluate_residual && (theta[0] != 1.0))
-          {
-            u_bar_gradient +=
-              (VectorizedArray<Number>(1.0) - theta) * old_gradient[cell][q];
-            p_bar_gradient +=
-              (VectorizedArray<Number>(1.0) - theta) * old_gradient_p[cell][q];
-          }
-
-        // precompute: div(B)
-        VectorizedArray<Number> div_bar = u_bar_gradient[0][0];
-        for (unsigned int d = 1; d < dim; ++d)
-          div_bar += u_bar_gradient[d][d];
-
-        // precompute: S⋅∇B
-        const auto s_grad_b = u_bar_gradient * u_star_value;
-
-        // velocity block:
-        //  a)  (v, ∂t(u))
-        for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] = u_time_derivative[d];
-
-        //  b)  (v, S⋅∇B)
-        for (unsigned int d = 0; d < dim; ++d)
-          value_result[d] += s_grad_b[d];
-
-        //  c)  - (div(v), p)
-        for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] -= p_value;
-
-        //  d)  (ε(v), νε(B))
-        for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += u_bar_gradient[d][d] * nu;
-
-        for (unsigned int e = 0, counter = dim; e < dim; ++e)
-          for (unsigned int d = e + 1; d < dim; ++d, ++counter)
-            {
-              const auto tmp =
-                (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
-              gradient_result[d][e] += tmp;
-              gradient_result[e][d] += tmp;
-            }
-
-        //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
-        const auto residual =
-          (delta_1) * ((consider_time_deriverative ?
-                          u_time_derivative :
-                          Tensor<1, dim, VectorizedArray<Number>>()) +
-                       p_bar_gradient + s_grad_b);
-        for (unsigned int d0 = 0; d0 < dim; ++d0)
-          for (unsigned int d1 = 0; d1 < dim; ++d1)
-            gradient_result[d0][d1] += u_star_value[d1] * residual[d0];
-
-        //  f) δ_2 (div(v), div(B)) -> GD stabilization
-        for (unsigned int d = 0; d < dim; ++d)
-          gradient_result[d][d] += delta_2 * div_bar;
-
-
-
-        // pressure block:
-        //  a)  (q, div(B))
-        value_result[dim] = div_bar;
-
-        //  b)  δ_1 (∇q, ∂t(u) + ∇p + S⋅∇B) -> PSPG stabilization
-        gradient_result[dim] =
-          delta_1 * ((consider_time_deriverative ?
-                        u_time_derivative :
-                        Tensor<1, dim, VectorizedArray<Number>>()) +
-                     p_gradient + s_grad_b);
-
-
-        integrator.submit_value(value_result, q);
-        integrator.submit_gradient(gradient_result, q);
+        integrator.integrate(EvaluationFlags::EvaluationFlags::values |
+                             EvaluationFlags::EvaluationFlags::gradients);
       }
+    else
+      {
+        const unsigned int cell = integrator.get_current_cell_index();
 
-    integrator.integrate(EvaluationFlags::EvaluationFlags::values |
-                         EvaluationFlags::EvaluationFlags::gradients);
+        const auto delta_1 = this->delta_1[cell];
+        const auto delta_2 = this->delta_2[cell];
+        const auto weight  = this->time_integrator_data.get_primary_weight();
+        const auto nu      = this->nu;
+
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                            EvaluationFlags::EvaluationFlags::gradients);
+
+        for (const auto q : integrator.quadrature_point_indices())
+          {
+            typename FECellIntegrator::value_type    value_result    = {};
+            typename FECellIntegrator::gradient_type gradient_result = {};
+
+            const auto value    = integrator.get_value(q);
+            const auto gradient = integrator.get_gradient(q);
+
+            const VectorizedArray<Number>                 p_value = value[dim];
+            const Tensor<1, dim, VectorizedArray<Number>> p_gradient =
+              gradient[dim];
+            const Tensor<1, dim, VectorizedArray<Number>> p_star_gradient =
+              this->p_star_gradient[cell][q];
+
+            const Tensor<1, dim, VectorizedArray<Number>> u_star_value =
+              this->u_star_value[cell][q];
+            const Tensor<2, dim, VectorizedArray<Number>> u_star_gradient =
+              this->u_star_gradient[cell][q];
+            Tensor<1, dim, VectorizedArray<Number>> u_time_derivative;
+            Tensor<1, dim, VectorizedArray<Number>> u_value;
+            Tensor<2, dim, VectorizedArray<Number>> u_gradient;
+
+            for (unsigned int d = 0; d < dim; ++d)
+              {
+                u_time_derivative[d] = value[d] * weight;
+                u_value[d]           = value[d];
+                u_gradient[d]        = gradient[d];
+              }
+
+            // precompute: div(u)
+            VectorizedArray<Number> div_u = u_gradient[0][0];
+            for (unsigned int d = 1; d < dim; ++d)
+              div_u += u_gradient[d][d];
+
+            // precompute: U⋅∇u
+            const auto s_grad_u = u_gradient * u_star_value;
+
+            // precompute: u⋅∇U
+            const auto u_grad_s = u_star_gradient * u_value;
+
+            // precompute: U⋅∇U
+            const auto s_grad_s = u_star_gradient * u_star_value;
+
+            // velocity block:
+            //  a)  (v, ∂t'(u) + U⋅∇u + u⋅∇U)
+            for (unsigned int d = 0; d < dim; ++d)
+              value_result[d] =
+                u_time_derivative[d] + s_grad_u[d] + u_grad_s[d];
+
+            //  b)  - (div(v), p)
+            for (unsigned int d = 0; d < dim; ++d)
+              gradient_result[d][d] -= p_value;
+
+            //  c)  (ε(v), νε(u))
+            for (unsigned int d = 0; d < dim; ++d)
+              gradient_result[d][d] += u_gradient[d][d] * nu;
+
+            for (unsigned int e = 0, counter = dim; e < dim; ++e)
+              for (unsigned int d = e + 1; d < dim; ++d, ++counter)
+                {
+                  const auto tmp =
+                    (u_gradient[d][e] + u_gradient[e][d]) * (nu * 0.5);
+                  gradient_result[d][e] += tmp;
+                  gradient_result[e][d] += tmp;
+                }
+
+            //  d)  δ_1 (U⋅∇v, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) +
+            //      δ_1 (u⋅∇v, ∂t'(U) + ∇P + U⋅∇U) -> SUPG stabilization
+            const auto residual_0 =
+              (delta_1) * ((consider_time_deriverative ?
+                              u_time_derivative :
+                              Tensor<1, dim, VectorizedArray<Number>>()) +
+                           p_gradient + s_grad_u + u_grad_s);
+            const auto residual_1 =
+              (delta_1) * ((consider_time_deriverative ?
+                              (u_star_value * weight) :
+                              Tensor<1, dim, VectorizedArray<Number>>()) +
+                           p_star_gradient + s_grad_s);
+            for (unsigned int d0 = 0; d0 < dim; ++d0)
+              for (unsigned int d1 = 0; d1 < dim; ++d1)
+                gradient_result[d0][d1] += u_star_value[d1] * residual_0[d0] +
+                                           u_value[d1] * residual_1[d0];
+
+            //  e)  δ_2 (div(v), div(u)) -> GD stabilization
+            for (unsigned int d = 0; d < dim; ++d)
+              gradient_result[d][d] += delta_2 * div_u;
+
+
+
+            // pressure block:
+            //  a)  (q, div(u))
+            value_result[dim] = div_u;
+
+            //  b)  δ_1 (∇q, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) -> PSPG stabilization
+            gradient_result[dim] =
+              delta_1 * ((consider_time_deriverative ?
+                            u_time_derivative :
+                            Tensor<1, dim, VectorizedArray<Number>>()) +
+                         p_gradient + s_grad_u + u_grad_s);
+
+
+            integrator.submit_value(value_result, q);
+            integrator.submit_gradient(gradient_result, q);
+          }
+
+        integrator.integrate(EvaluationFlags::EvaluationFlags::values |
+                             EvaluationFlags::EvaluationFlags::gradients);
+      }
   }
 
   void
@@ -1150,6 +1420,9 @@ private:
 
 
 
+/**
+ * Matrix-based Navier-Stokes operator.
+ */
 template <int dim>
 class NavierStokesOperatorMatrixBased : public OperatorBase
 {
@@ -1431,6 +1704,9 @@ private:
 
 
 
+/**
+ * Collection of parameters.
+ */
 struct Parameters
 {
   // system
@@ -1534,7 +1810,8 @@ private:
     prm.add_parameter("nonlinear solver",
                       nonlinear_solver,
                       "",
-                      Patterns::Selection("linearized|Picard simple|Picard"));
+                      Patterns::Selection(
+                        "linearized|Picard simple|Picard|Newton"));
 
     // output
     prm.add_parameter("paraview prefix", paraview_prefix);
@@ -1547,30 +1824,9 @@ private:
 
 
 
-template <int dim, typename Number>
-class InflowVelocity : public Function<dim, Number>
-{
-public:
-  InflowVelocity()
-    : Function<dim>(dim + 1)
-  {}
-
-  Number
-  value(const Point<dim> &p, const unsigned int component) const override
-  {
-    (void)p;
-
-    if (component == 0)
-      return 1.0;
-    else
-      return 0.0;
-  }
-
-private:
-};
-
-
-
+/**
+ * Base class for simulations.
+ */
 template <int dim>
 class SimulationBase
 {
@@ -1607,6 +1863,9 @@ public:
 
 
 
+/**
+ * Channel simulation.
+ */
 template <int dim>
 class SimulationChannel : public SimulationBase<dim>
 {
@@ -1657,10 +1916,36 @@ public:
 
 private:
   const unsigned int n_stretching;
+
+
+  template <int dim, typename Number>
+  class InflowVelocity : public Function<dim, Number>
+  {
+  public:
+    InflowVelocity()
+      : Function<dim>(dim + 1)
+    {}
+
+    Number
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      (void)p;
+
+      if (component == 0)
+        return 1.0;
+      else
+        return 0.0;
+    }
+
+  private:
+  };
 };
 
 
 
+/**
+ * Flow-past cylinder simulation.
+ */
 template <int dim>
 class SimulationCylinder : public SimulationBase<dim>
 {
@@ -1885,6 +2170,9 @@ private:
 
 
 
+/**
+ * Flow-past cylinder simulation with alternative mesh.
+ */
 template <int dim>
 class SimulationCylinderOld : public SimulationBase<dim>
 {
@@ -2119,6 +2407,9 @@ private:
 
 
 
+/**
+ * Driver class for executing the simulation.
+ */
 template <int dim>
 class Driver
 {
@@ -2234,28 +2525,37 @@ public:
     std::shared_ptr<OperatorBase> ns_operator;
 
     if (params.use_matrix_free_ns_operator)
-      ns_operator = std::make_shared<NavierStokesOperator<dim>>(
-        mapping,
-        dof_handler,
-        constraints_homogeneous,
-        constraints,
-        constraints_inhomogeneous,
-        quadrature,
-        params.nu,
-        params.c_1,
-        params.c_2,
-        *time_integrator_data,
-        params.consider_time_deriverative);
+      {
+        const bool increment_form = params.nonlinear_solver == "Newton";
+
+        ns_operator = std::make_shared<NavierStokesOperator<dim>>(
+          mapping,
+          dof_handler,
+          constraints_homogeneous,
+          constraints,
+          constraints_inhomogeneous,
+          quadrature,
+          params.nu,
+          params.c_1,
+          params.c_2,
+          *time_integrator_data,
+          params.consider_time_deriverative,
+          increment_form);
+      }
     else
-      ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
-        mapping,
-        dof_handler,
-        constraints_inhomogeneous,
-        quadrature,
-        params.nu,
-        params.c_1,
-        params.c_2,
-        *time_integrator_data);
+      {
+        AssertThrow(params.nonlinear_solver != "Newton", ExcInternalError());
+
+        ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
+          mapping,
+          dof_handler,
+          constraints_inhomogeneous,
+          quadrature,
+          params.nu,
+          params.c_1,
+          params.c_2,
+          *time_integrator_data);
+      }
 
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
@@ -2305,6 +2605,9 @@ public:
     else if (params.nonlinear_solver == "Picard")
       nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
         *ns_operator, *linear_solver, time_integrator_data->get_theta());
+    else if (params.nonlinear_solver == "Newton")
+      nonlinear_solver =
+        std::make_shared<NonLinearSolverNewton>(*ns_operator, *linear_solver);
     else
       AssertThrow(false, ExcNotImplemented());
 
