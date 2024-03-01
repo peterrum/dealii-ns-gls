@@ -277,9 +277,22 @@ public:
 /**
  * Linear/nonlinear operator.
  */
-class OperatorBase
+class OperatorBase : public Subscriptor
 {
 public:
+  virtual types::global_dof_index
+  m() const = 0;
+
+  Number
+  el(unsigned int, unsigned int) const
+  {
+    Assert(false, ExcNotImplemented());
+    return 0;
+  }
+
+  virtual void
+  compute_inverse_diagonal(VectorType &diagonal) const = 0;
+
   virtual void
   invalidate_system() = 0;
 
@@ -297,6 +310,12 @@ public:
 
   virtual void
   vmult(VectorType &dst, const VectorType &src) const = 0;
+
+  void
+  Tvmult(VectorType &dst, const VectorType &src) const
+  {
+    vmult(dst, src);
+  }
 
   virtual const SparseMatrixType &
   get_system_matrix() const = 0;
@@ -394,6 +413,8 @@ private:
   TrilinosWrappers::PreconditionAMG precon;
 };
 
+
+#include "include/multigrid.h"
 
 
 /**
@@ -836,6 +857,30 @@ public:
       {
         AssertThrow(theta[0] == 1.0, ExcInternalError());
       }
+  }
+
+  virtual types::global_dof_index
+  m() const override
+  {
+    if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
+      return this->matrix_free.get_dof_handler().n_dofs(
+        this->matrix_free.get_mg_level());
+    else
+      return this->matrix_free.get_dof_handler().n_dofs();
+  }
+
+  virtual void
+  compute_inverse_diagonal(VectorType &diagonal) const override
+  {
+    matrix_free.initialize_dof_vector(diagonal);
+    MatrixFreeTools::compute_diagonal(
+      matrix_free,
+      diagonal,
+      &NavierStokesOperator<dim>::do_vmult_cell<false>,
+      this);
+
+    for (auto &i : diagonal)
+      i = (std::abs(i) > 1.0e-10) ? (1.0 / i) : 1.0;
   }
 
   void
@@ -1457,6 +1502,20 @@ public:
     dsp.compress();
 
     system_matrix.reinit(dsp);
+  }
+
+  types::global_dof_index
+  m() const override
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    return 0;
+  }
+
+  void
+  compute_inverse_diagonal(VectorType &) const override
+  {
+    AssertThrow(false, ExcNotImplemented());
   }
 
   void
@@ -2566,6 +2625,13 @@ public:
 
         preconditioner =
           std::make_shared<PreconditionerAMG>(*ns_operator, constant_modes);
+      }
+    else if (params.preconditioner == "GMG")
+      {
+        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>> transfer;
+
+        preconditioner =
+          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators, transfer);
       }
     else
       AssertThrow(false, ExcNotImplemented());
