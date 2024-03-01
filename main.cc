@@ -501,6 +501,7 @@ public:
   NonLinearSolverNewton(OperatorBase &op, LinearSolverBase &linear_solver)
     : op(op)
     , linear_solver(linear_solver)
+    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , newton_tolerance(1.0e-7) // TODO
     , newton_max_iteration(30) // TODO
   {}
@@ -521,6 +522,9 @@ public:
     double       l2_norm       = rhs.l2_norm();
     unsigned int num_iteration = 0;
 
+    pcout << "    [N] step " << num_iteration << " ; residual = " << l2_norm
+          << std::endl;
+
     while (l2_norm > newton_tolerance)
       {
         inc = 0.0;
@@ -540,17 +544,25 @@ public:
         l2_norm = rhs.l2_norm();
         num_iteration++;
 
+        pcout << "    [N] step " << num_iteration << " ; residual = " << l2_norm
+              << std::endl;
+
         AssertThrow(
           num_iteration <= newton_max_iteration,
           dealii::ExcMessage(
             "Newton iteration did not converge. Final residual_0 is " +
             std::to_string(l2_norm) + "."));
       }
+
+    pcout << "    [N] solved in " << num_iteration << " iterations."
+          << std::endl;
   }
 
 private:
   OperatorBase     &op;
   LinearSolverBase &linear_solver;
+
+  const ConditionalOStream pcout;
 
   const double       newton_tolerance;
   const unsigned int newton_max_iteration;
