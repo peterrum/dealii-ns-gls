@@ -277,7 +277,7 @@ public:
   evaluate_rhs(VectorType &dst) const = 0;
 
   virtual void
-  evaluate_residual_0(VectorType &dst, const VectorType &src) const = 0;
+  evaluate_residual(VectorType &dst, const VectorType &src) const = 0;
 
   virtual void
   vmult(VectorType &dst, const VectorType &src) const = 0;
@@ -517,7 +517,7 @@ public:
     op.set_linearization_point(solution);
 
     // compute right-hans-side vector
-    op.evaluate_residual_0(rhs, solution);
+    op.evaluate_residual(rhs, solution);
 
     double       l2_norm       = rhs.l2_norm();
     unsigned int num_iteration = 0;
@@ -538,7 +538,7 @@ public:
         op.set_linearization_point(solution);
 
         // compute right-hans-side vector
-        op.evaluate_residual_0(rhs, solution);
+        op.evaluate_residual(rhs, solution);
 
         // check convergence
         l2_norm = rhs.l2_norm();
@@ -662,7 +662,7 @@ public:
     op.set_linearization_point(tmp);
 
     // compute residual_0
-    op.evaluate_residual_0(residual_0, tmp);
+    op.evaluate_residual(residual_0, tmp);
 
     double linfty_norm = residual_0.l2_norm();
 
@@ -692,7 +692,7 @@ public:
 
         // compute residual_0
         op.set_linearization_point(tmp);
-        op.evaluate_residual_0(residual_0, tmp);
+        op.evaluate_residual(residual_0, tmp);
         double new_linfty_norm = residual_0.l2_norm();
 
         if (new_linfty_norm < picard_tolerance)
@@ -983,7 +983,7 @@ public:
   }
 
   virtual void
-  evaluate_residual_0(VectorType &dst, const VectorType &src) const override
+  evaluate_residual(VectorType &dst, const VectorType &src) const override
   {
     this->matrix_free.cell_loop(
       &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
@@ -1051,21 +1051,21 @@ private:
 
   std::vector<unsigned int> constrained_indices;
 
-  template <bool evaluate_residual_0>
+  template <bool evaluate_residual>
   void
   do_vmult_range(const MatrixFree<dim, Number>               &matrix_free,
                  VectorType                                  &dst,
                  const VectorType                            &src,
                  const std::pair<unsigned int, unsigned int> &range) const
   {
-    FECellIntegrator phi(matrix_free, evaluate_residual_0 ? 1 : 0);
+    FECellIntegrator phi(matrix_free, evaluate_residual ? 1 : 0);
 
     for (auto cell = range.first; cell < range.second; ++cell)
       {
         phi.reinit(cell);
         phi.read_dof_values(src);
 
-        do_vmult_cell<evaluate_residual_0>(phi);
+        do_vmult_cell<evaluate_residual>(phi);
 
         phi.distribute_local_to_global(dst);
       }
@@ -1101,11 +1101,11 @@ private:
    *
    *                       ... with U/P being the linearizatin point
    */
-  template <bool evaluate_residual_0>
+  template <bool evaluate_residual>
   void
   do_vmult_cell(FECellIntegrator &integrator) const
   {
-    if (evaluate_residual_0 || !this->increment_form)
+    if (evaluate_residual || !this->increment_form)
       {
         const unsigned int cell = integrator.get_current_cell_index();
 
@@ -1143,10 +1143,10 @@ private:
                 u_bar_gradient[d]    = theta * gradient[d];
               }
 
-            if (evaluate_residual_0)
+            if (evaluate_residual)
               u_time_derivative += u_time_derivative_old[cell][q];
 
-            if (evaluate_residual_0 && (theta[0] != 1.0))
+            if (evaluate_residual && (theta[0] != 1.0))
               {
                 u_bar_gradient += (VectorizedArray<Number>(1.0) - theta) *
                                   old_gradient[cell][q];
@@ -1458,7 +1458,7 @@ public:
   }
 
   virtual void
-  evaluate_residual_0(VectorType &dst, const VectorType &src) const override
+  evaluate_residual(VectorType &dst, const VectorType &src) const override
   {
     (void)dst;
     (void)src;
