@@ -2610,7 +2610,14 @@ public:
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
 
-    MGLevelObject<std::shared_ptr<OperatorBase>> mg_ns_operators;
+    std::vector<std::shared_ptr<const Triangulation<dim>>> mg_trias;
+
+    MGLevelObject<DoFHandler<dim>>           mg_dof_handlers;
+    MGLevelObject<AffineConstraints<Number>> mg_constraints;
+
+    MGLevelObject<std::shared_ptr<OperatorBase>>       mg_ns_operators;
+    MGLevelObject<MGTwoLevelTransfer<dim, VectorType>> mg_transfers;
+
 
     if (params.preconditioner == "ILU")
       preconditioner = std::make_shared<PreconditionerILU>(*ns_operator);
@@ -2628,8 +2635,33 @@ public:
       }
     else if (params.preconditioner == "GMG")
       {
-        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>> transfer;
+        mg_trias =
+          MGTransferGlobalCoarseningTools::create_geometric_coarsening_sequence(
+            dof_handler.get_triangulation());
 
+        unsigned int minlevel = 0;
+        unsigned int maxlevel = mg_trias.size() - 1;
+
+        mg_dof_handlers.resize(minlevel, maxlevel);
+        mg_constraints.resize(minlevel, maxlevel);
+        mg_ns_operators.resize(minlevel, maxlevel);
+        mg_transfers.resize(minlevel, maxlevel);
+
+
+        // create transfer operator for preconditioner
+        for (unsigned int level = minlevel; level < maxlevel; ++level)
+          mg_transfers[level + 1].reinit(mg_dof_handlers[level + 1],
+                                         mg_dof_handlers[level],
+                                         mg_constraints[level + 1],
+                                         mg_constraints[level]);
+
+        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>> transfer =
+          std::make_shared<MGTransferGlobalCoarsening<dim, VectorType>>(
+            mg_transfers, [&](const auto l, auto &vec) {
+              mg_ns_operators[l]->initialize_dof_vector(vec);
+            });
+
+        // create preconditioner
         preconditioner =
           std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators, transfer);
       }
