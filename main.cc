@@ -2685,6 +2685,20 @@ public:
           MGTransferGlobalCoarseningTools::create_geometric_coarsening_sequence(
             dof_handler.get_triangulation());
 
+        if (true)
+          {
+            for (unsigned int i = 0; i < mg_trias.size(); ++i)
+              {
+                DataOut<dim> data_out;
+                data_out.attach_triangulation(*mg_trias[i]);
+                data_out.build_patches();
+
+                data_out.write_vtu_in_parallel("grid." + std::to_string(i) +
+                                                 ".vtu",
+                                               MPI_COMM_WORLD);
+              }
+          }
+
         unsigned int minlevel = 0;
         unsigned int maxlevel = mg_trias.size() - 1;
 
