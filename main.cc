@@ -2745,6 +2745,19 @@ public:
     const auto set_previous_solution =
       [&](const SolutionHistory<VectorType> &solution) {
         ns_operator->set_previous_solution(solution);
+
+        if (params.preconditioner == "GMG")
+          {
+            MGLevelObject<VectorType> mg_solution;
+
+            mg_transfer_no_constraints->interpolate_to_mg(
+              dof_handler, mg_solution, solution.get_vectors()[1]);
+
+            for (unsigned int l = mg_ns_operators.min_level();
+                 l <= mg_ns_operators.max_level();
+                 ++l)
+              mg_ns_operators[l]->set_previous_solution(mg_solution[l]);
+          }
       };
 
     nonlinear_solver->setup_jacobian = [&](const VectorType &src) {
@@ -2834,6 +2847,14 @@ public:
         time_integrator_data->update_dt(dt);
 
         ns_operator->invalidate_system(); // TODO
+
+        if (params.preconditioner == "GMG")
+          {
+            for (unsigned int l = mg_ns_operators.min_level();
+                 l <= mg_ns_operators.max_level();
+                 ++l)
+              mg_ns_operators[l]->invalidate_system(); // TODO
+          }
 
         // set previous solution
         solution.commit_solution();
