@@ -65,12 +65,33 @@ public:
     typename PreconditionChebyshev<MatrixType, VectorType, PreconditionerType>::
       AdditionalData parameters_chebyshev;
 
-    PreconditionChebyshev<MatrixType, VectorType, PreconditionerType> chebyshev;
+    parameters_chebyshev.degree              = parameters.degree;
+    parameters_chebyshev.smoothing_range     = parameters.smoothing_range;
+    parameters_chebyshev.eig_cg_n_iterations = parameters.eig_cg_n_iterations;
+    parameters_chebyshev.eig_cg_residual     = parameters.eig_cg_residual;
+    parameters_chebyshev.max_eigenvalue      = parameters.max_eigenvalue;
+    parameters_chebyshev.constraints.copy_from(parameters.constraints);
+    parameters_chebyshev.preconditioner = parameters.preconditioner;
 
-    chebyshev.initialize(A, parameters_chebyshev);
+    if (parameters.eigenvalue_algorithm ==
+        AdditionalData::EigenvalueAlgorithm::lanczos)
+      parameters_chebyshev.eigenvalue_algorithm =
+        PreconditionChebyshev<MatrixType, VectorType, PreconditionerType>::
+          AdditionalData::EigenvalueAlgorithm::lanczos;
+    else if (parameters.eigenvalue_algorithm ==
+             AdditionalData::EigenvalueAlgorithm::power_iteration)
+      parameters_chebyshev.eigenvalue_algorithm =
+        PreconditionChebyshev<MatrixType, VectorType, PreconditionerType>::
+          AdditionalData::EigenvalueAlgorithm::power_iteration;
+    else
+      AssertThrow(false, ExcInternalError());
+
+    PreconditionChebyshev<MatrixType, VectorType, PreconditionerType> chebyshev;
 
     VectorType vec;
     A.initialize_dof_vector(vec);
+
+    chebyshev.initialize(A, parameters_chebyshev);
 
     const auto evs = chebyshev.estimate_eigenvalues(vec);
 
@@ -86,8 +107,9 @@ public:
                                     PreconditionerType>::AdditionalData
       parameters_relaxation;
 
-    parameters_relaxation.relaxation   = omega;
-    parameters_relaxation.n_iterations = parameters.degree;
+    parameters_relaxation.relaxation     = omega;
+    parameters_relaxation.n_iterations   = parameters.degree;
+    parameters_relaxation.preconditioner = parameters.preconditioner;
 
     relaxation.initialize(A, parameters_relaxation);
   }

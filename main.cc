@@ -2822,7 +2822,8 @@ public:
 
         if (params.preconditioner == "GMG")
           {
-            MGLevelObject<VectorType> mg_solution;
+            MGLevelObject<VectorType> mg_solution(mg_ns_operators.min_level(),
+                                                  mg_ns_operators.max_level());
 
             mg_transfer_no_constraints->interpolate_to_mg(
               dof_handler, mg_solution, solution.get_vectors()[1]);
@@ -2844,7 +2845,8 @@ public:
     nonlinear_solver->setup_preconditioner = [&](const VectorType &solution) {
       if (params.preconditioner == "GMG")
         {
-          MGLevelObject<VectorType> mg_solution;
+          MGLevelObject<VectorType> mg_solution(mg_ns_operators.min_level(),
+                                                mg_ns_operators.max_level());
 
           mg_transfer_no_constraints->interpolate_to_mg(dof_handler,
                                                         mg_solution,
