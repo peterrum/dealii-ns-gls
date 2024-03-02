@@ -380,6 +380,8 @@ public:
         smoother_data[level].degree          = additional_data.smoothing_degree;
         smoother_data[level].eig_cg_n_iterations =
           additional_data.smoothing_eig_cg_n_iterations;
+        smoother_data[level].constraints.copy_from(
+          op[level]->get_constraints());
       }
 
     mg_smoother = std::make_unique<
@@ -395,6 +397,8 @@ public:
           additional_data.coarse_grid_smoother_type.c_str();
         amg_data.output_details = false;
 
+        precondition_amg =
+          std::make_unique<TrilinosWrappers::PreconditionAMG>();
         precondition_amg->initialize(op[min_level]->get_system_matrix());
         mg_coarse = std::make_unique<
           MGCoarseGridApplyPreconditioner<VectorType,

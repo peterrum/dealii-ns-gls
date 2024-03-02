@@ -320,6 +320,9 @@ public:
     vmult(dst, src);
   }
 
+  virtual const AffineConstraints<Number> &
+  get_constraints() const = 0;
+
   virtual const SparseMatrixType &
   get_system_matrix() const = 0;
 
@@ -860,6 +863,12 @@ public:
       {
         AssertThrow(theta[0] == 1.0, ExcInternalError());
       }
+  }
+
+  const AffineConstraints<Number> &
+  get_constraints() const override
+  {
+    return matrix_free.get_affine_constraints();
   }
 
   virtual types::global_dof_index
@@ -1522,6 +1531,12 @@ public:
     dsp.compress();
 
     system_matrix.reinit(dsp);
+  }
+
+  const AffineConstraints<Number> &
+  get_constraints() const override
+  {
+    return constraints;
   }
 
   types::global_dof_index
