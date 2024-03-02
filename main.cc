@@ -2679,6 +2679,48 @@ public:
         mg_transfers.resize(minlevel, maxlevel);
         mg_transfers_no_constraints.resize(minlevel, maxlevel);
 
+        for (unsigned int level = minlevel; level <= maxlevel; ++level)
+          {
+            const auto &dof_handler = mg_dof_handlers[level];
+            auto       &constraints = mg_constraints[level];
+
+            if (params.use_matrix_free_ns_operator)
+              {
+                const bool increment_form = params.nonlinear_solver == "Newton";
+
+                mg_ns_operators[level] =
+                  std::make_shared<NavierStokesOperator<dim>>(
+                    mapping,
+                    dof_handler,
+                    constraints,
+                    constraints,
+                    constraints,
+                    quadrature,
+                    params.nu,
+                    params.c_1,
+                    params.c_2,
+                    *time_integrator_data,
+                    params.consider_time_deriverative,
+                    increment_form);
+              }
+            else
+              {
+                AssertThrow(params.nonlinear_solver != "Newton",
+                            ExcInternalError());
+
+                mg_ns_operators[level] =
+                  std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
+                    mapping,
+                    dof_handler,
+                    constraints_inhomogeneous,
+                    quadrature,
+                    params.nu,
+                    params.c_1,
+                    params.c_2,
+                    *time_integrator_data);
+              }
+          }
+
 
         // create transfer operator for interpolation to the levels (without
         // constraints)
