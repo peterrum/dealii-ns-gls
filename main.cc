@@ -1882,7 +1882,7 @@ private:
     prm.add_parameter("preconditioner",
                       preconditioner,
                       "",
-                      Patterns::Selection("AMG|ILU"));
+                      Patterns::Selection("AMG|GMG|ILU"));
 
     // nonlinear solver
     prm.add_parameter("nonlinear solver",
