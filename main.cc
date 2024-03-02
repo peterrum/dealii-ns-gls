@@ -898,31 +898,11 @@ public:
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
     u_time_derivative_old.reinit(n_cells, n_quadrature_points);
-    u_old_gradient.reinit(n_cells, n_quadrature_points);
-    p_old_gradient.reinit(n_cells, n_quadrature_points);
-
-    delta_1.resize(n_cells);
-    delta_2.resize(n_cells);
 
     FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
-    FEEvaluation<dim, -1, 0, 1, Number>   integrator_scalar(matrix_free,
-                                                          0,
-                                                          0,
-                                                          dim);
-
-    const auto &vec = history.get_vectors()[1];
-
-    const bool has_ghost_elements = vec.has_ghost_elements();
-
-    AssertThrow(has_ghost_elements == false, ExcInternalError());
-
-    if (has_ghost_elements == false)
-      vec.update_ghost_values();
-
-    const auto tau = this->time_integrator_data.get_current_dt();
 
     VectorType vec_old;
-    vec_old.reinit(vec);
+    vec_old.reinit(history.get_vectors()[1]);
 
     for (unsigned int i = 1; i <= time_integrator_data.get_order(); ++i)
       vec_old.add(time_integrator_data.get_weights()[i],
@@ -939,6 +919,43 @@ public:
 
         for (const auto q : integrator.quadrature_point_indices())
           u_time_derivative_old[cell][q] = integrator.get_value(q);
+      }
+
+    this->set_previous_solution(history.get_vectors()[1]);
+  }
+
+  void
+  set_previous_solution(const VectorType &vec)
+  {
+    this->valid_system = false;
+
+    const unsigned n_cells             = matrix_free.n_cell_batches();
+    const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
+
+    u_old_gradient.reinit(n_cells, n_quadrature_points);
+    p_old_gradient.reinit(n_cells, n_quadrature_points);
+
+    delta_1.resize(n_cells);
+    delta_2.resize(n_cells);
+
+    FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+    FEEvaluation<dim, -1, 0, 1, Number>   integrator_scalar(matrix_free,
+                                                          0,
+                                                          0,
+                                                          dim);
+
+    const bool has_ghost_elements = vec.has_ghost_elements();
+
+    AssertThrow(has_ghost_elements == false, ExcInternalError());
+
+    if (has_ghost_elements == false)
+      vec.update_ghost_values();
+
+    const auto tau = this->time_integrator_data.get_current_dt();
+
+    for (unsigned int cell = 0; cell < n_cells; ++cell)
+      {
+        integrator.reinit(cell);
 
         integrator.read_dof_values_plain(vec);
         integrator.evaluate(EvaluationFlags::EvaluationFlags::gradients);
