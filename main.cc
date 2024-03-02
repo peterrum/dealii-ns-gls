@@ -2681,8 +2681,40 @@ public:
 
         for (unsigned int level = minlevel; level <= maxlevel; ++level)
           {
-            const auto &dof_handler = mg_dof_handlers[level];
-            auto       &constraints = mg_constraints[level];
+            auto &dof_handler = mg_dof_handlers[level];
+            auto &constraints = mg_constraints[level];
+
+            dof_handler.reinit(*mg_trias[level]);
+            dof_handler.distribute_dofs(fe);
+
+            const auto locally_relevant_dofs =
+              DoFTools::extract_locally_relevant_dofs(dof_handler);
+
+            constraints.reinit(locally_relevant_dofs);
+
+            for (const auto bci : bcs.all_homogeneous_dbcs)
+              DoFTools::make_zero_boundary_constraints(dof_handler,
+                                                       bci,
+                                                       constraints,
+                                                       mask_v);
+
+            for (const auto bci : bcs.all_homogeneous_nbcs)
+              DoFTools::make_zero_boundary_constraints(dof_handler,
+                                                       bci,
+                                                       constraints,
+                                                       mask_p);
+
+            for (const auto bci : bcs.all_slip_bcs)
+              VectorTools::compute_no_normal_flux_constraints(
+                dof_handler, 0, {bci}, constraints, mapping);
+
+            for (const auto &[bci, _] : bcs.all_inhomogeneous_dbcs)
+              DoFTools::make_zero_boundary_constraints(dof_handler,
+                                                       bci,
+                                                       constraints,
+                                                       mask_v);
+
+            constraints.close();
 
             if (params.use_matrix_free_ns_operator)
               {
@@ -2712,7 +2744,7 @@ public:
                   std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
                     mapping,
                     dof_handler,
-                    constraints_inhomogeneous,
+                    constraints,
                     quadrature,
                     params.nu,
                     params.c_1,
