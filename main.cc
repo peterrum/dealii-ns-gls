@@ -2617,6 +2617,11 @@ public:
 
     MGLevelObject<std::shared_ptr<OperatorBase>>       mg_ns_operators;
     MGLevelObject<MGTwoLevelTransfer<dim, VectorType>> mg_transfers;
+    MGLevelObject<MGTwoLevelTransfer<dim, VectorType>>
+      mg_transfers_no_constraints;
+
+    std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>>
+      mg_transfer_no_constraints;
 
 
     if (params.preconditioner == "ILU")
@@ -2646,9 +2651,23 @@ public:
         mg_constraints.resize(minlevel, maxlevel);
         mg_ns_operators.resize(minlevel, maxlevel);
         mg_transfers.resize(minlevel, maxlevel);
+        mg_transfers_no_constraints.resize(minlevel, maxlevel);
 
 
-        // create transfer operator for preconditioner
+        // create transfer operator for interpolation to the levels (without
+        // constraints)
+        for (unsigned int level = minlevel; level < maxlevel; ++level)
+          mg_transfers_no_constraints[level + 1].reinit(
+            mg_dof_handlers[level + 1], mg_dof_handlers[level]);
+
+        mg_transfer_no_constraints =
+          std::make_shared<MGTransferGlobalCoarsening<dim, VectorType>>(
+            mg_transfers_no_constraints, [&](const auto l, auto &vec) {
+              mg_ns_operators[l]->initialize_dof_vector(vec);
+            });
+
+
+        // create transfer operator for preconditioner (with constraints)
         for (unsigned int level = minlevel; level < maxlevel; ++level)
           mg_transfers[level + 1].reinit(mg_dof_handlers[level + 1],
                                          mg_dof_handlers[level],
@@ -2704,19 +2723,24 @@ public:
 
     nonlinear_solver->setup_jacobian = [&](const VectorType &src) {
       ns_operator->set_linearization_point(src);
+
+      // note: for the level operators, this is done during setup of
+      // preconditioner
     };
 
-    nonlinear_solver->setup_preconditioner = [&](const VectorType &src) {
-      (void)src;
-
+    nonlinear_solver->setup_preconditioner = [&](const VectorType &solution) {
       if (params.preconditioner == "GMG")
         {
-          // TODO: transfer solution
+          MGLevelObject<VectorType> mg_solution;
+
+          mg_transfer_no_constraints->interpolate_to_mg(dof_handler,
+                                                        mg_solution,
+                                                        solution);
 
           for (unsigned int l = mg_ns_operators.min_level();
                l <= mg_ns_operators.max_level();
                ++l)
-            mg_ns_operators[l]->set_linearization_point(src);
+            mg_ns_operators[l]->set_linearization_point(mg_solution[l]);
         }
 
       if (preconditioner)
