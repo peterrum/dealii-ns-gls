@@ -300,6 +300,9 @@ public:
   set_previous_solution(const SolutionHistory<VectorType> &vec) = 0;
 
   virtual void
+  set_previous_solution(const VectorType &vec) = 0;
+
+  virtual void
   set_linearization_point(const VectorType &src) = 0;
 
   virtual void
@@ -925,7 +928,7 @@ public:
   }
 
   void
-  set_previous_solution(const VectorType &vec)
+  set_previous_solution(const VectorType &vec) override
   {
     this->valid_system = false;
 
@@ -1544,7 +1547,13 @@ public:
   void
   set_previous_solution(const SolutionHistory<VectorType> &vec) override
   {
-    this->previous_solution = vec.get_vectors()[1];
+    this->set_previous_solution(vec.get_vectors()[1]);
+  }
+
+  void
+  set_previous_solution(const VectorType &vec) override
+  {
+    this->previous_solution = vec;
     this->previous_solution.update_ghost_values();
 
     this->valid_system = false;
