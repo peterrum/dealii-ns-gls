@@ -8,6 +8,135 @@
 #include <deal.II/multigrid/mg_transfer_global_coarsening.h>
 #include <deal.II/multigrid/multigrid.h>
 
+template <typename MatrixType, typename VectorType, typename PreconditionerType>
+class MyPreconditionRelaxation : public Subscriptor
+{
+public:
+  using size_type = types::global_dof_index;
+
+  class AdditionalData
+  {
+  public:
+    enum class EigenvalueAlgorithm
+    {
+      lanczos,
+      power_iteration
+    };
+
+    AdditionalData(const unsigned int        degree              = 1,
+                   const double              smoothing_range     = 0.,
+                   const unsigned int        eig_cg_n_iterations = 8,
+                   const double              eig_cg_residual     = 1e-2,
+                   const double              max_eigenvalue      = 1,
+                   const EigenvalueAlgorithm eigenvalue_algorithm =
+                     EigenvalueAlgorithm::lanczos)
+      : degree(degree)
+      , smoothing_range(smoothing_range)
+      , eig_cg_n_iterations(eig_cg_n_iterations)
+      , eig_cg_residual(eig_cg_residual)
+      , max_eigenvalue(max_eigenvalue)
+      , eigenvalue_algorithm(eigenvalue_algorithm)
+    {}
+
+    unsigned int degree;
+
+    double smoothing_range;
+
+    unsigned int eig_cg_n_iterations;
+
+    double eig_cg_residual;
+
+    double max_eigenvalue;
+
+    AffineConstraints<double> constraints;
+
+    std::shared_ptr<PreconditionerType> preconditioner;
+
+    EigenvalueAlgorithm eigenvalue_algorithm;
+  };
+
+  void
+  initialize(const MatrixType     &A,
+             const AdditionalData &parameters = AdditionalData())
+  {
+    typename PreconditionChebyshev<MatrixType, VectorType, PreconditionerType>::
+      AdditionalData parameters_chebyshev;
+
+    PreconditionChebyshev<MatrixType, VectorType, PreconditionerType> chebyshev;
+
+    chebyshev.initialize(A, parameters_chebyshev);
+
+    VectorType vec;
+    A.initialize_dof_vector(vec);
+
+    const auto evs = chebyshev.estimate_eigenvalues(vec);
+
+    const double alpha =
+      (parameters.smoothing_range > 1. ?
+         evs.max_eigenvalue_estimate / parameters.smoothing_range :
+         std::min(0.9 * evs.max_eigenvalue_estimate,
+                  evs.min_eigenvalue_estimate));
+
+    const double omega = 2.0 / (alpha + evs.max_eigenvalue_estimate);
+
+    typename PreconditionRelaxation<MatrixType,
+                                    PreconditionerType>::AdditionalData
+      parameters_relaxation;
+
+    parameters_relaxation.relaxation   = omega;
+    parameters_relaxation.n_iterations = parameters.degree;
+
+    relaxation.initialize(A, parameters_relaxation);
+  }
+
+  void
+  clear()
+  {
+    relaxation.clear();
+  }
+
+  size_type
+  m() const
+  {
+    return relaxation.m();
+  }
+
+  size_type
+  n() const
+  {
+    return relaxation.n();
+  }
+
+  void
+  vmult(VectorType &dst, const VectorType &src) const
+  {
+    relaxation.vmult(dst, src);
+  }
+
+  void
+  Tvmult(VectorType &dst, const VectorType &src) const
+  {
+    relaxation.Tvmult(dst, src);
+  }
+
+  void
+  step(VectorType &dst, const VectorType &src) const
+  {
+    relaxation.step(dst, src);
+  }
+
+  void
+  Tstep(VectorType &dst, const VectorType &src) const
+  {
+    relaxation.Tstep(dst, src);
+  }
+
+protected:
+  PreconditionRelaxation<MatrixType, PreconditionerType> relaxation;
+};
+
+
+
 template <int dim>
 class PreconditionerGMG : public PreconditionerBase
 {
@@ -31,9 +160,9 @@ public:
   using LevelMatrixType = OperatorBase;
 
   using SmootherPreconditionerType = DiagonalMatrix<VectorType>;
-  using SmootherType               = PreconditionChebyshev<LevelMatrixType,
-                                             VectorType,
-                                             SmootherPreconditionerType>;
+  using SmootherType               = MyPreconditionRelaxation<LevelMatrixType,
+                                                VectorType,
+                                                SmootherPreconditionerType>;
 
   using MGTransferType = MGTransferGlobalCoarsening<dim, VectorType>;
 
@@ -88,52 +217,7 @@ public:
       MGSmootherPrecondition<LevelMatrixType, SmootherType, VectorType>>();
     mg_smoother->initialize(op, smoother_data);
 
-    for (unsigned int level = min_level; level <= max_level; ++level)
-      {
-        VectorType vec;
-        op[level]->initialize_dof_vector(vec);
-        mg_smoother->smoothers[level].estimate_eigenvalues(vec);
-      }
-
-    coarse_grid_solver_control =
-      std::make_unique<ReductionControl>(additional_data.coarse_grid_maxiter,
-                                         additional_data.coarse_grid_abstol,
-                                         additional_data.coarse_grid_reltol,
-                                         false,
-                                         false);
-    coarse_grid_solver =
-      std::make_unique<SolverCG<VectorType>>(*coarse_grid_solver_control);
-
-    if (additional_data.coarse_grid_type == "cg_with_chebyshev")
-      {
-        typename SmootherType::AdditionalData smoother_data;
-
-        smoother_data.preconditioner =
-          std::make_shared<DiagonalMatrix<VectorType>>();
-        op[min_level]->compute_inverse_diagonal(
-          smoother_data.preconditioner->get_vector());
-        smoother_data.smoothing_range = additional_data.smoothing_range;
-        smoother_data.degree          = additional_data.smoothing_degree;
-        smoother_data.eig_cg_n_iterations =
-          additional_data.smoothing_eig_cg_n_iterations;
-
-        precondition_chebyshev =
-          std::make_unique<PreconditionChebyshev<LevelMatrixType,
-                                                 VectorType,
-                                                 DiagonalMatrix<VectorType>>>();
-
-        precondition_chebyshev->initialize(*op[min_level], smoother_data);
-
-        mg_coarse = std::make_unique<MGCoarseGridIterativeSolver<
-          VectorType,
-          SolverCG<VectorType>,
-          LevelMatrixType,
-          PreconditionChebyshev<LevelMatrixType,
-                                VectorType,
-                                DiagonalMatrix<VectorType>>>>(
-          *coarse_grid_solver, *op[min_level], *precondition_chebyshev);
-      }
-    else
+    if (true)
       {
         AssertThrow(false, ExcNotImplemented());
       }
