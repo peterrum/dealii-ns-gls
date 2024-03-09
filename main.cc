@@ -277,14 +277,30 @@ public:
 /**
  * Linear/nonlinear operator.
  */
-class OperatorBase
+class OperatorBase : public Subscriptor
 {
 public:
+  virtual types::global_dof_index
+  m() const = 0;
+
+  Number
+  el(unsigned int, unsigned int) const
+  {
+    Assert(false, ExcNotImplemented());
+    return 0;
+  }
+
+  virtual void
+  compute_inverse_diagonal(VectorType &diagonal) const = 0;
+
   virtual void
   invalidate_system() = 0;
 
   virtual void
   set_previous_solution(const SolutionHistory<VectorType> &vec) = 0;
+
+  virtual void
+  set_previous_solution(const VectorType &vec) = 0;
 
   virtual void
   set_linearization_point(const VectorType &src) = 0;
@@ -297,6 +313,15 @@ public:
 
   virtual void
   vmult(VectorType &dst, const VectorType &src) const = 0;
+
+  void
+  Tvmult(VectorType &dst, const VectorType &src) const
+  {
+    vmult(dst, src);
+  }
+
+  virtual const AffineConstraints<Number> &
+  get_constraints() const = 0;
 
   virtual const SparseMatrixType &
   get_system_matrix() const = 0;
@@ -395,6 +420,8 @@ private:
 };
 
 
+#include "include/multigrid.h"
+
 
 /**
  * Linear solvers.
@@ -433,7 +460,7 @@ public:
   void
   initialize() override
   {
-    preconditioner.initialize();
+    // nothing to do
   }
 
   void
@@ -477,6 +504,17 @@ class NonLinearSolverBase
 public:
   virtual void
   solve(VectorType &solution) const = 0;
+
+  std::function<void(const VectorType &src)> setup_jacobian;
+
+  std::function<void(const VectorType &src)> setup_preconditioner;
+
+  std::function<void(VectorType &dst, const VectorType &src)> evaluate_residual;
+
+  std::function<void(VectorType &dst)> evaluate_rhs;
+
+  std::function<void(VectorType &dst, const VectorType &src)>
+    solve_with_jacobian;
 };
 
 
@@ -487,30 +525,26 @@ public:
 class NonLinearSolverLinearized : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverLinearized(OperatorBase &op, LinearSolverBase &linear_solver)
-    : op(op)
-    , linear_solver(linear_solver)
+  NonLinearSolverLinearized()
   {}
 
   void
   solve(VectorType &solution) const override
   {
     // set linearization point
-    op.set_linearization_point(solution);
+    this->setup_jacobian(solution);
 
     // compute right-hans-side vector
     VectorType rhs;
     rhs.reinit(solution);
-    op.evaluate_rhs(rhs);
+    this->evaluate_rhs(rhs);
 
     // solve linear system
-    linear_solver.initialize();
-    linear_solver.solve(solution, rhs);
+    this->setup_preconditioner(solution);
+    this->solve_with_jacobian(solution, rhs);
   }
 
 private:
-  OperatorBase     &op;
-  LinearSolverBase &linear_solver;
 };
 
 
@@ -521,10 +555,8 @@ private:
 class NonLinearSolverNewton : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverNewton(OperatorBase &op, LinearSolverBase &linear_solver)
-    : op(op)
-    , linear_solver(linear_solver)
-    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+  NonLinearSolverNewton()
+    : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , newton_tolerance(1.0e-7) // TODO
     , newton_max_iteration(30) // TODO
   {}
@@ -537,10 +569,10 @@ public:
     inc.reinit(solution);
 
     // set linearization point
-    op.set_linearization_point(solution);
+    this->setup_jacobian(solution);
 
     // compute right-hans-side vector
-    op.evaluate_residual(rhs, solution);
+    this->evaluate_residual(rhs, solution);
 
     double       l2_norm       = rhs.l2_norm();
     unsigned int num_iteration = 0;
@@ -552,16 +584,16 @@ public:
       {
         inc = 0.0;
 
-        linear_solver.initialize();
-        linear_solver.solve(inc, rhs);
+        this->setup_preconditioner(solution);
+        this->solve_with_jacobian(inc, rhs);
 
         solution.add(1.0, inc);
 
         // set linearization point
-        op.set_linearization_point(solution);
+        this->setup_jacobian(solution);
 
         // compute right-hans-side vector
-        op.evaluate_residual(rhs, solution);
+        this->evaluate_residual(rhs, solution);
 
         // check convergence
         l2_norm = rhs.l2_norm();
@@ -582,9 +614,6 @@ public:
   }
 
 private:
-  OperatorBase     &op;
-  LinearSolverBase &linear_solver;
-
   const ConditionalOStream pcout;
 
   const double       newton_tolerance;
@@ -599,10 +628,8 @@ private:
 class NonLinearSolverPicardSimple : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverPicardSimple(OperatorBase &op, LinearSolverBase &linear_solver)
-    : op(op)
-    , linear_solver(linear_solver)
-    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+  NonLinearSolverPicardSimple()
+    : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , picard_tolerance(1.0e-7) // TODO
     , picard_max_iteration(30) // TODO
   {}
@@ -622,16 +649,15 @@ public:
         tmp = solution;
 
         // set linearization point
-        op.set_linearization_point(solution);
+        this->setup_jacobian(solution);
 
         // compute right-hans-side vector
-        op.evaluate_rhs(rhs);
+        this->evaluate_rhs(rhs);
 
         // solve linear system
-        if (true || (num_iteration == 0))
-          linear_solver.initialize();
+        this->setup_preconditioner(solution);
 
-        linear_solver.solve(solution, rhs);
+        this->solve_with_jacobian(solution, rhs);
 
         // check convergence
         tmp -= solution;
@@ -650,9 +676,6 @@ public:
   }
 
 private:
-  OperatorBase     &op;
-  LinearSolverBase &linear_solver;
-
   const ConditionalOStream pcout;
 
   const double       picard_tolerance;
@@ -669,12 +692,8 @@ private:
 class NonLinearSolverPicard : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverPicard(OperatorBase     &op,
-                        LinearSolverBase &linear_solver,
-                        const double      theta)
-    : op(op)
-    , linear_solver(linear_solver)
-    , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+  NonLinearSolverPicard(const double theta)
+    : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     , need_to_recompute_matrix(true)
     , picard_tolerance(1.0e-7)                  // TODO
     , picard_max_iteration(30)                  // TODO
@@ -696,10 +715,10 @@ public:
     tmp = solution;
 
     // set linearization point
-    op.set_linearization_point(tmp);
+    this->setup_jacobian(tmp);
 
     // compute residual_0
-    op.evaluate_residual(residual_0, tmp);
+    this->evaluate_residual(residual_0, tmp);
 
     double linfty_norm = residual_0.l2_norm();
 
@@ -720,16 +739,16 @@ public:
         if (need_to_recompute_matrix || linear_always_recompute_matrix)
           {
             pcout << "    [P] step " << i << " ; recompute matrix" << std::endl;
-            linear_solver.initialize();
+            this->setup_preconditioner(tmp);
             need_to_recompute_matrix = false;
           }
 
-        linear_solver.solve(update, residual_0);
+        this->solve_with_jacobian(update, residual_0);
         tmp += update;
 
         // compute residual_0
-        op.set_linearization_point(tmp);
-        op.evaluate_residual(residual_0, tmp);
+        this->setup_jacobian(tmp);
+        this->evaluate_residual(residual_0, tmp);
         double new_linfty_norm = residual_0.l2_norm();
 
         if (new_linfty_norm < picard_tolerance)
@@ -744,7 +763,7 @@ public:
           {
             // revert to previous step
             tmp -= update;
-            op.set_linearization_point(tmp);
+            this->setup_jacobian(tmp);
 
             need_to_recompute_matrix = true;
 
@@ -779,9 +798,6 @@ public:
   }
 
 private:
-  OperatorBase     &op;
-  LinearSolverBase &linear_solver;
-
   const ConditionalOStream pcout;
 
   mutable bool need_to_recompute_matrix;
@@ -849,6 +865,36 @@ public:
       }
   }
 
+  const AffineConstraints<Number> &
+  get_constraints() const override
+  {
+    return matrix_free.get_affine_constraints();
+  }
+
+  virtual types::global_dof_index
+  m() const override
+  {
+    if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
+      return this->matrix_free.get_dof_handler().n_dofs(
+        this->matrix_free.get_mg_level());
+    else
+      return this->matrix_free.get_dof_handler().n_dofs();
+  }
+
+  virtual void
+  compute_inverse_diagonal(VectorType &diagonal) const override
+  {
+    matrix_free.initialize_dof_vector(diagonal);
+    MatrixFreeTools::compute_diagonal(
+      matrix_free,
+      diagonal,
+      &NavierStokesOperator<dim>::do_vmult_cell<false>,
+      this);
+
+    for (auto &i : diagonal)
+      i = (std::abs(i) > 1.0e-10) ? (1.0 / i) : 1.0;
+  }
+
   void
   invalidate_system() override
   {
@@ -864,31 +910,11 @@ public:
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
     u_time_derivative_old.reinit(n_cells, n_quadrature_points);
-    u_old_gradient.reinit(n_cells, n_quadrature_points);
-    p_old_gradient.reinit(n_cells, n_quadrature_points);
-
-    delta_1.resize(n_cells);
-    delta_2.resize(n_cells);
 
     FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
-    FEEvaluation<dim, -1, 0, 1, Number>   integrator_scalar(matrix_free,
-                                                          0,
-                                                          0,
-                                                          dim);
-
-    const auto &vec = history.get_vectors()[1];
-
-    const bool has_ghost_elements = vec.has_ghost_elements();
-
-    AssertThrow(has_ghost_elements == false, ExcInternalError());
-
-    if (has_ghost_elements == false)
-      vec.update_ghost_values();
-
-    const auto tau = this->time_integrator_data.get_current_dt();
 
     VectorType vec_old;
-    vec_old.reinit(vec);
+    vec_old.reinit(history.get_vectors()[1]);
 
     for (unsigned int i = 1; i <= time_integrator_data.get_order(); ++i)
       vec_old.add(time_integrator_data.get_weights()[i],
@@ -905,6 +931,43 @@ public:
 
         for (const auto q : integrator.quadrature_point_indices())
           u_time_derivative_old[cell][q] = integrator.get_value(q);
+      }
+
+    this->set_previous_solution(history.get_vectors()[1]);
+  }
+
+  void
+  set_previous_solution(const VectorType &vec) override
+  {
+    this->valid_system = false;
+
+    const unsigned n_cells             = matrix_free.n_cell_batches();
+    const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
+
+    u_old_gradient.reinit(n_cells, n_quadrature_points);
+    p_old_gradient.reinit(n_cells, n_quadrature_points);
+
+    delta_1.resize(n_cells);
+    delta_2.resize(n_cells);
+
+    FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+    FEEvaluation<dim, -1, 0, 1, Number>   integrator_scalar(matrix_free,
+                                                          0,
+                                                          0,
+                                                          dim);
+
+    const bool has_ghost_elements = vec.has_ghost_elements();
+
+    AssertThrow(has_ghost_elements == false, ExcInternalError());
+
+    if (has_ghost_elements == false)
+      vec.update_ghost_values();
+
+    const auto tau = this->time_integrator_data.get_current_dt();
+
+    for (unsigned int cell = 0; cell < n_cells; ++cell)
+      {
+        integrator.reinit(cell);
 
         integrator.read_dof_values_plain(vec);
         integrator.evaluate(EvaluationFlags::EvaluationFlags::gradients);
@@ -1022,8 +1085,12 @@ public:
   virtual void
   evaluate_residual(VectorType &dst, const VectorType &src) const override
   {
+    // apply inhomogeneous DBC
+    VectorType tmp = src;                      // TODO: needed?
+    constraints_inhomogeneous.distribute(tmp); //
+
     this->matrix_free.cell_loop(
-      &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
+      &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, tmp, true);
 
     // apply constraints
     matrix_free.get_affine_constraints(0).set_zero(dst);
@@ -1466,6 +1533,26 @@ public:
     system_matrix.reinit(dsp);
   }
 
+  const AffineConstraints<Number> &
+  get_constraints() const override
+  {
+    return constraints;
+  }
+
+  types::global_dof_index
+  m() const override
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    return 0;
+  }
+
+  void
+  compute_inverse_diagonal(VectorType &) const override
+  {
+    AssertThrow(false, ExcNotImplemented());
+  }
+
   void
   invalidate_system() override
   {
@@ -1475,7 +1562,13 @@ public:
   void
   set_previous_solution(const SolutionHistory<VectorType> &vec) override
   {
-    this->previous_solution = vec.get_vectors()[1];
+    this->set_previous_solution(vec.get_vectors()[1]);
+  }
+
+  void
+  set_previous_solution(const VectorType &vec) override
+  {
+    this->previous_solution = vec;
     this->previous_solution.update_ghost_values();
 
     this->valid_system = false;
@@ -1804,7 +1897,7 @@ private:
     prm.add_parameter("preconditioner",
                       preconditioner,
                       "",
-                      Patterns::Selection("AMG|ILU"));
+                      Patterns::Selection("AMG|GMG|ILU"));
 
     // nonlinear solver
     prm.add_parameter("nonlinear solver",
@@ -1900,8 +1993,8 @@ public:
   {
     BoundaryDescriptor bcs;
 
-    bcs.all_inhomogeneous_dbcs.emplace_back(
-      0, std::make_shared<InflowVelocity<dim, Number>>());
+    bcs.all_inhomogeneous_dbcs.emplace_back(0,
+                                            std::make_shared<InflowVelocity>());
 
     bcs.all_homogeneous_nbcs.push_back(1);
 
@@ -1917,8 +2010,6 @@ public:
 private:
   const unsigned int n_stretching;
 
-
-  template <int dim, typename Number>
   class InflowVelocity : public Function<dim, Number>
   {
   public:
@@ -2560,6 +2651,20 @@ public:
     // set up preconditioner
     std::shared_ptr<PreconditionerBase> preconditioner;
 
+    std::vector<std::shared_ptr<const Triangulation<dim>>> mg_trias;
+
+    MGLevelObject<DoFHandler<dim>>           mg_dof_handlers;
+    MGLevelObject<AffineConstraints<Number>> mg_constraints;
+
+    MGLevelObject<std::shared_ptr<OperatorBase>>       mg_ns_operators;
+    MGLevelObject<MGTwoLevelTransfer<dim, VectorType>> mg_transfers;
+    MGLevelObject<MGTwoLevelTransfer<dim, VectorType>>
+      mg_transfers_no_constraints;
+
+    std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>>
+      mg_transfer_no_constraints;
+
+
     if (params.preconditioner == "ILU")
       preconditioner = std::make_shared<PreconditionerILU>(*ns_operator);
     else if (params.preconditioner == "AMG")
@@ -2573,6 +2678,140 @@ public:
 
         preconditioner =
           std::make_shared<PreconditionerAMG>(*ns_operator, constant_modes);
+      }
+    else if (params.preconditioner == "GMG")
+      {
+        mg_trias =
+          MGTransferGlobalCoarseningTools::create_geometric_coarsening_sequence(
+            dof_handler.get_triangulation());
+
+        if (true)
+          {
+            for (unsigned int i = 0; i < mg_trias.size(); ++i)
+              {
+                DataOut<dim> data_out;
+                data_out.attach_triangulation(*mg_trias[i]);
+                data_out.build_patches();
+
+                data_out.write_vtu_in_parallel("grid." + std::to_string(i) +
+                                                 ".vtu",
+                                               MPI_COMM_WORLD);
+              }
+          }
+
+        unsigned int minlevel = 0;
+        unsigned int maxlevel = mg_trias.size() - 1;
+
+        mg_dof_handlers.resize(minlevel, maxlevel);
+        mg_constraints.resize(minlevel, maxlevel);
+        mg_ns_operators.resize(minlevel, maxlevel);
+        mg_transfers.resize(minlevel, maxlevel);
+        mg_transfers_no_constraints.resize(minlevel, maxlevel);
+
+        for (unsigned int level = minlevel; level <= maxlevel; ++level)
+          {
+            auto &dof_handler = mg_dof_handlers[level];
+            auto &constraints = mg_constraints[level];
+
+            dof_handler.reinit(*mg_trias[level]);
+            dof_handler.distribute_dofs(fe);
+
+            const auto locally_relevant_dofs =
+              DoFTools::extract_locally_relevant_dofs(dof_handler);
+
+            constraints.reinit(locally_relevant_dofs);
+
+            for (const auto bci : bcs.all_homogeneous_dbcs)
+              DoFTools::make_zero_boundary_constraints(dof_handler,
+                                                       bci,
+                                                       constraints,
+                                                       mask_v);
+
+            for (const auto bci : bcs.all_homogeneous_nbcs)
+              DoFTools::make_zero_boundary_constraints(dof_handler,
+                                                       bci,
+                                                       constraints,
+                                                       mask_p);
+
+            for (const auto bci : bcs.all_slip_bcs)
+              VectorTools::compute_no_normal_flux_constraints(
+                dof_handler, 0, {bci}, constraints, mapping);
+
+            for (const auto &[bci, _] : bcs.all_inhomogeneous_dbcs)
+              DoFTools::make_zero_boundary_constraints(dof_handler,
+                                                       bci,
+                                                       constraints,
+                                                       mask_v);
+
+            constraints.close();
+
+            if (params.use_matrix_free_ns_operator)
+              {
+                const bool increment_form = params.nonlinear_solver == "Newton";
+
+                mg_ns_operators[level] =
+                  std::make_shared<NavierStokesOperator<dim>>(
+                    mapping,
+                    dof_handler,
+                    constraints,
+                    constraints,
+                    constraints,
+                    quadrature,
+                    params.nu,
+                    params.c_1,
+                    params.c_2,
+                    *time_integrator_data,
+                    params.consider_time_deriverative,
+                    increment_form);
+              }
+            else
+              {
+                AssertThrow(params.nonlinear_solver != "Newton",
+                            ExcInternalError());
+
+                mg_ns_operators[level] =
+                  std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
+                    mapping,
+                    dof_handler,
+                    constraints,
+                    quadrature,
+                    params.nu,
+                    params.c_1,
+                    params.c_2,
+                    *time_integrator_data);
+              }
+          }
+
+
+        // create transfer operator for interpolation to the levels (without
+        // constraints)
+        for (unsigned int level = minlevel; level < maxlevel; ++level)
+          mg_transfers_no_constraints[level + 1].reinit(
+            mg_dof_handlers[level + 1], mg_dof_handlers[level]);
+
+        mg_transfer_no_constraints =
+          std::make_shared<MGTransferGlobalCoarsening<dim, VectorType>>(
+            mg_transfers_no_constraints, [&](const auto l, auto &vec) {
+              mg_ns_operators[l]->initialize_dof_vector(vec);
+            });
+
+
+        // create transfer operator for preconditioner (with constraints)
+        for (unsigned int level = minlevel; level < maxlevel; ++level)
+          mg_transfers[level + 1].reinit(mg_dof_handlers[level + 1],
+                                         mg_dof_handlers[level],
+                                         mg_constraints[level + 1],
+                                         mg_constraints[level]);
+
+        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>> transfer =
+          std::make_shared<MGTransferGlobalCoarsening<dim, VectorType>>(
+            mg_transfers, [&](const auto l, auto &vec) {
+              mg_ns_operators[l]->initialize_dof_vector(vec);
+            });
+
+        // create preconditioner
+        preconditioner =
+          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators, transfer);
       }
     else
       AssertThrow(false, ExcNotImplemented());
@@ -2595,27 +2834,86 @@ public:
     std::shared_ptr<NonLinearSolverBase> nonlinear_solver;
 
     if (params.nonlinear_solver == "linearized")
-      nonlinear_solver =
-        std::make_shared<NonLinearSolverLinearized>(*ns_operator,
-                                                    *linear_solver);
+      nonlinear_solver = std::make_shared<NonLinearSolverLinearized>();
     else if (params.nonlinear_solver == "Picard simple")
-      nonlinear_solver =
-        std::make_shared<NonLinearSolverPicardSimple>(*ns_operator,
-                                                      *linear_solver);
+      nonlinear_solver = std::make_shared<NonLinearSolverPicardSimple>();
     else if (params.nonlinear_solver == "Picard")
       nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
-        *ns_operator, *linear_solver, time_integrator_data->get_theta());
+        time_integrator_data->get_theta());
     else if (params.nonlinear_solver == "Newton")
-      nonlinear_solver =
-        std::make_shared<NonLinearSolverNewton>(*ns_operator, *linear_solver);
+      nonlinear_solver = std::make_shared<NonLinearSolverNewton>();
     else
       AssertThrow(false, ExcNotImplemented());
+
+    const auto set_previous_solution =
+      [&](const SolutionHistory<VectorType> &solution) {
+        ns_operator->set_previous_solution(solution);
+
+        if (params.preconditioner == "GMG")
+          {
+            MGLevelObject<VectorType> mg_solution(mg_ns_operators.min_level(),
+                                                  mg_ns_operators.max_level());
+
+            mg_transfer_no_constraints->interpolate_to_mg(
+              dof_handler, mg_solution, solution.get_vectors()[1]);
+
+            for (unsigned int l = mg_ns_operators.min_level();
+                 l <= mg_ns_operators.max_level();
+                 ++l)
+              mg_ns_operators[l]->set_previous_solution(mg_solution[l]);
+          }
+      };
+
+    nonlinear_solver->setup_jacobian = [&](const VectorType &src) {
+      ns_operator->set_linearization_point(src);
+
+      // note: for the level operators, this is done during setup of
+      // preconditioner
+    };
+
+    nonlinear_solver->setup_preconditioner = [&](const VectorType &solution) {
+      if (params.preconditioner == "GMG")
+        {
+          MGLevelObject<VectorType> mg_solution(mg_ns_operators.min_level(),
+                                                mg_ns_operators.max_level());
+
+          mg_transfer_no_constraints->interpolate_to_mg(dof_handler,
+                                                        mg_solution,
+                                                        solution);
+
+          for (unsigned int l = mg_ns_operators.min_level();
+               l <= mg_ns_operators.max_level();
+               ++l)
+            mg_ns_operators[l]->set_linearization_point(mg_solution[l]);
+        }
+
+      if (preconditioner)
+        preconditioner->initialize();
+
+      linear_solver->initialize();
+    };
+
+    nonlinear_solver->evaluate_rhs = [&](VectorType &dst) {
+      ns_operator->evaluate_rhs(dst);
+    };
+
+    nonlinear_solver->evaluate_residual = [&](VectorType       &dst,
+                                              const VectorType &src) {
+      ns_operator->evaluate_residual(dst, src);
+    };
+
+    nonlinear_solver->solve_with_jacobian = [&](VectorType       &dst,
+                                                const VectorType &src) {
+      linear_solver->solve(dst, src);
+    };
 
     // initialize solution
     SolutionHistory<VectorType> solution(time_integrator_data->get_order() + 1);
 
     for (auto &vec : solution.get_vectors())
       ns_operator->initialize_dof_vector(vec);
+
+
 
     const double dt =
       GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
@@ -2655,10 +2953,18 @@ public:
 
         ns_operator->invalidate_system(); // TODO
 
+        if (params.preconditioner == "GMG")
+          {
+            for (unsigned int l = mg_ns_operators.min_level();
+                 l <= mg_ns_operators.max_level();
+                 ++l)
+              mg_ns_operators[l]->invalidate_system(); // TODO
+          }
+
         // set previous solution
         solution.commit_solution();
 
-        ns_operator->set_previous_solution(solution);
+        set_previous_solution(solution);
 
         auto &current_solution = solution.get_current_solution();
 
