@@ -186,7 +186,10 @@ public:
     const MGLevelObject<std::shared_ptr<OperatorBase>> &op,
     const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>>
       &transfer)
-    : op(op)
+    : pcout(std::cout,
+            (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) &&
+              false /*TODO: introduce verbosity*/)
+    , op(op)
     , transfer(transfer)
   {}
 
@@ -200,6 +203,8 @@ public:
   void
   initialize() override
   {
+    pcout << "    [M] initialize" << std::endl;
+
     PreconditionerGMGAdditionalData additional_data; // TODO
 
     const unsigned int min_level = transfer->min_level();
@@ -240,7 +245,12 @@ public:
       {
         VectorType vec;
         op[level]->initialize_dof_vector(vec);
-        mg_smoother->smoothers[level].estimate_eigenvalues(vec);
+        const auto ev = mg_smoother->smoothers[level].estimate_eigenvalues(vec);
+
+        pcout << "    [M]  - level: " << level
+              << ", omega: " << mg_smoother->smoothers[level].get_relaxation()
+              << ", ev_min: " << ev.min_eigenvalue_estimate
+              << ", ev_max: " << ev.max_eigenvalue_estimate << std::endl;
       }
 
     if (additional_data.coarse_grid_type == "AMG")
@@ -276,9 +286,13 @@ public:
     preconditioner =
       std::make_unique<PreconditionMG<dim, VectorType, MGTransferType>>(
         dof_handler_dummy, *mg, *transfer);
+
+    pcout << std::endl;
   }
 
 private:
+  const ConditionalOStream pcout;
+
   const MGLevelObject<std::shared_ptr<OperatorBase>> &op;
   const std::shared_ptr<MGTransferType>               transfer;
 
