@@ -8,158 +8,6 @@
 #include <deal.II/multigrid/mg_transfer_global_coarsening.h>
 #include <deal.II/multigrid/multigrid.h>
 
-// TODO: make part of deal.II
-template <typename MatrixType, typename VectorType, typename PreconditionerType>
-class MyPreconditionRelaxation : public Subscriptor
-{
-public:
-  using size_type = types::global_dof_index;
-
-  class AdditionalData
-  {
-  public:
-    enum class EigenvalueAlgorithm
-    {
-      lanczos,
-      power_iteration
-    };
-
-    AdditionalData(const unsigned int        degree              = 1,
-                   const double              smoothing_range     = 0.,
-                   const unsigned int        eig_cg_n_iterations = 8,
-                   const double              eig_cg_residual     = 1e-2,
-                   const double              max_eigenvalue      = 1,
-                   const EigenvalueAlgorithm eigenvalue_algorithm =
-                     EigenvalueAlgorithm::lanczos)
-      : degree(degree)
-      , smoothing_range(smoothing_range)
-      , eig_cg_n_iterations(eig_cg_n_iterations)
-      , eig_cg_residual(eig_cg_residual)
-      , max_eigenvalue(max_eigenvalue)
-      , eigenvalue_algorithm(eigenvalue_algorithm)
-    {}
-
-    unsigned int degree;
-
-    double smoothing_range;
-
-    unsigned int eig_cg_n_iterations;
-
-    double eig_cg_residual;
-
-    double max_eigenvalue;
-
-    AffineConstraints<double> constraints;
-
-    std::shared_ptr<PreconditionerType> preconditioner;
-
-    EigenvalueAlgorithm eigenvalue_algorithm;
-  };
-
-  void
-  initialize(const MatrixType     &A,
-             const AdditionalData &parameters = AdditionalData())
-  {
-    // TODO: move eigenvalue estimation to first usage
-
-    typename PreconditionChebyshev<MatrixType, VectorType, PreconditionerType>::
-      AdditionalData parameters_chebyshev;
-
-    parameters_chebyshev.degree              = parameters.degree;
-    parameters_chebyshev.smoothing_range     = parameters.smoothing_range;
-    parameters_chebyshev.eig_cg_n_iterations = parameters.eig_cg_n_iterations;
-    parameters_chebyshev.eig_cg_residual     = parameters.eig_cg_residual;
-    parameters_chebyshev.max_eigenvalue      = parameters.max_eigenvalue;
-    parameters_chebyshev.constraints.copy_from(parameters.constraints);
-    parameters_chebyshev.preconditioner = parameters.preconditioner;
-
-    if (parameters.eigenvalue_algorithm ==
-        AdditionalData::EigenvalueAlgorithm::lanczos)
-      parameters_chebyshev.eigenvalue_algorithm =
-        PreconditionChebyshev<MatrixType, VectorType, PreconditionerType>::
-          AdditionalData::EigenvalueAlgorithm::lanczos;
-    else if (parameters.eigenvalue_algorithm ==
-             AdditionalData::EigenvalueAlgorithm::power_iteration)
-      parameters_chebyshev.eigenvalue_algorithm =
-        PreconditionChebyshev<MatrixType, VectorType, PreconditionerType>::
-          AdditionalData::EigenvalueAlgorithm::power_iteration;
-    else
-      AssertThrow(false, ExcInternalError());
-
-    PreconditionChebyshev<MatrixType, VectorType, PreconditionerType> chebyshev;
-
-    VectorType vec;
-    A.initialize_dof_vector(vec);
-
-    chebyshev.initialize(A, parameters_chebyshev);
-
-    const auto evs = chebyshev.estimate_eigenvalues(vec);
-
-    const double alpha =
-      (parameters.smoothing_range > 1. ?
-         evs.max_eigenvalue_estimate / parameters.smoothing_range :
-         std::min(0.9 * evs.max_eigenvalue_estimate,
-                  evs.min_eigenvalue_estimate));
-
-    const double omega = 2.0 / (alpha + evs.max_eigenvalue_estimate);
-
-    typename PreconditionRelaxation<MatrixType,
-                                    PreconditionerType>::AdditionalData
-      parameters_relaxation;
-
-    parameters_relaxation.relaxation     = omega;
-    parameters_relaxation.n_iterations   = parameters.degree;
-    parameters_relaxation.preconditioner = parameters.preconditioner;
-
-    relaxation.initialize(A, parameters_relaxation);
-  }
-
-  void
-  clear()
-  {
-    relaxation.clear();
-  }
-
-  size_type
-  m() const
-  {
-    return relaxation.m();
-  }
-
-  size_type
-  n() const
-  {
-    return relaxation.n();
-  }
-
-  void
-  vmult(VectorType &dst, const VectorType &src) const
-  {
-    relaxation.vmult(dst, src);
-  }
-
-  void
-  Tvmult(VectorType &dst, const VectorType &src) const
-  {
-    relaxation.Tvmult(dst, src);
-  }
-
-  void
-  step(VectorType &dst, const VectorType &src) const
-  {
-    relaxation.step(dst, src);
-  }
-
-  void
-  Tstep(VectorType &dst, const VectorType &src) const
-  {
-    relaxation.Tstep(dst, src);
-  }
-
-protected:
-  PreconditionRelaxation<MatrixType, PreconditionerType> relaxation;
-};
-
 
 // TODO: make part of deal.II
 namespace dealii
@@ -329,9 +177,8 @@ public:
   using LevelMatrixType = OperatorBase;
 
   using SmootherPreconditionerType = DiagonalMatrix<VectorType>;
-  using SmootherType               = MyPreconditionRelaxation<LevelMatrixType,
-                                                VectorType,
-                                                SmootherPreconditionerType>;
+  using SmootherType =
+    PreconditionRelaxation<LevelMatrixType, SmootherPreconditionerType>;
 
   using MGTransferType = MGTransferGlobalCoarsening<dim, VectorType>;
 
@@ -339,7 +186,10 @@ public:
     const MGLevelObject<std::shared_ptr<OperatorBase>> &op,
     const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>>
       &transfer)
-    : op(op)
+    : pcout(std::cout,
+            (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) &&
+              false /*TODO: introduce verbosity*/)
+    , op(op)
     , transfer(transfer)
   {}
 
@@ -353,6 +203,8 @@ public:
   void
   initialize() override
   {
+    pcout << "    [M] initialize" << std::endl;
+
     PreconditionerGMGAdditionalData additional_data; // TODO
 
     const unsigned int min_level = transfer->min_level();
@@ -376,8 +228,9 @@ public:
           std::make_shared<SmootherPreconditionerType>();
         op[level]->compute_inverse_diagonal(
           smoother_data[level].preconditioner->get_vector());
+        smoother_data[level].relaxation      = 0.0;
         smoother_data[level].smoothing_range = additional_data.smoothing_range;
-        smoother_data[level].degree          = additional_data.smoothing_degree;
+        smoother_data[level].n_iterations    = additional_data.smoothing_degree;
         smoother_data[level].eig_cg_n_iterations =
           additional_data.smoothing_eig_cg_n_iterations;
         smoother_data[level].constraints.copy_from(
@@ -387,6 +240,18 @@ public:
     mg_smoother = std::make_unique<
       MGSmootherPrecondition<LevelMatrixType, SmootherType, VectorType>>();
     mg_smoother->initialize(op, smoother_data);
+
+    for (unsigned int level = min_level; level <= max_level; ++level)
+      {
+        VectorType vec;
+        op[level]->initialize_dof_vector(vec);
+        const auto ev = mg_smoother->smoothers[level].estimate_eigenvalues(vec);
+
+        pcout << "    [M]  - level: " << level
+              << ", omega: " << mg_smoother->smoothers[level].get_relaxation()
+              << ", ev_min: " << ev.min_eigenvalue_estimate
+              << ", ev_max: " << ev.max_eigenvalue_estimate << std::endl;
+      }
 
     if (additional_data.coarse_grid_type == "AMG")
       {
@@ -421,9 +286,13 @@ public:
     preconditioner =
       std::make_unique<PreconditionMG<dim, VectorType, MGTransferType>>(
         dof_handler_dummy, *mg, *transfer);
+
+    pcout << std::endl;
   }
 
 private:
+  const ConditionalOStream pcout;
+
   const MGLevelObject<std::shared_ptr<OperatorBase>> &op;
   const std::shared_ptr<MGTransferType>               transfer;
 
