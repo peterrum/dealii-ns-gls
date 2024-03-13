@@ -236,6 +236,13 @@ public:
       MGSmootherPrecondition<LevelMatrixType, SmootherType, VectorType>>();
     mg_smoother->initialize(op, smoother_data);
 
+    for (unsigned int level = min_level; level <= max_level; ++level)
+      {
+        VectorType vec;
+        op[level]->initialize_dof_vector(vec);
+        mg_smoother->smoothers[level].estimate_eigenvalues(vec);
+      }
+
     if (additional_data.coarse_grid_type == "AMG")
       {
         TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
