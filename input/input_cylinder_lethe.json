@@ -2,7 +2,7 @@
   "dim"                  : 2,
   "fe degree"            : 1,
   "mapping degree"       : 1,
-  "n global refinements" : 1,
+  "n global refinements" : 2,
 
   "simulation name" : "cylinder lethe",
 
@@ -13,7 +13,7 @@
   "time intration" : "bdf",
 
   "c1" : 2.00,
-  "c2" : 1.0,
+  "c2" : 0.0,
   "nu" : 0.00,
   "consider time deriverative" : true,
 
