@@ -13,6 +13,7 @@
 #include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/grid_in.h>
 #include <deal.II/grid/grid_tools.h>
 
 #include <deal.II/lac/affine_constraints.h>
@@ -2499,6 +2500,115 @@ private:
 
 
 /**
+ * Flow-past cylinder simulation with alternative mesh.
+ */
+template <int dim>
+class SimulationCylinderLethe : public SimulationBase<dim>
+{
+public:
+  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
+
+  SimulationCylinderLethe()
+    : use_no_slip_cylinder_bc(true)
+  {}
+
+  void
+  create_triangulation(Triangulation<dim> &tria) const override
+  {
+    GridIn<dim> grid_in(tria);
+    grid_in.read("../mesh/cylinder.msh");
+
+    Point<dim>                   circleCenter(8, 8);
+    const SphericalManifold<dim> manifold_description(circleCenter);
+    tria.set_manifold(0, manifold_description);
+  }
+
+  virtual BoundaryDescriptor
+  get_boundary_descriptor() const override
+  {
+    BoundaryDescriptor bcs;
+
+    // inflow
+    bcs.all_inhomogeneous_dbcs.emplace_back(
+      1, std::make_shared<InflowBoundaryValues>());
+
+    // outflow
+    bcs.all_homogeneous_nbcs.push_back(4);
+
+    // walls
+    bcs.all_slip_bcs.push_back(2);
+
+    // cylinder
+    if (use_no_slip_cylinder_bc)
+      bcs.all_homogeneous_dbcs.push_back(0);
+    else
+      bcs.all_slip_bcs.push_back(0);
+
+    return bcs;
+  }
+
+  void
+  postprocess(const double           t,
+              const Mapping<dim>    &mapping,
+              const DoFHandler<dim> &dof_handler,
+              const VectorType      &solution) const override
+  {
+    // nothing to do
+    (void)t;
+    (void)mapping;
+    (void)dof_handler;
+    (void)solution;
+  }
+
+private:
+  const bool use_no_slip_cylinder_bc;
+
+  class InflowBoundaryValues : public Function<dim>
+  {
+  public:
+    InflowBoundaryValues()
+      : Function<dim>(dim + 1)
+      , t_(0.0){};
+
+    double
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      const double Um = 1.5;
+      const double H  = 0.41;
+      const double y  = p[1];
+
+      (void)Um;
+      (void)H;
+      (void)y;
+
+      /// FIXME here. Somehow the velocity is too small
+      /// I don't know why.
+      const double u_val = 1.0;
+      // const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
+      //*
+      //  std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
+      ;
+      const double v_val = 0.0;
+      const double p_val = 0.0;
+
+      if (component == 0)
+        return u_val;
+      else if (component == 1)
+        return v_val;
+      else if (component == 2)
+        return p_val;
+
+      return 0;
+    }
+
+  private:
+    const double t_;
+  };
+};
+
+
+
+/**
  * Driver class for executing the simulation.
  */
 template <int dim>
@@ -2525,6 +2635,8 @@ public:
     else if (params.simulation_name == "cylinder old")
       simulation =
         std::make_shared<SimulationCylinderOld<dim>>(params.nu, params.no_slip);
+    else if (params.simulation_name == "cylinder lethe")
+      simulation = std::make_shared<SimulationCylinderLethe<dim>>();
     else
       AssertThrow(false, ExcNotImplemented());
 
