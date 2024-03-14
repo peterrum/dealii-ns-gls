@@ -167,11 +167,15 @@ public:
     unsigned int smoothing_degree              = 1;
     unsigned int smoothing_eig_cg_n_iterations = 20;
 
-    unsigned int coarse_grid_smoother_sweeps = 1;
-    unsigned int coarse_grid_n_cycles        = 1;
-    std::string  coarse_grid_smoother_type   = "ILU";
+    unsigned int coarse_grid_smoother_sweeps = 1;     // TODO: not used
+    unsigned int coarse_grid_n_cycles        = 1;     // TODO: not used
+    std::string  coarse_grid_smoother_type   = "ILU"; // TODO: not used
 
-    std::string coarse_grid_type = "AMG";
+    unsigned int coarse_grid_maxiter = 10000;
+    double       coarse_grid_abstol  = 1e-20;
+    double       coarse_grid_reltol  = 1e-4;
+
+    std::string coarse_grid_type = "iAMG";
   };
 
   using LevelMatrixType = OperatorBase;
@@ -233,6 +237,8 @@ public:
         smoother_data[level].n_iterations    = additional_data.smoothing_degree;
         smoother_data[level].eig_cg_n_iterations =
           additional_data.smoothing_eig_cg_n_iterations;
+        smoother_data[level].eigenvalue_algorithm =
+          SmootherType::AdditionalData::EigenvalueAlgorithm::power_iteration;
         smoother_data[level].constraints.copy_from(
           op[level]->get_constraints());
       }
@@ -256,19 +262,75 @@ public:
     if (additional_data.coarse_grid_type == "AMG")
       {
         TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
-        amg_data.smoother_sweeps = additional_data.coarse_grid_smoother_sweeps;
-        amg_data.n_cycles        = additional_data.coarse_grid_n_cycles;
-        amg_data.smoother_type =
-          additional_data.coarse_grid_smoother_type.c_str();
+        // amg_data.smoother_sweeps =
+        // additional_data.coarse_grid_smoother_sweeps; amg_data.n_cycles =
+        // additional_data.coarse_grid_n_cycles; amg_data.smoother_type =
+        //   additional_data.coarse_grid_smoother_type.c_str();
         amg_data.output_details = false;
+
+        amg_data.elliptic              = false; // TODO
+        amg_data.higher_order_elements = false; //
+        amg_data.n_cycles              = 1;     //
+        amg_data.aggregation_threshold = 1e-14; //
+        amg_data.constant_modes   = op[min_level]->extract_constant_modes(); //
+        amg_data.smoother_sweeps  = 2;                                       //
+        amg_data.smoother_overlap = 1;                                       //
+        amg_data.output_details   = false;                                   //
+        amg_data.smoother_type    = "ILU";                                   //
+        amg_data.coarse_type      = "ILU";                                   //
 
         precondition_amg =
           std::make_unique<TrilinosWrappers::PreconditionAMG>();
-        precondition_amg->initialize(op[min_level]->get_system_matrix());
+        precondition_amg->initialize(op[min_level]->get_system_matrix(),
+                                     amg_data);
         mg_coarse = std::make_unique<
           MGCoarseGridApplyPreconditioner<VectorType,
                                           TrilinosWrappers::PreconditionAMG>>(
           *precondition_amg);
+      }
+    else if (additional_data.coarse_grid_type == "iAMG")
+      {
+        AssertThrow(min_level != max_level, ExcInternalError());
+
+        TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
+        // amg_data.smoother_sweeps =
+        // additional_data.coarse_grid_smoother_sweeps; amg_data.n_cycles =
+        // additional_data.coarse_grid_n_cycles; amg_data.smoother_type =
+        //   additional_data.coarse_grid_smoother_type.c_str();
+        amg_data.output_details = false;
+
+        amg_data.elliptic              = false; // TODO
+        amg_data.higher_order_elements = false; //
+        amg_data.n_cycles              = 1;     //
+        amg_data.aggregation_threshold = 1e-14; //
+        amg_data.constant_modes   = op[min_level]->extract_constant_modes(); //
+        amg_data.smoother_sweeps  = 2;                                       //
+        amg_data.smoother_overlap = 1;                                       //
+        amg_data.output_details   = false;                                   //
+        amg_data.smoother_type    = "ILU";                                   //
+        amg_data.coarse_type      = "ILU";                                   //
+
+        precondition_amg =
+          std::make_unique<TrilinosWrappers::PreconditionAMG>();
+        precondition_amg->initialize(op[min_level]->get_system_matrix(),
+                                     amg_data);
+
+        coarse_grid_solver_control = std::make_unique<ReductionControl>(
+          additional_data.coarse_grid_maxiter,
+          additional_data.coarse_grid_abstol,
+          additional_data.coarse_grid_reltol,
+          false,
+          false);
+
+        coarse_grid_solver = std::make_unique<SolverGMRES<VectorType>>(
+          *coarse_grid_solver_control);
+
+        mg_coarse = std::make_unique<
+          MGCoarseGridIterativeSolver<VectorType,
+                                      SolverGMRES<VectorType>,
+                                      OperatorBase,
+                                      TrilinosWrappers::PreconditionAMG>>(
+          *coarse_grid_solver, *op[min_level], *precondition_amg);
       }
     else
       {
@@ -305,6 +367,10 @@ private:
     mg_smoother;
 
   mutable std::unique_ptr<TrilinosWrappers::PreconditionAMG> precondition_amg;
+
+  mutable std::unique_ptr<SolverControl> coarse_grid_solver_control;
+
+  mutable std::unique_ptr<SolverGMRES<VectorType>> coarse_grid_solver;
 
   mutable std::unique_ptr<MGCoarseGridBase<VectorType>> mg_coarse;
 
