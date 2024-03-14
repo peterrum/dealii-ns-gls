@@ -321,6 +321,13 @@ public:
     vmult(dst, src);
   }
 
+  virtual std::vector<std::vector<bool>>
+  extract_constant_modes() const
+  {
+    AssertThrow(false, ExcNotImplemented());
+    return {};
+  }
+
   virtual const AffineConstraints<Number> &
   get_constraints() const = 0;
 
@@ -880,6 +887,19 @@ public:
         this->matrix_free.get_mg_level());
     else
       return this->matrix_free.get_dof_handler().n_dofs();
+  }
+
+  std::vector<std::vector<bool>>
+  extract_constant_modes() const override
+  {
+    std::vector<std::vector<bool>> constant_modes;
+
+    ComponentMask components(dim + 1, true);
+    DoFTools::extract_constant_modes(this->matrix_free.get_dof_handler(),
+                                     components,
+                                     constant_modes);
+
+    return constant_modes;
   }
 
   virtual void
@@ -2533,7 +2553,7 @@ public:
       1, std::make_shared<InflowBoundaryValues>());
 
     // outflow
-    bcs.all_homogeneous_nbcs.push_back(4);
+    // bcs.all_homogeneous_nbcs.push_back(4);
 
     // walls
     bcs.all_slip_bcs.push_back(2);
@@ -3025,7 +3045,20 @@ public:
     for (auto &vec : solution.get_vectors())
       ns_operator->initialize_dof_vector(vec);
 
+    {
+      // set time-dependent inhomogeneous DBCs
+      constraints_inhomogeneous.clear();
+      constraints_inhomogeneous.copy_from(constraints_copy);
+      for (const auto &[bci, fu] : bcs.all_inhomogeneous_dbcs)
+        {
+          fu->set_time(0.0); // TODO: correct?
+          VectorTools::interpolate_boundary_values(
+            mapping, dof_handler, bci, *fu, constraints_inhomogeneous, mask_v);
+        }
+      constraints_inhomogeneous.close();
 
+      constraints_inhomogeneous.distribute(solution.get_current_solution());
+    }
 
     const double dt =
       GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
