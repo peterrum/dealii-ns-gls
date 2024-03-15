@@ -222,12 +222,14 @@ public:
   PreconditionerGMG(
     const MGLevelObject<std::shared_ptr<OperatorBase>> &op,
     const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>>
-      &transfer)
+                                          &transfer,
+    const PreconditionerGMGAdditionalData &additional_data)
     : pcout(std::cout,
             (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) &&
               false /*TODO: introduce verbosity*/)
     , op(op)
     , transfer(transfer)
+    , additional_data(additional_data)
   {}
 
   void
@@ -241,8 +243,6 @@ public:
   initialize() override
   {
     pcout << "    [M] initialize" << std::endl;
-
-    PreconditionerGMGAdditionalData additional_data; // TODO
 
     const unsigned int min_level = transfer->min_level();
     const unsigned int max_level = transfer->max_level();
@@ -373,6 +373,8 @@ private:
 
   const MGLevelObject<std::shared_ptr<OperatorBase>> &op;
   const std::shared_ptr<MGTransferType>               transfer;
+
+  const PreconditionerGMGAdditionalData additional_data;
 
   DoFHandler<dim> dof_handler_dummy;
 

@@ -3048,7 +3048,9 @@ public:
 
         // create preconditioner
         preconditioner =
-          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators, transfer);
+          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators,
+                                                   transfer,
+                                                   params.gmg);
       }
     else
       AssertThrow(false, ExcNotImplemented());
