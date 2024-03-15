@@ -214,11 +214,6 @@ public:
     const unsigned int min_level = transfer->min_level();
     const unsigned int max_level = transfer->max_level();
 
-    MGLevelObject<std::shared_ptr<OperatorBase>> op(min_level, max_level);
-
-    for (unsigned int l = min_level; l <= max_level; ++l)
-      op[l] = this->op[l];
-
     // wrap level operators
     mg_matrix = std::make_unique<mg::Matrix<VectorType>>(op);
 
