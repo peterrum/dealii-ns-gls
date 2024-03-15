@@ -157,28 +157,39 @@ namespace dealii
 
 
 
+struct PreconditionerGMGAdditionalData
+{
+  // smoother (relaxation + point Jacobi)
+  double       smoothing_range               = 20;
+  unsigned int smoothing_n_iterations        = 5;
+  unsigned int smoothing_eig_cg_n_iterations = 20;
+
+  // coarse-grid solver type
+  std::string coarse_grid_type = "iAMG";
+
+  // coarse-grid GMRES
+  unsigned int coarse_grid_gmres_maxiter = 10000;
+  double       coarse_grid_gmres_abstol  = 1e-20;
+  double       coarse_grid_gmres_reltol  = 1e-4;
+
+  // coarse-grid AMG
+  bool         coarse_grid_amg_elliptic              = false;
+  bool         coarse_grid_amg_higher_order_elements = false;
+  unsigned int coarse_grid_amg_n_cycles              = 1;
+  double       coarse_grid_amg_aggregation_threshold = 1e-14;
+  unsigned int coarse_grid_amg_smoother_sweeps       = 2;
+  unsigned int coarse_grid_amg_smoother_overlap      = 1;
+  bool         coarse_grid_amg_output_details        = false;
+  std::string  coarse_grid_amg_smoother_type         = "ILU";
+  std::string  coarse_grid_amg_coarse_type           = "ILU";
+};
+
+
+
 template <int dim>
 class PreconditionerGMG : public PreconditionerBase
 {
 public:
-  struct PreconditionerGMGAdditionalData
-  {
-    // smoother (relaxation + point Jacobi)
-    double       smoothing_range               = 20;
-    unsigned int smoothing_n_iterations        = 5;
-    unsigned int smoothing_eig_cg_n_iterations = 20;
-
-    // coarse-grid solver type
-    std::string coarse_grid_type = "iAMG";
-
-    // coarse-grid GMRES
-    unsigned int coarse_grid_gmres_maxiter = 10000;
-    double       coarse_grid_gmres_abstol  = 1e-20;
-    double       coarse_grid_gmres_reltol  = 1e-4;
-
-    // coarse-grid AMG
-  };
-
   using LevelMatrixType = OperatorBase;
 
   using SmootherPreconditionerType = DiagonalMatrix<VectorType>;
