@@ -22,7 +22,7 @@
   "lin absolute tolerance" : 1e-8,
   "lin relative tolerance" : 1e-4,
 
-  "preconditioner" : "GMG",
+  "preconditioner" : "ILU",
 
   "nonlinear solver" : "Newton",
 

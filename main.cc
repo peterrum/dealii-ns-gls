@@ -366,7 +366,14 @@ public:
   initialize() override
   {
     const auto &matrix = op.get_system_matrix();
-    precon.initialize(matrix);
+
+    const int    current_preconditioner_fill_level = 0;
+    const double ilu_atol                          = 1e-12;
+    const double ilu_rtol                          = 1.00;
+    TrilinosWrappers::PreconditionILU::AdditionalData ad(
+      current_preconditioner_fill_level, ilu_atol, ilu_rtol, 0);
+
+    precon.initialize(matrix, ad);
   }
 
   void
