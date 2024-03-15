@@ -494,7 +494,9 @@ public:
     solver_parameters.max_n_tmp_vectors     = 30; // TODO
     solver_parameters.right_preconditioning = true;
 
-    SolverGMRES<VectorType> solver(solver_control);
+    SolverGMRES<VectorType> solver(solver_control, solver_parameters);
+
+    dst = 0.0;
 
     try
       {
@@ -1199,12 +1201,16 @@ private:
                  const VectorType                            &src,
                  const std::pair<unsigned int, unsigned int> &range) const
   {
-    FECellIntegrator phi(matrix_free, evaluate_residual ? 1 : 0);
+    FECellIntegrator phi(matrix_free, 0);
 
     for (auto cell = range.first; cell < range.second; ++cell)
       {
         phi.reinit(cell);
-        phi.read_dof_values(src);
+
+        if (evaluate_residual)
+          phi.read_dof_values_plain(src);
+        else
+          phi.read_dof_values(src);
 
         do_vmult_cell<evaluate_residual>(phi);
 
@@ -1432,7 +1438,6 @@ private:
             //  c)  (ε(v), νε(u))
             for (unsigned int d = 0; d < dim; ++d)
               gradient_result[d][d] += u_gradient[d][d] * nu;
-
             for (unsigned int e = 0, counter = dim; e < dim; ++e)
               for (unsigned int d = e + 1; d < dim; ++d, ++counter)
                 {
@@ -1451,7 +1456,8 @@ private:
                            p_gradient + s_grad_u + u_grad_s);
             const auto residual_1 =
               (delta_1) * ((consider_time_deriverative ?
-                              (u_star_value * weight) :
+                              (u_star_value * weight +
+                               this->u_time_derivative_old[cell][q]) :
                               Tensor<1, dim, VectorizedArray<Number>>()) +
                            p_star_gradient + s_grad_s);
             for (unsigned int d0 = 0; d0 < dim; ++d0)
@@ -1849,6 +1855,7 @@ struct Parameters
   std::string simulation_name = "channel";
 
   // system
+  double       dt             = 0.0;
   double       cfl            = 0.1;
   double       t_final        = 3.0;
   double       theta          = 0.5;
@@ -1906,6 +1913,7 @@ private:
     prm.add_parameter("simulation name", simulation_name);
 
     // time stepping
+    prm.add_parameter("dt", dt);
     prm.add_parameter("cfl", cfl);
     prm.add_parameter("t final", t_final);
     prm.add_parameter("theta", theta);
@@ -2649,10 +2657,6 @@ public:
   create_triangulation(Triangulation<dim> &tria) const override
   {
     GridGenerator::channel_with_cylinder(tria, 0.03, 2, 2.0, true);
-
-    Point<dim>                   circleCenter(8, 8);
-    const SphericalManifold<dim> manifold_description(circleCenter);
-    tria.set_manifold(0, manifold_description);
   }
 
   virtual BoundaryDescriptor
@@ -3082,16 +3086,30 @@ public:
 
         if (params.preconditioner == "GMG")
           {
-            MGLevelObject<VectorType> mg_solution(mg_ns_operators.min_level(),
-                                                  mg_ns_operators.max_level());
+            MGLevelObject<SolutionHistory<VectorType>> all_mg_solution(
+              mg_ns_operators.min_level(),
+              mg_ns_operators.max_level(),
+              time_integrator_data->get_order() + 1);
 
-            mg_transfer_no_constraints->interpolate_to_mg(
-              dof_handler, mg_solution, solution.get_vectors()[1]);
+            for (unsigned int i = 1; i <= time_integrator_data->get_order();
+                 ++i)
+              {
+                MGLevelObject<VectorType> mg_solution(
+                  mg_ns_operators.min_level(), mg_ns_operators.max_level());
+
+                mg_transfer_no_constraints->interpolate_to_mg(
+                  dof_handler, mg_solution, solution.get_vectors()[i]);
+
+                for (unsigned int l = mg_ns_operators.min_level();
+                     l <= mg_ns_operators.max_level();
+                     ++l)
+                  all_mg_solution[l].get_vectors()[i] = mg_solution[l];
+              }
 
             for (unsigned int l = mg_ns_operators.min_level();
                  l <= mg_ns_operators.max_level();
                  ++l)
-              mg_ns_operators[l]->set_previous_solution(mg_solution[l]);
+              mg_ns_operators[l]->set_previous_solution(all_mg_solution[l]);
           }
       };
 
@@ -3160,7 +3178,9 @@ public:
     }
 
     const double dt =
-      GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
+      (params.dt != 0.0) ?
+        params.dt :
+        (GridTools::minimal_cell_diameter(tria, mapping) * params.cfl);
 
     double       t       = 0.0;
     unsigned int counter = 1;
