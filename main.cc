@@ -1057,6 +1057,9 @@ public:
           }
 
         // compute stabilization parameters (q-point-wise)
+        // adopted from:
+        // https://github.com/lethe-cfd/lethe/blob/d8e115f175e34628e96243fce6eec00d7fcaf3c1/source/solvers/mf_navier_stokes_operators.cc#L222-L246
+        // https://github.com/lethe-cfd/lethe/blob/d8e115f175e34628e96243fce6eec00d7fcaf3c1/source/solvers/mf_navier_stokes_operators.cc#L657-L668
         VectorizedArray<Number> h;
         for (unsigned int v = 0;
              v < matrix_free.n_active_entries_per_cell_batch(cell);
