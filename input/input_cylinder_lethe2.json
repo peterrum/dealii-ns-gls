@@ -19,7 +19,8 @@
 
   "use matrix free ns operator" : true,
 
-  "lin relative tolerance" : 1e-2,
+  "lin absolute tolerance" : 1e-8,
+  "lin relative tolerance" : 1e-4,
 
   "preconditioner" : "GMG",
 

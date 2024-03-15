@@ -474,9 +474,18 @@ public:
   void
   solve(VectorType &dst, const VectorType &src) const override
   {
-    ReductionControl solver_control(n_max_iterations,
-                                    absolute_tolerance,
-                                    relative_tolerance);
+    const double linear_solver_tolerance =
+      std::max(relative_tolerance * src.l2_norm(), absolute_tolerance);
+
+    SolverControl solver_control(n_max_iterations,
+                                 linear_solver_tolerance,
+                                 true,
+                                 true);
+
+    typename SolverGMRES<VectorType>::AdditionalData solver_parameters;
+
+    solver_parameters.max_n_tmp_vectors     = 30; // TODO
+    solver_parameters.right_preconditioning = true;
 
     SolverGMRES<VectorType> solver(solver_control);
 
