@@ -859,7 +859,8 @@ public:
     const Number                      c_2,
     const TimeIntegratorData<Number> &time_integrator_data,
     const bool                        consider_time_deriverative,
-    const bool                        increment_form)
+    const bool                        increment_form,
+    const bool                        cell_wise_stabilization)
     : constraints_inhomogeneous(constraints_inhomogeneous)
     , theta(time_integrator_data.get_theta())
     , nu(nu)
@@ -868,7 +869,7 @@ public:
     , time_integrator_data(time_integrator_data)
     , consider_time_deriverative(consider_time_deriverative)
     , increment_form(increment_form)
-    , cell_wise_stabilization(true)
+    , cell_wise_stabilization(cell_wise_stabilization)
     , valid_system(false)
   {
     const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
@@ -2917,7 +2918,8 @@ public:
           params.c_2,
           *time_integrator_data,
           params.consider_time_deriverative,
-          increment_form);
+          increment_form,
+          params.cell_wise_stabilization);
       }
     else
       {
@@ -3048,7 +3050,8 @@ public:
                     params.c_2,
                     *time_integrator_data,
                     params.consider_time_deriverative,
-                    increment_form);
+                    increment_form,
+                    params.cell_wise_stabilization);
               }
             else
               {
