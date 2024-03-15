@@ -296,17 +296,23 @@ public:
     if (additional_data.coarse_grid_solver == "AMG")
       {
         TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
-        amg_data.output_details        = false;
-        amg_data.elliptic              = false; // TODO
-        amg_data.higher_order_elements = false; //
-        amg_data.n_cycles              = 1;     //
-        amg_data.aggregation_threshold = 1e-14; //
-        amg_data.smoother_sweeps       = 2;     //
-        amg_data.smoother_overlap      = 1;     //
-        amg_data.output_details        = false; //
-        amg_data.smoother_type         = "ILU"; //
-        amg_data.coarse_type           = "ILU"; //
-        amg_data.constant_modes = op[min_level]->extract_constant_modes(); //
+        amg_data.elliptic = additional_data.coarse_grid_amg_elliptic;
+        amg_data.higher_order_elements =
+          additional_data.coarse_grid_amg_higher_order_elements;
+        amg_data.n_cycles = additional_data.coarse_grid_amg_n_cycles;
+        amg_data.aggregation_threshold =
+          additional_data.coarse_grid_amg_aggregation_threshold;
+        amg_data.smoother_sweeps =
+          additional_data.coarse_grid_amg_smoother_sweeps;
+        amg_data.smoother_overlap =
+          additional_data.coarse_grid_amg_smoother_overlap;
+        amg_data.output_details =
+          additional_data.coarse_grid_amg_output_details;
+        amg_data.smoother_type =
+          additional_data.coarse_grid_amg_smoother_type.c_str();
+        amg_data.coarse_type =
+          additional_data.coarse_grid_amg_coarse_type.c_str();
+        amg_data.constant_modes = op[min_level]->extract_constant_modes();
 
         precondition_amg =
           std::make_unique<TrilinosWrappers::PreconditionAMG>();
