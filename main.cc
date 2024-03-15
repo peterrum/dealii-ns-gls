@@ -868,6 +868,7 @@ public:
     , time_integrator_data(time_integrator_data)
     , consider_time_deriverative(consider_time_deriverative)
     , increment_form(increment_form)
+    , cell_wise_stabilization(true)
     , valid_system(false)
   {
     const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
@@ -980,6 +981,8 @@ public:
   {
     this->valid_system = false;
 
+    const unsigned fe_degree =
+      matrix_free.get_dof_handler().get_fe().tensor_degree();
     const unsigned n_cells             = matrix_free.n_cell_batches();
     const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
@@ -988,6 +991,9 @@ public:
 
     delta_1.resize(n_cells);
     delta_2.resize(n_cells);
+
+    delta_1_q.reinit(n_cells, n_quadrature_points);
+    delta_2_q.reinit(n_cells, n_quadrature_points);
 
     FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
     FEEvaluation<dim, -1, 0, 1, Number>   integrator_scalar(matrix_free,
@@ -1023,7 +1029,7 @@ public:
             p_old_gradient[cell][q] = integrator_scalar.get_gradient(q);
           }
 
-        // compute stabilization parameters
+        // compute stabilization parameters (cell-wise)
         VectorizedArray<Number> u_max = 0.0;
         for (const auto q : integrator.quadrature_point_indices())
           u_max = std::max(integrator.get_value(q).norm(), u_max);
@@ -1047,6 +1053,36 @@ public:
                 delta_1[cell][v] = c_1 * h * h;
                 delta_2[cell][v] = c_2 * h * h;
               }
+          }
+
+        // compute stabilization parameters (q-point-wise)
+        VectorizedArray<Number> h;
+        for (unsigned int v = 0;
+             v < matrix_free.n_active_entries_per_cell_batch(cell);
+             ++v)
+          {
+            const double h_k =
+              matrix_free.get_cell_iterator(cell, v)->measure();
+
+            if (dim == 2)
+              h[v] = std::sqrt(4. * h_k / M_PI) / fe_degree;
+            else if (dim == 3)
+              h[v] = std::pow(6 * h_k / M_PI, 1. / 3.) / fe_degree;
+          }
+
+        for (const auto q : integrator.quadrature_point_indices())
+          {
+            VectorizedArray<Number> u_mag_squared = 1e-12;
+            for (unsigned int k = 0; k < dim; ++k)
+              u_mag_squared +=
+                Utilities::fixed_power<2>(integrator.get_value(q)[k]);
+
+            delta_1_q[cell][q] =
+              1. / std::sqrt(Utilities::fixed_power<2>(1.0 / tau) +
+                             4. * u_mag_squared / h / h +
+                             9. * Utilities::fixed_power<2>(4. * nu / (h * h)));
+
+            delta_2_q[cell][q] = std::sqrt(u_mag_squared) * h * 0.5;
           }
       }
 
@@ -1178,11 +1214,15 @@ private:
   const TimeIntegratorData<Number> &time_integrator_data;
   const bool                        consider_time_deriverative;
   const bool                        increment_form;
+  const bool                        cell_wise_stabilization;
 
   mutable bool valid_system;
 
   AlignedVector<VectorizedArray<Number>> delta_1;
   AlignedVector<VectorizedArray<Number>> delta_2;
+
+  Table<2, VectorizedArray<Number>> delta_1_q;
+  Table<2, VectorizedArray<Number>> delta_2_q;
 
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> u_star_value;
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> u_star_gradient;
@@ -1255,12 +1295,9 @@ private:
     if (evaluate_residual || !this->increment_form)
       {
         const unsigned int cell = integrator.get_current_cell_index();
-
-        const auto delta_1 = this->delta_1[cell];
-        const auto delta_2 = this->delta_2[cell];
-        const auto weight  = this->time_integrator_data.get_primary_weight();
-        const auto theta   = this->theta;
-        const auto nu      = this->nu;
+        const auto weight = this->time_integrator_data.get_primary_weight();
+        const auto theta  = this->theta;
+        const auto nu     = this->nu;
 
         integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
                             EvaluationFlags::EvaluationFlags::gradients);
@@ -1272,6 +1309,13 @@ private:
 
             const auto value    = integrator.get_value(q);
             const auto gradient = integrator.get_gradient(q);
+
+            const auto delta_1 = cell_wise_stabilization ?
+                                   this->delta_1[cell] :
+                                   this->delta_1_q[cell][q];
+            const auto delta_2 = cell_wise_stabilization ?
+                                   this->delta_2[cell] :
+                                   this->delta_2_q[cell][q];
 
             const VectorizedArray<Number>                 p_value = value[dim];
             const Tensor<1, dim, VectorizedArray<Number>> p_gradient =
@@ -1337,10 +1381,10 @@ private:
 
             //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
             const auto residual_0 =
-              (delta_1) * ((consider_time_deriverative ?
-                              u_time_derivative :
-                              Tensor<1, dim, VectorizedArray<Number>>()) +
-                           p_bar_gradient + s_grad_b);
+              delta_1 * ((consider_time_deriverative ?
+                            u_time_derivative :
+                            Tensor<1, dim, VectorizedArray<Number>>()) +
+                         p_bar_gradient + s_grad_b);
             for (unsigned int d0 = 0; d0 < dim; ++d0)
               for (unsigned int d1 = 0; d1 < dim; ++d1)
                 gradient_result[d0][d1] += u_star_value[d1] * residual_0[d0];
@@ -1374,10 +1418,8 @@ private:
       {
         const unsigned int cell = integrator.get_current_cell_index();
 
-        const auto delta_1 = this->delta_1[cell];
-        const auto delta_2 = this->delta_2[cell];
-        const auto weight  = this->time_integrator_data.get_primary_weight();
-        const auto nu      = this->nu;
+        const auto weight = this->time_integrator_data.get_primary_weight();
+        const auto nu     = this->nu;
 
         integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
                             EvaluationFlags::EvaluationFlags::gradients);
@@ -1389,6 +1431,13 @@ private:
 
             const auto value    = integrator.get_value(q);
             const auto gradient = integrator.get_gradient(q);
+
+            const auto delta_1 = cell_wise_stabilization ?
+                                   this->delta_1[cell] :
+                                   this->delta_1_q[cell][q];
+            const auto delta_2 = cell_wise_stabilization ?
+                                   this->delta_2[cell] :
+                                   this->delta_2_q[cell][q];
 
             const VectorizedArray<Number>                 p_value = value[dim];
             const Tensor<1, dim, VectorizedArray<Number>> p_gradient =
@@ -1450,16 +1499,16 @@ private:
             //  d)  δ_1 (U⋅∇v, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) +
             //      δ_1 (u⋅∇v, ∂t'(U) + ∇P + U⋅∇U) -> SUPG stabilization
             const auto residual_0 =
-              (delta_1) * ((consider_time_deriverative ?
-                              u_time_derivative :
-                              Tensor<1, dim, VectorizedArray<Number>>()) +
-                           p_gradient + s_grad_u + u_grad_s);
+              delta_1 * ((consider_time_deriverative ?
+                            u_time_derivative :
+                            Tensor<1, dim, VectorizedArray<Number>>()) +
+                         p_gradient + s_grad_u + u_grad_s);
             const auto residual_1 =
-              (delta_1) * ((consider_time_deriverative ?
-                              (u_star_value * weight +
-                               this->u_time_derivative_old[cell][q]) :
-                              Tensor<1, dim, VectorizedArray<Number>>()) +
-                           p_star_gradient + s_grad_s);
+              delta_1 * ((consider_time_deriverative ?
+                            (u_star_value * weight +
+                             this->u_time_derivative_old[cell][q]) :
+                            Tensor<1, dim, VectorizedArray<Number>>()) +
+                         p_star_gradient + s_grad_s);
             for (unsigned int d0 = 0; d0 < dim; ++d0)
               for (unsigned int d1 = 0; d1 < dim; ++d1)
                 gradient_result[d0][d1] += u_star_value[d1] * residual_0[d0] +
