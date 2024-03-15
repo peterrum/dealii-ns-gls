@@ -1916,6 +1916,7 @@ struct Parameters
   double c_1                        = 4.0;
   double c_2                        = 2.0;
   bool   consider_time_deriverative = false;
+  bool   cell_wise_stabilization    = true;
 
   // implmentation of operator evaluation
   bool use_matrix_free_ns_operator = true;
@@ -1977,6 +1978,7 @@ private:
     prm.add_parameter("c1", c_1);
     prm.add_parameter("c2", c_2);
     prm.add_parameter("consider time deriverative", consider_time_deriverative);
+    prm.add_parameter("cell wise stabilization", cell_wise_stabilization);
 
     // implmentation of operator evaluation
     prm.add_parameter("use matrix free ns operator",
