@@ -183,6 +183,26 @@ struct PreconditionerGMGAdditionalData
   bool         coarse_grid_amg_output_details        = false;
   std::string  coarse_grid_amg_smoother_type         = "ILU";
   std::string  coarse_grid_amg_coarse_type           = "ILU";
+
+  void
+  add_parameters(ParameterHandler &prm)
+  {
+    // smoother
+    prm.add_parameter("gmg smoothing n iterations", smoothing_n_iterations);
+
+    // coarse-grid solver
+    prm.add_parameter("gmg coarse grid solver",
+                      coarse_grid_solver,
+                      "",
+                      Patterns::Selection("AMG"));
+    prm.add_parameter("gmg coarse grid iterate", coarse_grid_iterate);
+
+    // coarse-grid GMRES
+    prm.add_parameter("gmg coarse grid gmres reltol", coarse_grid_gmres_reltol);
+
+    // coarse-grid AMG
+    // TODO
+  }
 };
 
 

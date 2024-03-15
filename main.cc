@@ -1878,7 +1878,8 @@ struct Parameters
 
 
   // preconditioner of linear solver
-  std::string preconditioner = "ILU";
+  std::string                     preconditioner = "ILU";
+  PreconditionerGMGAdditionalData gmg;
 
   // nonlinear solver
   std::string nonlinear_solver = "linearized";
@@ -1943,6 +1944,7 @@ private:
                       preconditioner,
                       "",
                       Patterns::Selection("AMG|GMG|ILU"));
+    gmg.add_parameters(prm);
 
     // nonlinear solver
     prm.add_parameter("nonlinear solver",
