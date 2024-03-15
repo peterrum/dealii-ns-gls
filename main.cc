@@ -321,6 +321,13 @@ public:
     vmult(dst, src);
   }
 
+  virtual std::vector<std::vector<bool>>
+  extract_constant_modes() const
+  {
+    AssertThrow(false, ExcNotImplemented());
+    return {};
+  }
+
   virtual const AffineConstraints<Number> &
   get_constraints() const = 0;
 
@@ -359,7 +366,14 @@ public:
   initialize() override
   {
     const auto &matrix = op.get_system_matrix();
-    precon.initialize(matrix);
+
+    const int    current_preconditioner_fill_level = 0;
+    const double ilu_atol                          = 1e-12;
+    const double ilu_rtol                          = 1.00;
+    TrilinosWrappers::PreconditionILU::AdditionalData ad(
+      current_preconditioner_fill_level, ilu_atol, ilu_rtol, 0);
+
+    precon.initialize(matrix, ad);
   }
 
   void
@@ -467,11 +481,22 @@ public:
   void
   solve(VectorType &dst, const VectorType &src) const override
   {
-    ReductionControl solver_control(n_max_iterations,
-                                    absolute_tolerance,
-                                    relative_tolerance);
+    const double linear_solver_tolerance =
+      std::max(relative_tolerance * src.l2_norm(), absolute_tolerance);
 
-    SolverGMRES<VectorType> solver(solver_control);
+    SolverControl solver_control(n_max_iterations,
+                                 linear_solver_tolerance,
+                                 true,
+                                 true);
+
+    typename SolverGMRES<VectorType>::AdditionalData solver_parameters;
+
+    solver_parameters.max_n_tmp_vectors     = 30; // TODO
+    solver_parameters.right_preconditioning = true;
+
+    SolverGMRES<VectorType> solver(solver_control, solver_parameters);
+
+    dst = 0.0;
 
     try
       {
@@ -882,6 +907,19 @@ public:
       return this->matrix_free.get_dof_handler().n_dofs();
   }
 
+  std::vector<std::vector<bool>>
+  extract_constant_modes() const override
+  {
+    std::vector<std::vector<bool>> constant_modes;
+
+    ComponentMask components(dim + 1, true);
+    DoFTools::extract_constant_modes(this->matrix_free.get_dof_handler(),
+                                     components,
+                                     constant_modes);
+
+    return constant_modes;
+  }
+
   virtual void
   compute_inverse_diagonal(VectorType &diagonal) const override
   {
@@ -1163,12 +1201,16 @@ private:
                  const VectorType                            &src,
                  const std::pair<unsigned int, unsigned int> &range) const
   {
-    FECellIntegrator phi(matrix_free, evaluate_residual ? 1 : 0);
+    FECellIntegrator phi(matrix_free, 0);
 
     for (auto cell = range.first; cell < range.second; ++cell)
       {
         phi.reinit(cell);
-        phi.read_dof_values(src);
+
+        if (evaluate_residual)
+          phi.read_dof_values_plain(src);
+        else
+          phi.read_dof_values(src);
 
         do_vmult_cell<evaluate_residual>(phi);
 
@@ -1396,7 +1438,6 @@ private:
             //  c)  (ε(v), νε(u))
             for (unsigned int d = 0; d < dim; ++d)
               gradient_result[d][d] += u_gradient[d][d] * nu;
-
             for (unsigned int e = 0, counter = dim; e < dim; ++e)
               for (unsigned int d = e + 1; d < dim; ++d, ++counter)
                 {
@@ -1415,7 +1456,8 @@ private:
                            p_gradient + s_grad_u + u_grad_s);
             const auto residual_1 =
               (delta_1) * ((consider_time_deriverative ?
-                              (u_star_value * weight) :
+                              (u_star_value * weight +
+                               this->u_time_derivative_old[cell][q]) :
                               Tensor<1, dim, VectorizedArray<Number>>()) +
                            p_star_gradient + s_grad_s);
             for (unsigned int d0 = 0; d0 < dim; ++d0)
@@ -1813,6 +1855,7 @@ struct Parameters
   std::string simulation_name = "channel";
 
   // system
+  double       dt             = 0.0;
   double       cfl            = 0.1;
   double       t_final        = 3.0;
   double       theta          = 0.5;
@@ -1870,6 +1913,7 @@ private:
     prm.add_parameter("simulation name", simulation_name);
 
     // time stepping
+    prm.add_parameter("dt", dt);
     prm.add_parameter("cfl", cfl);
     prm.add_parameter("t final", t_final);
     prm.add_parameter("theta", theta);
@@ -2533,7 +2577,7 @@ public:
       1, std::make_shared<InflowBoundaryValues>());
 
     // outflow
-    bcs.all_homogeneous_nbcs.push_back(4);
+    // bcs.all_homogeneous_nbcs.push_back(4);
 
     // walls
     bcs.all_slip_bcs.push_back(2);
@@ -2573,21 +2617,98 @@ private:
     double
     value(const Point<dim> &p, const unsigned int component) const override
     {
-      const double Um = 1.5;
-      const double H  = 0.41;
-      const double y  = p[1];
+      (void)p;
 
-      (void)Um;
-      (void)H;
-      (void)y;
-
-      /// FIXME here. Somehow the velocity is too small
-      /// I don't know why.
       const double u_val = 1.0;
-      // const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
-      //*
-      //  std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
-      ;
+      const double v_val = 0.0;
+      const double p_val = 0.0;
+
+      if (component == 0)
+        return u_val;
+      else if (component == 1)
+        return v_val;
+      else if (component == 2)
+        return p_val;
+
+      return 0;
+    }
+
+  private:
+    const double t_;
+  };
+};
+
+
+
+/**
+ * Flow-past cylinder simulation with alternative mesh.
+ */
+template <int dim>
+class SimulationCylinderLethe2 : public SimulationBase<dim>
+{
+public:
+  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
+
+  SimulationCylinderLethe2()
+    : use_no_slip_cylinder_bc(true)
+  {}
+
+  void
+  create_triangulation(Triangulation<dim> &tria) const override
+  {
+    GridGenerator::channel_with_cylinder(tria, 0.03, 2, 2.0, true);
+  }
+
+  virtual BoundaryDescriptor
+  get_boundary_descriptor() const override
+  {
+    BoundaryDescriptor bcs;
+
+    // inflow
+    bcs.all_inhomogeneous_dbcs.emplace_back(
+      0, std::make_shared<InflowBoundaryValues>());
+
+    // walls
+    bcs.all_slip_bcs.push_back(3);
+
+    // cylinder
+    if (use_no_slip_cylinder_bc)
+      bcs.all_homogeneous_dbcs.push_back(2);
+    else
+      bcs.all_slip_bcs.push_back(2);
+
+    return bcs;
+  }
+
+  void
+  postprocess(const double           t,
+              const Mapping<dim>    &mapping,
+              const DoFHandler<dim> &dof_handler,
+              const VectorType      &solution) const override
+  {
+    // nothing to do
+    (void)t;
+    (void)mapping;
+    (void)dof_handler;
+    (void)solution;
+  }
+
+private:
+  const bool use_no_slip_cylinder_bc;
+
+  class InflowBoundaryValues : public Function<dim>
+  {
+  public:
+    InflowBoundaryValues()
+      : Function<dim>(dim + 1)
+      , t_(0.0){};
+
+    double
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      (void)p;
+
+      const double u_val = 1.0;
       const double v_val = 0.0;
       const double p_val = 0.0;
 
@@ -2637,6 +2758,8 @@ public:
         std::make_shared<SimulationCylinderOld<dim>>(params.nu, params.no_slip);
     else if (params.simulation_name == "cylinder lethe")
       simulation = std::make_shared<SimulationCylinderLethe<dim>>();
+    else if (params.simulation_name == "cylinder lethe 2")
+      simulation = std::make_shared<SimulationCylinderLethe2<dim>>();
     else
       AssertThrow(false, ExcNotImplemented());
 
@@ -2963,16 +3086,30 @@ public:
 
         if (params.preconditioner == "GMG")
           {
-            MGLevelObject<VectorType> mg_solution(mg_ns_operators.min_level(),
-                                                  mg_ns_operators.max_level());
+            MGLevelObject<SolutionHistory<VectorType>> all_mg_solution(
+              mg_ns_operators.min_level(),
+              mg_ns_operators.max_level(),
+              time_integrator_data->get_order() + 1);
 
-            mg_transfer_no_constraints->interpolate_to_mg(
-              dof_handler, mg_solution, solution.get_vectors()[1]);
+            for (unsigned int i = 1; i <= time_integrator_data->get_order();
+                 ++i)
+              {
+                MGLevelObject<VectorType> mg_solution(
+                  mg_ns_operators.min_level(), mg_ns_operators.max_level());
+
+                mg_transfer_no_constraints->interpolate_to_mg(
+                  dof_handler, mg_solution, solution.get_vectors()[i]);
+
+                for (unsigned int l = mg_ns_operators.min_level();
+                     l <= mg_ns_operators.max_level();
+                     ++l)
+                  all_mg_solution[l].get_vectors()[i] = mg_solution[l];
+              }
 
             for (unsigned int l = mg_ns_operators.min_level();
                  l <= mg_ns_operators.max_level();
                  ++l)
-              mg_ns_operators[l]->set_previous_solution(mg_solution[l]);
+              mg_ns_operators[l]->set_previous_solution(all_mg_solution[l]);
           }
       };
 
@@ -3025,10 +3162,25 @@ public:
     for (auto &vec : solution.get_vectors())
       ns_operator->initialize_dof_vector(vec);
 
+    {
+      // set time-dependent inhomogeneous DBCs
+      constraints_inhomogeneous.clear();
+      constraints_inhomogeneous.copy_from(constraints_copy);
+      for (const auto &[bci, fu] : bcs.all_inhomogeneous_dbcs)
+        {
+          fu->set_time(0.0); // TODO: correct?
+          VectorTools::interpolate_boundary_values(
+            mapping, dof_handler, bci, *fu, constraints_inhomogeneous, mask_v);
+        }
+      constraints_inhomogeneous.close();
 
+      constraints_inhomogeneous.distribute(solution.get_current_solution());
+    }
 
     const double dt =
-      GridTools::minimal_cell_diameter(tria, mapping) * params.cfl;
+      (params.dt != 0.0) ?
+        params.dt :
+        (GridTools::minimal_cell_diameter(tria, mapping) * params.cfl);
 
     double       t       = 0.0;
     unsigned int counter = 1;

@@ -2,10 +2,11 @@
   "dim"                  : 2,
   "fe degree"            : 1,
   "mapping degree"       : 1,
-  "n global refinements" : 2,
+  "n global refinements" : 1,
 
-  "simulation name" : "cylinder lethe",
+  "simulation name" : "cylinder lethe 2",
 
+  "dt"             : 0.00205384,
   "cfl"            : 0.1,
   "t final"        : 20.0,
   "theta"          : 1.0,
@@ -19,7 +20,8 @@
 
   "use matrix free ns operator" : true,
 
-  "lin relative tolerance" : 1e-2,
+  "lin absolute tolerance" : 1e-8,
+  "lin relative tolerance" : 1e-4,
 
   "preconditioner" : "GMG",
 
