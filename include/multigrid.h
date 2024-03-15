@@ -165,7 +165,8 @@ struct PreconditionerGMGAdditionalData
   unsigned int smoothing_eig_cg_n_iterations = 20;
 
   // coarse-grid solver type
-  std::string coarse_grid_type = "iAMG";
+  std::string coarse_grid_solver  = "AMG";
+  bool        coarse_grid_iterate = true;
 
   // coarse-grid GMRES
   unsigned int coarse_grid_gmres_maxiter = 10000;
@@ -272,7 +273,7 @@ public:
               << ", ev_max: " << ev.max_eigenvalue_estimate << std::endl;
       }
 
-    if (additional_data.coarse_grid_type == "AMG")
+    if (additional_data.coarse_grid_solver == "AMG")
       {
         TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
         amg_data.output_details        = false;
@@ -291,32 +292,22 @@ public:
           std::make_unique<TrilinosWrappers::PreconditionAMG>();
         precondition_amg->initialize(op[min_level]->get_system_matrix(),
                                      amg_data);
+      }
+    else
+      {
+        AssertThrow(false, ExcInternalError());
+      }
+
+    if (!additional_data.coarse_grid_iterate)
+      {
         mg_coarse = std::make_unique<
           MGCoarseGridApplyPreconditioner<VectorType,
                                           TrilinosWrappers::PreconditionAMG>>(
           *precondition_amg);
       }
-    else if (additional_data.coarse_grid_type == "iAMG")
+    else
       {
         AssertThrow(min_level != max_level, ExcInternalError());
-
-        TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
-        amg_data.output_details        = false;
-        amg_data.elliptic              = false; // TODO
-        amg_data.higher_order_elements = false; //
-        amg_data.n_cycles              = 1;     //
-        amg_data.aggregation_threshold = 1e-14; //
-        amg_data.smoother_sweeps       = 2;     //
-        amg_data.smoother_overlap      = 1;     //
-        amg_data.output_details        = false; //
-        amg_data.smoother_type         = "ILU"; //
-        amg_data.coarse_type           = "ILU"; //
-        amg_data.constant_modes = op[min_level]->extract_constant_modes(); //
-
-        precondition_amg =
-          std::make_unique<TrilinosWrappers::PreconditionAMG>();
-        precondition_amg->initialize(op[min_level]->get_system_matrix(),
-                                     amg_data);
 
         coarse_grid_solver_control = std::make_unique<ReductionControl>(
           additional_data.coarse_grid_gmres_maxiter,
@@ -334,10 +325,6 @@ public:
                                       OperatorBase,
                                       TrilinosWrappers::PreconditionAMG>>(
           *coarse_grid_solver, *op[min_level], *precondition_amg);
-      }
-    else
-      {
-        AssertThrow(false, ExcInternalError());
       }
 
     mg = std::make_unique<Multigrid<VectorType>>(*mg_matrix,
