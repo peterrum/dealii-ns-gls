@@ -157,27 +157,60 @@ namespace dealii
 
 
 
+struct PreconditionerGMGAdditionalData
+{
+  // smoother (relaxation + point Jacobi)
+  double       smoothing_range               = 20;
+  unsigned int smoothing_n_iterations        = 5;
+  unsigned int smoothing_eig_cg_n_iterations = 20;
+
+  // coarse-grid solver type
+  std::string coarse_grid_solver  = "AMG";
+  bool        coarse_grid_iterate = true;
+
+  // coarse-grid GMRES
+  unsigned int coarse_grid_gmres_maxiter = 10000;
+  double       coarse_grid_gmres_abstol  = 1e-20;
+  double       coarse_grid_gmres_reltol  = 1e-4;
+
+  // coarse-grid AMG
+  bool         coarse_grid_amg_elliptic              = false;
+  bool         coarse_grid_amg_higher_order_elements = false;
+  unsigned int coarse_grid_amg_n_cycles              = 1;
+  double       coarse_grid_amg_aggregation_threshold = 1e-14;
+  unsigned int coarse_grid_amg_smoother_sweeps       = 2;
+  unsigned int coarse_grid_amg_smoother_overlap      = 1;
+  bool         coarse_grid_amg_output_details        = false;
+  std::string  coarse_grid_amg_smoother_type         = "ILU";
+  std::string  coarse_grid_amg_coarse_type           = "ILU";
+
+  void
+  add_parameters(ParameterHandler &prm)
+  {
+    // smoother
+    prm.add_parameter("gmg smoothing n iterations", smoothing_n_iterations);
+
+    // coarse-grid solver
+    prm.add_parameter("gmg coarse grid solver",
+                      coarse_grid_solver,
+                      "",
+                      Patterns::Selection("AMG"));
+    prm.add_parameter("gmg coarse grid iterate", coarse_grid_iterate);
+
+    // coarse-grid GMRES
+    prm.add_parameter("gmg coarse grid gmres reltol", coarse_grid_gmres_reltol);
+
+    // coarse-grid AMG
+    // TODO
+  }
+};
+
+
+
 template <int dim>
 class PreconditionerGMG : public PreconditionerBase
 {
 public:
-  struct PreconditionerGMGAdditionalData
-  {
-    double       smoothing_range               = 20;
-    unsigned int smoothing_degree              = 1;
-    unsigned int smoothing_eig_cg_n_iterations = 20;
-
-    unsigned int coarse_grid_smoother_sweeps = 1;     // TODO: not used
-    unsigned int coarse_grid_n_cycles        = 1;     // TODO: not used
-    std::string  coarse_grid_smoother_type   = "ILU"; // TODO: not used
-
-    unsigned int coarse_grid_maxiter = 10000;
-    double       coarse_grid_abstol  = 1e-20;
-    double       coarse_grid_reltol  = 1e-4;
-
-    std::string coarse_grid_type = "iAMG";
-  };
-
   using LevelMatrixType = OperatorBase;
 
   using SmootherPreconditionerType = DiagonalMatrix<VectorType>;
@@ -189,12 +222,14 @@ public:
   PreconditionerGMG(
     const MGLevelObject<std::shared_ptr<OperatorBase>> &op,
     const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>>
-      &transfer)
+                                          &transfer,
+    const PreconditionerGMGAdditionalData &additional_data)
     : pcout(std::cout,
             (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) &&
               false /*TODO: introduce verbosity*/)
     , op(op)
     , transfer(transfer)
+    , additional_data(additional_data)
   {}
 
   void
@@ -208,8 +243,6 @@ public:
   initialize() override
   {
     pcout << "    [M] initialize" << std::endl;
-
-    PreconditionerGMGAdditionalData additional_data; // TODO
 
     const unsigned int min_level = transfer->min_level();
     const unsigned int max_level = transfer->max_level();
@@ -229,7 +262,8 @@ public:
           smoother_data[level].preconditioner->get_vector());
         smoother_data[level].relaxation      = 0.0;
         smoother_data[level].smoothing_range = additional_data.smoothing_range;
-        smoother_data[level].n_iterations    = additional_data.smoothing_degree;
+        smoother_data[level].n_iterations =
+          additional_data.smoothing_n_iterations;
         smoother_data[level].eig_cg_n_iterations =
           additional_data.smoothing_eig_cg_n_iterations;
         smoother_data[level].eigenvalue_algorithm =
@@ -254,66 +288,52 @@ public:
               << ", ev_max: " << ev.max_eigenvalue_estimate << std::endl;
       }
 
-    if (additional_data.coarse_grid_type == "AMG")
+    if (additional_data.coarse_grid_solver == "AMG")
       {
         TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
-        // amg_data.smoother_sweeps =
-        // additional_data.coarse_grid_smoother_sweeps; amg_data.n_cycles =
-        // additional_data.coarse_grid_n_cycles; amg_data.smoother_type =
-        //   additional_data.coarse_grid_smoother_type.c_str();
-        amg_data.output_details = false;
-
-        amg_data.elliptic              = false; // TODO
-        amg_data.higher_order_elements = false; //
-        amg_data.n_cycles              = 1;     //
-        amg_data.aggregation_threshold = 1e-14; //
-        amg_data.constant_modes   = op[min_level]->extract_constant_modes(); //
-        amg_data.smoother_sweeps  = 2;                                       //
-        amg_data.smoother_overlap = 1;                                       //
-        amg_data.output_details   = false;                                   //
-        amg_data.smoother_type    = "ILU";                                   //
-        amg_data.coarse_type      = "ILU";                                   //
+        amg_data.elliptic = additional_data.coarse_grid_amg_elliptic;
+        amg_data.higher_order_elements =
+          additional_data.coarse_grid_amg_higher_order_elements;
+        amg_data.n_cycles = additional_data.coarse_grid_amg_n_cycles;
+        amg_data.aggregation_threshold =
+          additional_data.coarse_grid_amg_aggregation_threshold;
+        amg_data.smoother_sweeps =
+          additional_data.coarse_grid_amg_smoother_sweeps;
+        amg_data.smoother_overlap =
+          additional_data.coarse_grid_amg_smoother_overlap;
+        amg_data.output_details =
+          additional_data.coarse_grid_amg_output_details;
+        amg_data.smoother_type =
+          additional_data.coarse_grid_amg_smoother_type.c_str();
+        amg_data.coarse_type =
+          additional_data.coarse_grid_amg_coarse_type.c_str();
+        amg_data.constant_modes = op[min_level]->extract_constant_modes();
 
         precondition_amg =
           std::make_unique<TrilinosWrappers::PreconditionAMG>();
         precondition_amg->initialize(op[min_level]->get_system_matrix(),
                                      amg_data);
+      }
+    else
+      {
+        AssertThrow(false, ExcInternalError());
+      }
+
+    if (!additional_data.coarse_grid_iterate)
+      {
         mg_coarse = std::make_unique<
           MGCoarseGridApplyPreconditioner<VectorType,
                                           TrilinosWrappers::PreconditionAMG>>(
           *precondition_amg);
       }
-    else if (additional_data.coarse_grid_type == "iAMG")
+    else
       {
         AssertThrow(min_level != max_level, ExcInternalError());
 
-        TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
-        // amg_data.smoother_sweeps =
-        // additional_data.coarse_grid_smoother_sweeps; amg_data.n_cycles =
-        // additional_data.coarse_grid_n_cycles; amg_data.smoother_type =
-        //   additional_data.coarse_grid_smoother_type.c_str();
-        amg_data.output_details = false;
-
-        amg_data.elliptic              = false; // TODO
-        amg_data.higher_order_elements = false; //
-        amg_data.n_cycles              = 1;     //
-        amg_data.aggregation_threshold = 1e-14; //
-        amg_data.constant_modes   = op[min_level]->extract_constant_modes(); //
-        amg_data.smoother_sweeps  = 2;                                       //
-        amg_data.smoother_overlap = 1;                                       //
-        amg_data.output_details   = false;                                   //
-        amg_data.smoother_type    = "ILU";                                   //
-        amg_data.coarse_type      = "ILU";                                   //
-
-        precondition_amg =
-          std::make_unique<TrilinosWrappers::PreconditionAMG>();
-        precondition_amg->initialize(op[min_level]->get_system_matrix(),
-                                     amg_data);
-
         coarse_grid_solver_control = std::make_unique<ReductionControl>(
-          additional_data.coarse_grid_maxiter,
-          additional_data.coarse_grid_abstol,
-          additional_data.coarse_grid_reltol,
+          additional_data.coarse_grid_gmres_maxiter,
+          additional_data.coarse_grid_gmres_abstol,
+          additional_data.coarse_grid_gmres_reltol,
           false,
           false);
 
@@ -326,10 +346,6 @@ public:
                                       OperatorBase,
                                       TrilinosWrappers::PreconditionAMG>>(
           *coarse_grid_solver, *op[min_level], *precondition_amg);
-      }
-    else
-      {
-        AssertThrow(false, ExcInternalError());
       }
 
     mg = std::make_unique<Multigrid<VectorType>>(*mg_matrix,
@@ -352,6 +368,8 @@ private:
 
   const MGLevelObject<std::shared_ptr<OperatorBase>> &op;
   const std::shared_ptr<MGTransferType>               transfer;
+
+  const PreconditionerGMGAdditionalData additional_data;
 
   DoFHandler<dim> dof_handler_dummy;
 

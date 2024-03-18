@@ -26,6 +26,11 @@
 
   "preconditioner" : "GMG",
 
+  "gmg smoothing n iterations"   : 5,
+  "gmg coarse grid solver"       : "AMG",
+  "gmg coarse grid iterate"      : true,
+  "gmg coarse grid gmres reltol" : 1e-2,
+
   "nonlinear solver" : "Newton",
 
   "paraview prefix"    : "results_mf",

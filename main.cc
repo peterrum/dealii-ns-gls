@@ -1932,7 +1932,8 @@ struct Parameters
 
 
   // preconditioner of linear solver
-  std::string preconditioner = "ILU";
+  std::string                     preconditioner = "ILU";
+  PreconditionerGMGAdditionalData gmg;
 
   // nonlinear solver
   std::string nonlinear_solver = "linearized";
@@ -1998,6 +1999,7 @@ private:
                       preconditioner,
                       "",
                       Patterns::Selection("AMG|GMG|ILU"));
+    gmg.add_parameters(prm);
 
     // nonlinear solver
     prm.add_parameter("nonlinear solver",
@@ -3103,7 +3105,9 @@ public:
 
         // create preconditioner
         preconditioner =
-          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators, transfer);
+          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators,
+                                                   transfer,
+                                                   params.gmg);
       }
     else
       AssertThrow(false, ExcNotImplemented());
