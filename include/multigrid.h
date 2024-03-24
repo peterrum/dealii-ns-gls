@@ -2,6 +2,8 @@
 
 #include <deal.II/lac/precondition.h>
 
+#include <deal.II/matrix_free/operators.h>
+
 #include <deal.II/multigrid/mg_coarse.h>
 #include <deal.II/multigrid/mg_matrix.h>
 #include <deal.II/multigrid/mg_smoother.h>
@@ -221,15 +223,19 @@ public:
   using MGTransferType = MGTransferGlobalCoarsening<dim, VectorType>;
 
   PreconditionerGMG(
+    const DoFHandler<dim>                              &dof_handler,
     const MGLevelObject<std::shared_ptr<OperatorBase>> &op,
     const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>>
                                           &transfer,
+    const bool                             consider_edge_constraints,
     const PreconditionerGMGAdditionalData &additional_data)
     : pcout(std::cout,
             (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) &&
               false /*TODO: introduce verbosity*/)
+    , dof_handler(dof_handler)
     , op(op)
     , transfer(transfer)
+    , consider_edge_constraints(consider_edge_constraints)
     , additional_data(additional_data)
   {}
 
@@ -250,6 +256,16 @@ public:
 
     // wrap level operators
     mg_matrix = std::make_unique<mg::Matrix<VectorType>>(op);
+
+    // create interface matrices
+    if (consider_edge_constraints)
+      {
+        mg_interface_matrices.resize(min_level, max_level);
+        for (unsigned int level = min_level; level <= max_level; ++level)
+          mg_interface_matrices[level].initialize(*op[level]);
+        mg_interface =
+          std::make_unique<mg::Matrix<VectorType>>(mg_interface_matrices);
+      }
 
     // setup smoothers on each level
     MGLevelObject<typename SmootherType::AdditionalData> smoother_data(
@@ -357,9 +373,13 @@ public:
                                                  min_level,
                                                  max_level);
 
+    if (consider_edge_constraints &&
+        dof_handler.get_triangulation().has_hanging_nodes())
+      mg->set_edge_matrices(*mg_interface, *mg_interface);
+
     preconditioner =
       std::make_unique<PreconditionMG<dim, VectorType, MGTransferType>>(
-        dof_handler_dummy, *mg, *transfer);
+        dof_handler, *mg, *transfer);
 
     pcout << std::endl;
   }
@@ -367,14 +387,21 @@ public:
 private:
   const ConditionalOStream pcout;
 
+  const DoFHandler<dim>                              &dof_handler;
   const MGLevelObject<std::shared_ptr<OperatorBase>> &op;
   const std::shared_ptr<MGTransferType>               transfer;
 
+  const bool consider_edge_constraints;
+
   const PreconditionerGMGAdditionalData additional_data;
 
-  DoFHandler<dim> dof_handler_dummy;
-
   mutable std::unique_ptr<mg::Matrix<VectorType>> mg_matrix;
+
+  mutable MGLevelObject<
+    MatrixFreeOperators::MGInterfaceOperator<LevelMatrixType>>
+    mg_interface_matrices;
+
+  mutable std::unique_ptr<mg::Matrix<VectorType>> mg_interface;
 
   mutable std::unique_ptr<
     MGSmootherPrecondition<LevelMatrixType, SmootherType, VectorType>>

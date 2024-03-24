@@ -281,6 +281,9 @@ public:
 class OperatorBase : public Subscriptor
 {
 public:
+  using value_type = Number;
+  using size_type  = types::global_dof_index;
+
   virtual types::global_dof_index
   m() const = 0;
 
@@ -319,6 +322,24 @@ public:
   Tvmult(VectorType &dst, const VectorType &src) const
   {
     vmult(dst, src);
+  }
+
+  virtual void
+  vmult_interface_down(VectorType &dst, const VectorType &src) const
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    (void)dst;
+    (void)src;
+  }
+
+  virtual void
+  vmult_interface_up(VectorType &dst, const VectorType &src) const
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    (void)dst;
+    (void)src;
   }
 
   virtual std::vector<std::vector<bool>>
@@ -899,11 +920,27 @@ public:
         AssertThrow(theta[0] == 1.0, ExcInternalError());
       }
 
-    if (mg_level)
+    if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
       {
-        AssertThrow(dof_handler.get_triangulation().has_hanging_nodes() ==
-                      false,
-                    ExcNotImplemented());
+        std::vector<types::global_dof_index> interface_indices;
+        IndexSet                             refinement_edge_indices;
+        refinement_edge_indices = get_refinement_edges(this->matrix_free);
+        refinement_edge_indices.fill_index_vector(interface_indices);
+
+        edge_constrained_indices.clear();
+        edge_constrained_indices.reserve(interface_indices.size());
+        edge_constrained_values.resize(interface_indices.size());
+        const IndexSet &locally_owned =
+          this->matrix_free.get_dof_handler().locally_owned_mg_dofs(
+            this->matrix_free.get_mg_level());
+        for (unsigned int i = 0; i < interface_indices.size(); ++i)
+          if (locally_owned.is_element(interface_indices[i]))
+            edge_constrained_indices.push_back(
+              locally_owned.index_within_set(interface_indices[i]));
+
+        this->has_edge_constrained_indices =
+          Utilities::MPI::max(edge_constrained_indices.size(),
+                              dof_handler.get_communicator()) > 0;
       }
   }
 
@@ -1198,12 +1235,83 @@ public:
   void
   vmult(VectorType &dst, const VectorType &src) const override
   {
+    // save values for edge constrained dofs and set them to 0 in src vector
+    for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
+      {
+        edge_constrained_values[i] = std::pair<Number, Number>(
+          src.local_element(edge_constrained_indices[i]),
+          dst.local_element(edge_constrained_indices[i]));
+
+        const_cast<LinearAlgebra::distributed::Vector<Number> &>(src)
+          .local_element(edge_constrained_indices[i]) = 0.;
+      }
+
     this->matrix_free.cell_loop(
       &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
 
     for (unsigned int i = 0; i < constrained_indices.size(); ++i)
       dst.local_element(constrained_indices[i]) =
         src.local_element(constrained_indices[i]);
+
+    // restoring edge constrained dofs in src and dst
+    for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
+      {
+        const_cast<LinearAlgebra::distributed::Vector<Number> &>(src)
+          .local_element(edge_constrained_indices[i]) =
+          edge_constrained_values[i].first;
+        dst.local_element(edge_constrained_indices[i]) =
+          edge_constrained_values[i].first;
+      }
+  }
+
+  void
+  vmult_interface_down(VectorType &dst, const VectorType &src) const override
+  {
+    if (has_edge_constrained_indices == false)
+      {
+        dst = Number(0.);
+        return;
+      }
+
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
+
+    // make a copy of dst and zero out everything except edge_constraints
+    VectorType dst_copy(dst);
+    dst = 0.0;
+
+    for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
+      dst.local_element(edge_constrained_indices[i]) =
+        dst_copy.local_element(edge_constrained_indices[i]);
+  }
+
+  void
+  vmult_interface_up(VectorType &dst, const VectorType &src) const override
+  {
+    if (has_edge_constrained_indices == false)
+      {
+        dst = Number(0.);
+        return;
+      }
+
+    dst = 0.0;
+
+    // make a copy of src vector and set everything to 0 except edge
+    // constrained dofs
+    VectorType src_cpy;
+    src_cpy.reinit(src, /*omit_zeroing_entries=*/false);
+
+    for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
+      src_cpy.local_element(edge_constrained_indices[i]) =
+        src.local_element(edge_constrained_indices[i]);
+
+    // do loop with copy of src
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim>::do_vmult_range<false>,
+      this,
+      dst,
+      src_cpy,
+      false);
   }
 
   const SparseMatrixType &
@@ -1607,6 +1715,33 @@ private:
 
         this->valid_system = true;
       }
+  }
+
+  std::vector<unsigned int> edge_constrained_indices;
+
+  bool has_edge_constrained_indices = false;
+
+  mutable std::vector<std::pair<Number, Number>> edge_constrained_values;
+
+  std::vector<bool> edge_constrained_cell;
+
+  static IndexSet
+  get_refinement_edges(const MatrixFree<dim, Number> &matrix_free)
+  {
+    const unsigned int level = matrix_free.get_mg_level();
+
+    std::vector<IndexSet> refinement_edge_indices;
+    refinement_edge_indices.clear();
+    const unsigned int nlevels =
+      matrix_free.get_dof_handler().get_triangulation().n_global_levels();
+    refinement_edge_indices.resize(nlevels);
+    for (unsigned int l = 0; l < nlevels; l++)
+      refinement_edge_indices[l] =
+        IndexSet(matrix_free.get_dof_handler().n_dofs(l));
+
+    MGTools::extract_inner_interface_dofs(matrix_free.get_dof_handler(),
+                                          refinement_edge_indices);
+    return refinement_edge_indices[level];
   }
 };
 
@@ -2760,7 +2895,7 @@ public:
 
     tria.refine_global(n_global_refinements);
 
-    if (false)
+    if (true)
       {
         const auto bb =
           BoundingBox<dim>(Point<dim>(0.2, 0.2)).create_extended(0.12);
@@ -3165,10 +3300,8 @@ public:
             });
 
         // create preconditioner
-        preconditioner =
-          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators,
-                                                   transfer,
-                                                   params.gmg);
+        preconditioner = std::make_shared<PreconditionerGMG<dim>>(
+          dof_handler, mg_ns_operators, transfer, false, params.gmg);
       }
     else if (params.preconditioner == "GMG-LS")
       {
@@ -3179,8 +3312,6 @@ public:
 
         mg_constraints.resize(minlevel, maxlevel);
         mg_ns_operators.resize(minlevel, maxlevel);
-        mg_transfers.resize(minlevel, maxlevel);
-        mg_transfers_no_constraints.resize(minlevel, maxlevel);
 
         MGConstrainedDoFs mg_constrained_dofs;
         mg_constrained_dofs.initialize(dof_handler);
@@ -3282,10 +3413,8 @@ public:
         });
 
         // create preconditioner
-        preconditioner =
-          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators,
-                                                   transfer,
-                                                   params.gmg);
+        preconditioner = std::make_shared<PreconditionerGMG<dim>>(
+          dof_handler, mg_ns_operators, transfer, true, params.gmg);
       }
     else
       AssertThrow(false, ExcNotImplemented());
