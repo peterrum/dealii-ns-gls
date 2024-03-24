@@ -2942,8 +2942,6 @@ public:
       }
 
     // set up preconditioner
-    std::shared_ptr<PreconditionerBase> preconditioner;
-
     std::vector<std::shared_ptr<const Triangulation<dim>>> mg_trias;
 
     MGLevelObject<DoFHandler<dim>>           mg_dof_handlers;
@@ -2957,6 +2955,7 @@ public:
     std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>>
       mg_transfer_no_constraints;
 
+    std::shared_ptr<PreconditionerBase> preconditioner;
 
     if (params.preconditioner == "ILU")
       preconditioner = std::make_shared<PreconditionerILU>(*ns_operator);
