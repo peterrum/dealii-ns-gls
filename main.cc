@@ -2037,7 +2037,8 @@ public:
   };
 
   virtual void
-  create_triangulation(Triangulation<dim> &tria) const = 0;
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const = 0;
 
   virtual BoundaryDescriptor
   get_boundary_descriptor() const = 0;
@@ -2072,7 +2073,8 @@ public:
   {}
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     std::vector<unsigned int> n_subdivisions(dim, 1);
     n_subdivisions[0] *= n_stretching;
@@ -2088,6 +2090,8 @@ public:
       tria, n_subdivisions, p0, p1, true);
 
     tria.refine_global(2);
+
+    tria.refine_global(n_global_refinements);
   }
 
   virtual BoundaryDescriptor
@@ -2158,9 +2162,12 @@ public:
   }
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     ExaDG::FlowPastCylinder::create_coarse_grid(tria);
+
+    tria.refine_global(n_global_refinements);
   }
 
   virtual BoundaryDescriptor
@@ -2385,7 +2392,8 @@ public:
   }
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     if (false /* TODO */)
       cylinder(tria,
@@ -2397,6 +2405,8 @@ public:
                ExaDG::FlowPastCylinder::D);
     else
       cylinder(tria, 4.0, 2.0, 0.6, 0.5);
+
+    tria.refine_global(n_global_refinements);
   }
 
   virtual BoundaryDescriptor
@@ -2614,7 +2624,8 @@ public:
   {}
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     GridIn<dim> grid_in(tria);
     grid_in.read("../mesh/cylinder.msh");
@@ -2622,6 +2633,8 @@ public:
     Point<dim>                   circleCenter(8, 8);
     const SphericalManifold<dim> manifold_description(circleCenter);
     tria.set_manifold(0, manifold_description);
+
+    tria.refine_global(n_global_refinements);
   }
 
   virtual BoundaryDescriptor
@@ -2711,9 +2724,12 @@ public:
   {}
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     GridGenerator::channel_with_cylinder(tria, 0.03, 2, 2.0, true);
+
+    tria.refine_global(n_global_refinements);
   }
 
   virtual BoundaryDescriptor
@@ -2823,8 +2839,7 @@ public:
     // set up system
     parallel::distributed::Triangulation<dim> tria(comm);
 
-    simulation->create_triangulation(tria);
-    tria.refine_global(params.n_global_refinements);
+    simulation->create_triangulation(tria, params.n_global_refinements);
 
     tria.reset_all_manifolds(); // TODO: problem with ChartManifold
 
@@ -2874,6 +2889,8 @@ public:
     for (const auto bci : bcs.all_slip_bcs)
       VectorTools::compute_no_normal_flux_constraints(
         dof_handler, 0, {bci}, constraints, mapping);
+
+    DoFTools::make_hanging_node_constraints(dof_handler, constraints);
 
     constraints_copy.copy_from(constraints);
 
