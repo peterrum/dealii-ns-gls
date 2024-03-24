@@ -3248,7 +3248,9 @@ public:
 
     nonlinear_solver->solve_with_jacobian = [&](VectorType       &dst,
                                                 const VectorType &src) {
+      constraints_homogeneous.set_zero(const_cast<VectorType &>(src));
       linear_solver->solve(dst, src);
+      constraints_homogeneous.distribute(dst);
     };
 
     nonlinear_solver->postprocess = [&](const VectorType &dst) {
