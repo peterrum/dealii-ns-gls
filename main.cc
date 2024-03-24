@@ -3143,6 +3143,145 @@ public:
                                                    transfer,
                                                    params.gmg);
       }
+    else if (params.preconditioner == "GMG-LS")
+      {
+        mg_trias =
+          MGTransferGlobalCoarseningTools::create_geometric_coarsening_sequence(
+            dof_handler.get_triangulation());
+
+        if (true /*TODO*/)
+          {
+            for (unsigned int i = 0; i < mg_trias.size(); ++i)
+              {
+                DataOut<dim> data_out;
+                data_out.attach_triangulation(*mg_trias[i]);
+                data_out.build_patches();
+
+                data_out.write_vtu_in_parallel("grid." + std::to_string(i) +
+                                                 ".vtu",
+                                               MPI_COMM_WORLD);
+              }
+          }
+
+        unsigned int minlevel = 0;
+        unsigned int maxlevel = mg_trias.size() - 1;
+
+        mg_dof_handlers.resize(minlevel, maxlevel);
+        mg_constraints.resize(minlevel, maxlevel);
+        mg_ns_operators.resize(minlevel, maxlevel);
+        mg_transfers.resize(minlevel, maxlevel);
+        mg_transfers_no_constraints.resize(minlevel, maxlevel);
+
+        for (unsigned int level = minlevel; level <= maxlevel; ++level)
+          {
+            auto &dof_handler = mg_dof_handlers[level];
+            auto &constraints = mg_constraints[level];
+
+            dof_handler.reinit(*mg_trias[level]);
+            dof_handler.distribute_dofs(fe);
+
+            const auto locally_relevant_dofs =
+              DoFTools::extract_locally_relevant_dofs(dof_handler);
+
+            constraints.reinit(locally_relevant_dofs);
+
+            for (const auto bci : bcs.all_homogeneous_dbcs)
+              DoFTools::make_zero_boundary_constraints(dof_handler,
+                                                       bci,
+                                                       constraints,
+                                                       mask_v);
+
+            for (const auto bci : bcs.all_homogeneous_nbcs)
+              DoFTools::make_zero_boundary_constraints(dof_handler,
+                                                       bci,
+                                                       constraints,
+                                                       mask_p);
+
+            for (const auto bci : bcs.all_slip_bcs)
+              VectorTools::compute_no_normal_flux_constraints(
+                dof_handler, 0, {bci}, constraints, mapping);
+
+            for (const auto &[bci, _] : bcs.all_inhomogeneous_dbcs)
+              DoFTools::make_zero_boundary_constraints(dof_handler,
+                                                       bci,
+                                                       constraints,
+                                                       mask_v);
+
+            DoFTools::make_hanging_node_constraints(dof_handler, constraints);
+
+            constraints.close();
+
+            if (params.use_matrix_free_ns_operator)
+              {
+                const bool increment_form = params.nonlinear_solver == "Newton";
+
+                mg_ns_operators[level] =
+                  std::make_shared<NavierStokesOperator<dim>>(
+                    mapping,
+                    dof_handler,
+                    constraints,
+                    constraints,
+                    constraints,
+                    quadrature,
+                    params.nu,
+                    params.c_1,
+                    params.c_2,
+                    *time_integrator_data,
+                    params.consider_time_deriverative,
+                    increment_form,
+                    params.cell_wise_stabilization);
+              }
+            else
+              {
+                AssertThrow(params.nonlinear_solver != "Newton",
+                            ExcInternalError());
+
+                mg_ns_operators[level] =
+                  std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
+                    mapping,
+                    dof_handler,
+                    constraints,
+                    quadrature,
+                    params.nu,
+                    params.c_1,
+                    params.c_2,
+                    *time_integrator_data);
+              }
+          }
+
+
+        // create transfer operator for interpolation to the levels (without
+        // constraints)
+        for (unsigned int level = minlevel; level < maxlevel; ++level)
+          mg_transfers_no_constraints[level + 1].reinit(
+            mg_dof_handlers[level + 1], mg_dof_handlers[level]);
+
+        mg_transfer_no_constraints =
+          std::make_shared<MGTransferGlobalCoarsening<dim, VectorType>>(
+            mg_transfers_no_constraints, [&](const auto l, auto &vec) {
+              mg_ns_operators[l]->initialize_dof_vector(vec);
+            });
+
+
+        // create transfer operator for preconditioner (with constraints)
+        for (unsigned int level = minlevel; level < maxlevel; ++level)
+          mg_transfers[level + 1].reinit(mg_dof_handlers[level + 1],
+                                         mg_dof_handlers[level],
+                                         mg_constraints[level + 1],
+                                         mg_constraints[level]);
+
+        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>> transfer =
+          std::make_shared<MGTransferGlobalCoarsening<dim, VectorType>>(
+            mg_transfers, [&](const auto l, auto &vec) {
+              mg_ns_operators[l]->initialize_dof_vector(vec);
+            });
+
+        // create preconditioner
+        preconditioner =
+          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators,
+                                                   transfer,
+                                                   params.gmg);
+      }
     else
       AssertThrow(false, ExcNotImplemented());
 
