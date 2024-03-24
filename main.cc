@@ -541,6 +541,8 @@ public:
 
   std::function<void(VectorType &dst, const VectorType &src)>
     solve_with_jacobian;
+
+  std::function<void(const VectorType &dst)> postprocess;
 };
 
 
@@ -614,6 +616,9 @@ public:
         this->solve_with_jacobian(inc, rhs);
 
         solution.add(1.0, inc);
+
+        if (postprocess)
+          this->postprocess(solution);
 
         // set linearization point
         this->setup_jacobian(solution);
@@ -3246,6 +3251,10 @@ public:
       linear_solver->solve(dst, src);
     };
 
+    nonlinear_solver->postprocess = [&](const VectorType &dst) {
+      output(0.0, mapping, dof_handler, dst, true);
+    };
+
     // initialize solution
     SolutionHistory<VectorType> solution(time_integrator_data->get_order() + 1);
 
@@ -3349,12 +3358,13 @@ private:
   output(const double           time,
          const Mapping<dim>    &mapping,
          const DoFHandler<dim> &dof_handler,
-         const VectorType      &vector) const
+         const VectorType      &vector,
+         const bool             force = false) const
   {
     static unsigned int counter = 0;
 
-    if ((time + std::numeric_limits<double>::epsilon()) <
-        counter * params.output_granularity)
+    if ((force == false) && ((time + std::numeric_limits<double>::epsilon()) <
+                             counter * params.output_granularity))
       return;
 
     const std::string file_name =
