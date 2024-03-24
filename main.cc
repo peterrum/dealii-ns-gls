@@ -986,6 +986,9 @@ public:
       &NavierStokesOperator<dim>::do_vmult_cell<false>,
       this);
 
+    for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
+      diagonal.local_element(edge_constrained_indices[i]) = 0.0;
+
     for (auto &i : diagonal)
       i = (std::abs(i) > 1.0e-10) ? (1.0 / i) : 1.0;
   }
