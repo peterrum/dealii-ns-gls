@@ -3253,9 +3253,10 @@ public:
       constraints_homogeneous.distribute(dst);
     };
 
-    nonlinear_solver->postprocess = [&](const VectorType &dst) {
-      output(0.0, mapping, dof_handler, dst, true);
-    };
+    if (false)
+      nonlinear_solver->postprocess = [&](const VectorType &dst) {
+        output(0.0, mapping, dof_handler, dst, true);
+      };
 
     // initialize solution
     SolutionHistory<VectorType> solution(time_integrator_data->get_order() + 1);
