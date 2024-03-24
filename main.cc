@@ -2730,6 +2730,11 @@ public:
     GridGenerator::channel_with_cylinder(tria, 0.03, 2, 2.0, true);
 
     tria.refine_global(n_global_refinements);
+
+    for (const auto &cell : tria.active_cell_iterators())
+      if (cell->center()[0] < 0.4)
+        cell->set_refine_flag();
+    tria.execute_coarsening_and_refinement();
   }
 
   virtual BoundaryDescriptor
@@ -3051,6 +3056,8 @@ public:
                                                        bci,
                                                        constraints,
                                                        mask_v);
+
+            DoFTools::make_hanging_node_constraints(dof_handler, constraints);
 
             constraints.close();
 
