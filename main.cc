@@ -2731,10 +2731,16 @@ public:
 
     tria.refine_global(n_global_refinements);
 
-    for (const auto &cell : tria.active_cell_iterators())
-      if (cell->center()[0] < 0.4)
-        cell->set_refine_flag();
-    tria.execute_coarsening_and_refinement();
+    if (true)
+      {
+        const auto bb =
+          BoundingBox<dim>(Point<dim>(0.2, 0.2)).create_extended(0.12);
+
+        for (const auto &cell : tria.active_cell_iterators())
+          if (bb.point_inside(cell->center()))
+            cell->set_refine_flag();
+        tria.execute_coarsening_and_refinement();
+      }
   }
 
   virtual BoundaryDescriptor
