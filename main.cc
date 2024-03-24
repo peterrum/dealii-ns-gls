@@ -865,7 +865,8 @@ public:
     const TimeIntegratorData<Number> &time_integrator_data,
     const bool                        consider_time_deriverative,
     const bool                        increment_form,
-    const bool                        cell_wise_stabilization)
+    const bool                        cell_wise_stabilization,
+    const unsigned int                mg_level = numbers::invalid_unsigned_int)
     : constraints_inhomogeneous(constraints_inhomogeneous)
     , theta(time_integrator_data.get_theta())
     , nu(nu)
@@ -885,6 +886,7 @@ public:
     typename MatrixFree<dim, Number>::AdditionalData additional_data;
 
     additional_data.mapping_update_flags = update_values | update_gradients;
+    additional_data.mg_level             = mg_level;
 
     matrix_free.reinit(
       mapping, mf_dof_handlers, mf_constraints, quadrature, additional_data);
@@ -895,6 +897,13 @@ public:
     if (consider_time_deriverative)
       {
         AssertThrow(theta[0] == 1.0, ExcInternalError());
+      }
+
+    if (mg_level)
+      {
+        AssertThrow(dof_handler.get_triangulation().has_hanging_nodes() ==
+                      false,
+                    ExcNotImplemented());
       }
   }
 
@@ -918,6 +927,9 @@ public:
   extract_constant_modes() const override
   {
     std::vector<std::vector<bool>> constant_modes;
+
+    if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
+      return constant_modes; // TODO
 
     ComponentMask components(dim + 1, true);
     DoFTools::extract_constant_modes(this->matrix_free.get_dof_handler(),
@@ -1562,9 +1574,21 @@ private:
 
         TrilinosWrappers::SparsityPattern dsp;
 
-        dsp.reinit(dof_handler.locally_owned_dofs(),
+        dsp.reinit(this->matrix_free.get_mg_level() !=
+                       numbers::invalid_unsigned_int ?
+                     dof_handler.locally_owned_mg_dofs(
+                       this->matrix_free.get_mg_level()) :
+                     dof_handler.locally_owned_dofs(),
                    dof_handler.get_communicator());
-        DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints);
+
+        if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
+          MGTools::make_sparsity_pattern(dof_handler,
+                                         dsp,
+                                         this->matrix_free.get_mg_level(),
+                                         constraints);
+        else
+          DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints);
+
         dsp.compress();
 
         system_matrix.reinit(dsp);
@@ -2003,7 +2027,7 @@ private:
     prm.add_parameter("preconditioner",
                       preconditioner,
                       "",
-                      Patterns::Selection("AMG|GMG|ILU"));
+                      Patterns::Selection("AMG|GMG|ILU|GMG-LS"));
     gmg.add_parameters(prm);
 
     // nonlinear solver
@@ -2736,7 +2760,7 @@ public:
 
     tria.refine_global(n_global_refinements);
 
-    if (true)
+    if (false)
       {
         const auto bb =
           BoundingBox<dim>(Point<dim>(0.2, 0.2)).create_extended(0.12);
@@ -2853,7 +2877,10 @@ public:
       AssertThrow(false, ExcNotImplemented());
 
     // set up system
-    parallel::distributed::Triangulation<dim> tria(comm);
+    parallel::distributed::Triangulation<dim> tria(
+      comm,
+      ::Triangulation<dim>::none,
+      parallel::distributed::Triangulation<dim>::construct_multigrid_hierarchy);
 
     simulation->create_triangulation(tria, params.n_global_refinements);
 
@@ -3145,37 +3172,40 @@ public:
       }
     else if (params.preconditioner == "GMG-LS")
       {
+        dof_handler.distribute_mg_dofs(); // TODO
+
         unsigned int minlevel = 0;
         unsigned int maxlevel = tria.n_global_levels() - 1;
 
+        mg_constraints.resize(minlevel, maxlevel);
         mg_ns_operators.resize(minlevel, maxlevel);
         mg_transfers.resize(minlevel, maxlevel);
         mg_transfers_no_constraints.resize(minlevel, maxlevel);
 
-        MGConstrainedDoFs mg_constraints;
-        mg_constraints.initialize(dof_handler);
+        MGConstrainedDoFs mg_constrained_dofs;
+        mg_constrained_dofs.initialize(dof_handler);
 
         for (const auto bci : bcs.all_homogeneous_dbcs)
-          mg_constraints.make_zero_boundary_constraints(dof_handler,
-                                                        {bci},
-                                                        mask_v);
+          mg_constrained_dofs.make_zero_boundary_constraints(dof_handler,
+                                                             {bci},
+                                                             mask_v);
 
         for (const auto bci : bcs.all_homogeneous_nbcs)
-          mg_constraints.make_zero_boundary_constraints(dof_handler,
-                                                        {bci},
-                                                        mask_p);
+          mg_constrained_dofs.make_zero_boundary_constraints(dof_handler,
+                                                             {bci},
+                                                             mask_p);
 
         for (const auto &[bci, _] : bcs.all_inhomogeneous_dbcs)
-          mg_constraints.make_zero_boundary_constraints(dof_handler,
-                                                        {bci},
-                                                        mask_v);
+          mg_constrained_dofs.make_zero_boundary_constraints(dof_handler,
+                                                             {bci},
+                                                             mask_v);
 
         for (unsigned int level = minlevel; level <= maxlevel; ++level)
           {
             AffineConstraints<Number> constraints;
 
             const auto &refinement_edge_indices =
-              mg_constraints.get_refinement_edge_indices(level);
+              mg_constrained_dofs.get_refinement_edge_indices(level);
 
             const auto locally_relevant_dofs =
               DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
@@ -3193,18 +3223,18 @@ public:
 
             constraints.close();
 
-            mg_constraints.add_user_constraints(level, constraints);
+            mg_constrained_dofs.add_user_constraints(level, constraints);
           }
 
         for (unsigned int level = minlevel; level <= maxlevel; ++level)
           {
-            AffineConstraints<Number> constraints;
+            auto &constraints = mg_constraints[level];
 
             const auto locally_relevant_dofs =
               DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
             constraints.reinit(locally_relevant_dofs);
 
-            mg_constraints.merge_constraints(
+            mg_constrained_dofs.merge_constraints(
               constraints, level, true, false, true, true);
 
             if (params.use_matrix_free_ns_operator)
@@ -3224,7 +3254,8 @@ public:
                     *time_integrator_data,
                     params.consider_time_deriverative,
                     increment_form,
-                    params.cell_wise_stabilization);
+                    params.cell_wise_stabilization,
+                    level);
               }
             else
               {
@@ -3245,7 +3276,7 @@ public:
         // create transfer operator for preconditioner (with constraints)
         std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>> transfer =
           std::make_shared<MGTransferGlobalCoarsening<dim, VectorType>>(
-            mg_constraints);
+            mg_constrained_dofs);
         transfer->build(dof_handler, [&](const auto l, auto &vec) {
           mg_ns_operators[l]->initialize_dof_vector(vec);
         });
@@ -3292,7 +3323,7 @@ public:
       [&](const SolutionHistory<VectorType> &solution) {
         ns_operator->set_previous_solution(solution);
 
-        if (params.preconditioner == "GMG")
+        if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
           {
             MGLevelObject<SolutionHistory<VectorType>> all_mg_solution(
               mg_ns_operators.min_level(),
@@ -3329,7 +3360,7 @@ public:
     };
 
     nonlinear_solver->setup_preconditioner = [&](const VectorType &solution) {
-      if (params.preconditioner == "GMG")
+      if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
         {
           MGLevelObject<VectorType> mg_solution(mg_ns_operators.min_level(),
                                                 mg_ns_operators.max_level());
@@ -3432,7 +3463,7 @@ public:
 
         ns_operator->invalidate_system(); // TODO
 
-        if (params.preconditioner == "GMG")
+        if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
           {
             for (unsigned int l = mg_ns_operators.min_level();
                  l <= mg_ns_operators.max_level();
