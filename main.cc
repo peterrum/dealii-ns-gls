@@ -3010,7 +3010,7 @@ public:
           MGTransferGlobalCoarseningTools::create_geometric_coarsening_sequence(
             dof_handler.get_triangulation());
 
-        if (true)
+        if (true /*TODO*/)
           {
             for (unsigned int i = 0; i < mg_trias.size(); ++i)
               {
