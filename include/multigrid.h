@@ -1,6 +1,7 @@
 #pragma once
 
 #include <deal.II/lac/precondition.h>
+#include <deal.II/lac/trilinos_solver.h>
 
 #include <deal.II/matrix_free/operators.h>
 
@@ -197,7 +198,7 @@ struct PreconditionerGMGAdditionalData
     prm.add_parameter("gmg coarse grid solver",
                       coarse_grid_solver,
                       "",
-                      Patterns::Selection("AMG"));
+                      Patterns::Selection("AMG|direct|identity"));
     prm.add_parameter("gmg coarse grid iterate", coarse_grid_iterate);
 
     // coarse-grid GMRES
@@ -255,7 +256,17 @@ public:
     const unsigned int max_level = transfer->max_level();
 
     // wrap level operators
-    mg_matrix = std::make_unique<mg::Matrix<VectorType>>(op);
+    if (consider_edge_constraints)
+      {
+        op_ls.resize(min_level, max_level);
+        for (unsigned int level = min_level; level <= max_level; level++)
+          op_ls[level].initialize(*op[level]);
+        mg_matrix = std::make_unique<mg::Matrix<VectorType>>(op_ls);
+      }
+    else
+      {
+        mg_matrix = std::make_unique<mg::Matrix<VectorType>>(op);
+      }
 
     // create interface matrices
     if (consider_edge_constraints)
@@ -328,8 +339,20 @@ public:
 
         precondition_amg =
           std::make_unique<TrilinosWrappers::PreconditionAMG>();
+
         precondition_amg->initialize(op[min_level]->get_system_matrix(),
                                      amg_data);
+      }
+    else if (additional_data.coarse_grid_solver == "direct")
+      {
+        precondition_direct =
+          std::make_unique<TrilinosWrappers::SolverDirect>();
+
+        precondition_direct->initialize(op[min_level]->get_system_matrix());
+      }
+    else if (additional_data.coarse_grid_solver == "identity")
+      {
+        precondition_identity = std::make_unique<PreconditionIdentity>();
       }
     else
       {
@@ -338,10 +361,22 @@ public:
 
     if (!additional_data.coarse_grid_iterate)
       {
-        mg_coarse = std::make_unique<
-          MGCoarseGridApplyPreconditioner<VectorType,
-                                          TrilinosWrappers::PreconditionAMG>>(
-          *precondition_amg);
+        if (additional_data.coarse_grid_solver == "AMG")
+          mg_coarse = std::make_unique<
+            MGCoarseGridApplyPreconditioner<VectorType,
+                                            TrilinosWrappers::PreconditionAMG>>(
+            *precondition_amg);
+        else if (additional_data.coarse_grid_solver == "direct")
+          mg_coarse = std::make_unique<
+            MGCoarseGridApplyPreconditioner<VectorType,
+                                            TrilinosWrappers::SolverDirect>>(
+            *precondition_direct);
+        else if (additional_data.coarse_grid_solver == "identity")
+          mg_coarse = std::make_unique<
+            MGCoarseGridApplyPreconditioner<VectorType, PreconditionIdentity>>(
+            *precondition_identity);
+        else
+          AssertThrow(false, ExcInternalError());
       }
     else
       {
@@ -356,6 +391,15 @@ public:
 
         coarse_grid_solver = std::make_unique<SolverGMRES<VectorType>>(
           *coarse_grid_solver_control);
+
+        if (false)
+          coarse_grid_solver->connect([](const auto i,
+                                         const auto v,
+                                         const auto &) -> SolverControl::State {
+            std::cout << i << ": " << v << std::endl;
+
+            return SolverControl::State::success;
+          });
 
         mg_coarse = std::make_unique<
           MGCoarseGridIterativeSolver<VectorType,
@@ -375,7 +419,7 @@ public:
 
     if (consider_edge_constraints &&
         dof_handler.get_triangulation().has_hanging_nodes())
-      mg->set_edge_matrices(*mg_interface, *mg_interface);
+      mg->set_edge_in_matrix(*mg_interface);
 
     preconditioner =
       std::make_unique<PreconditionMG<dim, VectorType, MGTransferType>>(
@@ -395,6 +439,10 @@ private:
 
   const PreconditionerGMGAdditionalData additional_data;
 
+  mutable MGLevelObject<
+    MatrixFreeOperators::MGInterfaceOperator<LevelMatrixType>>
+    op_ls;
+
   mutable std::unique_ptr<mg::Matrix<VectorType>> mg_matrix;
 
   mutable MGLevelObject<
@@ -408,6 +456,10 @@ private:
     mg_smoother;
 
   mutable std::unique_ptr<TrilinosWrappers::PreconditionAMG> precondition_amg;
+
+  mutable std::unique_ptr<TrilinosWrappers::SolverDirect> precondition_direct;
+
+  mutable std::unique_ptr<PreconditionIdentity> precondition_identity;
 
   mutable std::unique_ptr<SolverControl> coarse_grid_solver_control;
 

@@ -519,12 +519,7 @@ public:
 
     dst = 0.0;
 
-    try
-      {
-        solver.solve(op, dst, src, preconditioner);
-      }
-    catch (const SolverControl::NoConvergence &)
-      {}
+    solver.solve(op, dst, src, preconditioner);
 
     pcout << "    [L] solved in " << solver_control.last_step()
           << " iterations." << std::endl;
@@ -2972,6 +2967,110 @@ private:
 
 
 /**
+ * Flow-past cylinder simulation with alternative mesh.
+ */
+template <int dim>
+class SimulationRotation : public SimulationBase<dim>
+{
+public:
+  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
+
+  SimulationRotation()
+    : use_no_slip_cylinder_bc(true)
+  {}
+
+  void
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
+  {
+    GridGenerator::hyper_shell(tria, Point<dim>(), 0.25, 1, 4, true);
+
+    tria.refine_global(n_global_refinements);
+
+    if (false)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          if (cell->at_boundary())
+            cell->set_refine_flag();
+        tria.execute_coarsening_and_refinement();
+      }
+    else if (false)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          if (!cell->at_boundary())
+            cell->set_refine_flag();
+        tria.execute_coarsening_and_refinement();
+      }
+    else if (true)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          if ((0.45 < cell->center().norm()) && (cell->center().norm() < 0.85))
+            cell->set_refine_flag();
+        tria.execute_coarsening_and_refinement();
+      }
+  }
+
+  virtual BoundaryDescriptor
+  get_boundary_descriptor() const override
+  {
+    BoundaryDescriptor bcs;
+
+    // inflow
+    bcs.all_inhomogeneous_dbcs.emplace_back(
+      0, std::make_shared<InflowBoundaryValues>());
+
+    // walls
+    bcs.all_homogeneous_dbcs.push_back(1);
+
+    return bcs;
+  }
+
+  void
+  postprocess(const double           t,
+              const Mapping<dim>    &mapping,
+              const DoFHandler<dim> &dof_handler,
+              const VectorType      &solution) const override
+  {
+    // nothing to do
+    (void)t;
+    (void)mapping;
+    (void)dof_handler;
+    (void)solution;
+  }
+
+private:
+  const bool use_no_slip_cylinder_bc;
+
+  class InflowBoundaryValues : public Function<dim>
+  {
+  public:
+    InflowBoundaryValues()
+      : Function<dim>(dim + 1)
+      , t_(0.0){};
+
+    double
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      (void)p;
+
+      if (component == 0)
+        return -p[1];
+      else if (component == 1)
+        return p[0];
+      else if (component == 2)
+        return 0;
+
+      return 0;
+    }
+
+  private:
+    const double t_;
+  };
+};
+
+
+
+/**
  * Driver class for executing the simulation.
  */
 template <int dim>
@@ -3002,6 +3101,8 @@ public:
       simulation = std::make_shared<SimulationCylinderLethe<dim>>();
     else if (params.simulation_name == "cylinder lethe 2")
       simulation = std::make_shared<SimulationCylinderLethe2<dim>>();
+    else if (params.simulation_name == "rotation")
+      simulation = std::make_shared<SimulationRotation<dim>>();
     else
       AssertThrow(false, ExcNotImplemented());
 
