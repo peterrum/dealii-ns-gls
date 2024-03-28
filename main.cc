@@ -1068,7 +1068,8 @@ public:
         integrator.reinit(cell);
 
         integrator.read_dof_values_plain(vec);
-        integrator.evaluate(EvaluationFlags::EvaluationFlags::gradients);
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                            EvaluationFlags::EvaluationFlags::gradients);
 
         integrator_scalar.reinit(cell);
         integrator_scalar.read_dof_values_plain(vec);
@@ -2987,7 +2988,7 @@ public:
 
     tria.refine_global(n_global_refinements);
 
-    if (false)
+    if (true)
       {
         for (const auto &cell : tria.active_cell_iterators())
           if (cell->at_boundary())
@@ -2997,15 +2998,9 @@ public:
     else if (false)
       {
         for (const auto &cell : tria.active_cell_iterators())
-          if (!cell->at_boundary())
-            cell->set_refine_flag();
-        tria.execute_coarsening_and_refinement();
-      }
-    else if (true)
-      {
-        for (const auto &cell : tria.active_cell_iterators())
-          if ((0.45 < cell->center().norm()) && (cell->center().norm() < 0.85))
-            cell->set_refine_flag();
+          for (const auto &face : cell->face_iterators())
+            if (face->at_boundary() && (face->boundary_id() == 0))
+              cell->set_refine_flag();
         tria.execute_coarsening_and_refinement();
       }
   }
