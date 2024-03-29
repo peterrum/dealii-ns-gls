@@ -46,7 +46,6 @@ using SparseMatrixType = TrilinosWrappers::SparseMatrix;
 /**
  * Base class for BDF and θ-method.
  */
-template <typename Number>
 class TimeIntegratorData
 {
 public:
@@ -74,8 +73,7 @@ public:
 /**
  * BDF implementation.
  */
-template <typename Number>
-class TimeIntegratorDataBDF : public TimeIntegratorData<Number>
+class TimeIntegratorDataBDF : public TimeIntegratorData
 {
 public:
   TimeIntegratorDataBDF(const unsigned int order)
@@ -178,8 +176,7 @@ private:
 /**
  * θ-method implementation.
  */
-template <typename Number>
-class TimeIntegratorDataTheta : public TimeIntegratorData<Number>
+class TimeIntegratorDataTheta : public TimeIntegratorData
 {
 public:
   TimeIntegratorDataTheta(const Number theta)
@@ -237,7 +234,6 @@ private:
 /**
  * A container storing solution vectors of multiple time steps.
  */
-template <typename VectorType>
 class SolutionHistory
 {
 public:
@@ -301,7 +297,7 @@ public:
   invalidate_system() = 0;
 
   virtual void
-  set_previous_solution(const SolutionHistory<VectorType> &vec) = 0;
+  set_previous_solution(const SolutionHistory &vec) = 0;
 
   virtual void
   set_previous_solution(const VectorType &vec) = 0;
@@ -869,20 +865,20 @@ public:
   using FECellIntegrator = FEEvaluation<dim, -1, 0, dim + 1, Number>;
 
   NavierStokesOperator(
-    const Mapping<dim>               &mapping,
-    const DoFHandler<dim>            &dof_handler,
-    const AffineConstraints<Number>  &constraints_homogeneous,
-    const AffineConstraints<Number>  &constraints,
-    const AffineConstraints<Number>  &constraints_inhomogeneous,
-    const Quadrature<dim>            &quadrature,
-    const Number                      nu,
-    const Number                      c_1,
-    const Number                      c_2,
-    const TimeIntegratorData<Number> &time_integrator_data,
-    const bool                        consider_time_deriverative,
-    const bool                        increment_form,
-    const bool                        cell_wise_stabilization,
-    const unsigned int                mg_level = numbers::invalid_unsigned_int)
+    const Mapping<dim>              &mapping,
+    const DoFHandler<dim>           &dof_handler,
+    const AffineConstraints<Number> &constraints_homogeneous,
+    const AffineConstraints<Number> &constraints,
+    const AffineConstraints<Number> &constraints_inhomogeneous,
+    const Quadrature<dim>           &quadrature,
+    const Number                     nu,
+    const Number                     c_1,
+    const Number                     c_2,
+    const TimeIntegratorData        &time_integrator_data,
+    const bool                       consider_time_deriverative,
+    const bool                       increment_form,
+    const bool                       cell_wise_stabilization,
+    const unsigned int               mg_level = numbers::invalid_unsigned_int)
     : constraints_inhomogeneous(constraints_inhomogeneous)
     , theta(time_integrator_data.get_theta())
     , nu(nu)
@@ -995,7 +991,7 @@ public:
   }
 
   void
-  set_previous_solution(const SolutionHistory<VectorType> &history) override
+  set_previous_solution(const SolutionHistory &history) override
   {
     this->valid_system = false;
 
@@ -1326,14 +1322,14 @@ private:
   VectorType               linearization_point;
   mutable SparseMatrixType system_matrix;
 
-  const VectorizedArray<Number>     theta;
-  const VectorizedArray<Number>     nu;
-  const Number                      c_1;
-  const Number                      c_2;
-  const TimeIntegratorData<Number> &time_integrator_data;
-  const bool                        consider_time_deriverative;
-  const bool                        increment_form;
-  const bool                        cell_wise_stabilization;
+  const VectorizedArray<Number> theta;
+  const VectorizedArray<Number> nu;
+  const Number                  c_1;
+  const Number                  c_2;
+  const TimeIntegratorData     &time_integrator_data;
+  const bool                    consider_time_deriverative;
+  const bool                    increment_form;
+  const bool                    cell_wise_stabilization;
 
   mutable bool valid_system;
 
@@ -1745,14 +1741,14 @@ class NavierStokesOperatorMatrixBased : public OperatorBase
 {
 public:
   NavierStokesOperatorMatrixBased(
-    const Mapping<dim>               &mapping,
-    const DoFHandler<dim>            &dof_handler,
-    const AffineConstraints<Number>  &constraints,
-    const Quadrature<dim>            &quadrature,
-    const Number                      nu,
-    const Number                      c_1,
-    const Number                      c_2,
-    const TimeIntegratorData<Number> &time_integrator_data)
+    const Mapping<dim>              &mapping,
+    const DoFHandler<dim>           &dof_handler,
+    const AffineConstraints<Number> &constraints,
+    const Quadrature<dim>           &quadrature,
+    const Number                     nu,
+    const Number                     c_1,
+    const Number                     c_2,
+    const TimeIntegratorData        &time_integrator_data)
     : mapping(mapping)
     , dof_handler(dof_handler)
     , constraints(constraints)
@@ -1810,7 +1806,7 @@ public:
   }
 
   void
-  set_previous_solution(const SolutionHistory<VectorType> &vec) override
+  set_previous_solution(const SolutionHistory &vec) override
   {
     this->set_previous_solution(vec.get_vectors()[1]);
   }
@@ -1867,15 +1863,15 @@ public:
   }
 
 private:
-  const Mapping<dim>               &mapping;
-  const DoFHandler<dim>            &dof_handler;
-  const AffineConstraints<Number>  &constraints;
-  const Quadrature<dim>            &quadrature;
-  const Number                      theta;
-  const Number                      nu;
-  const Number                      c_1;
-  const Number                      c_2;
-  const TimeIntegratorData<Number> &time_integrator_data;
+  const Mapping<dim>              &mapping;
+  const DoFHandler<dim>           &dof_handler;
+  const AffineConstraints<Number> &constraints;
+  const Quadrature<dim>           &quadrature;
+  const Number                     theta;
+  const Number                     nu;
+  const Number                     c_1;
+  const Number                     c_2;
+  const TimeIntegratorData        &time_integrator_data;
 
   mutable bool valid_system;
 
@@ -3178,14 +3174,14 @@ public:
     // note: filled during time loop
 
     // set up time integration scheme
-    std::shared_ptr<TimeIntegratorData<Number>> time_integrator_data;
+    std::shared_ptr<TimeIntegratorData> time_integrator_data;
 
     if (params.time_intration == "bdf")
       time_integrator_data =
-        std::make_shared<TimeIntegratorDataBDF<Number>>(params.bdf_order);
+        std::make_shared<TimeIntegratorDataBDF>(params.bdf_order);
     else if (params.time_intration == "theta")
       time_integrator_data =
-        std::make_shared<TimeIntegratorDataTheta<Number>>(params.theta);
+        std::make_shared<TimeIntegratorDataTheta>(params.theta);
     else
       AssertThrow(false, ExcNotImplemented());
 
@@ -3538,38 +3534,36 @@ public:
     else
       AssertThrow(false, ExcNotImplemented());
 
-    const auto set_previous_solution =
-      [&](const SolutionHistory<VectorType> &solution) {
-        ns_operator->set_previous_solution(solution);
+    const auto set_previous_solution = [&](const SolutionHistory &solution) {
+      ns_operator->set_previous_solution(solution);
 
-        if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
-          {
-            MGLevelObject<SolutionHistory<VectorType>> all_mg_solution(
-              mg_ns_operators.min_level(),
-              mg_ns_operators.max_level(),
-              time_integrator_data->get_order() + 1);
+      if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
+        {
+          MGLevelObject<SolutionHistory> all_mg_solution(
+            mg_ns_operators.min_level(),
+            mg_ns_operators.max_level(),
+            time_integrator_data->get_order() + 1);
 
-            for (unsigned int i = 1; i <= time_integrator_data->get_order();
-                 ++i)
-              {
-                MGLevelObject<VectorType> mg_solution(
-                  mg_ns_operators.min_level(), mg_ns_operators.max_level());
+          for (unsigned int i = 1; i <= time_integrator_data->get_order(); ++i)
+            {
+              MGLevelObject<VectorType> mg_solution(
+                mg_ns_operators.min_level(), mg_ns_operators.max_level());
 
-                mg_transfer_no_constraints->interpolate_to_mg(
-                  dof_handler, mg_solution, solution.get_vectors()[i]);
+              mg_transfer_no_constraints->interpolate_to_mg(
+                dof_handler, mg_solution, solution.get_vectors()[i]);
 
-                for (unsigned int l = mg_ns_operators.min_level();
-                     l <= mg_ns_operators.max_level();
-                     ++l)
-                  all_mg_solution[l].get_vectors()[i] = mg_solution[l];
-              }
+              for (unsigned int l = mg_ns_operators.min_level();
+                   l <= mg_ns_operators.max_level();
+                   ++l)
+                all_mg_solution[l].get_vectors()[i] = mg_solution[l];
+            }
 
-            for (unsigned int l = mg_ns_operators.min_level();
-                 l <= mg_ns_operators.max_level();
-                 ++l)
-              mg_ns_operators[l]->set_previous_solution(all_mg_solution[l]);
-          }
-      };
+          for (unsigned int l = mg_ns_operators.min_level();
+               l <= mg_ns_operators.max_level();
+               ++l)
+            mg_ns_operators[l]->set_previous_solution(all_mg_solution[l]);
+        }
+    };
 
     nonlinear_solver->setup_jacobian = [&](const VectorType &src) {
       ns_operator->set_linearization_point(src);
@@ -3622,7 +3616,7 @@ public:
       };
 
     // initialize solution
-    SolutionHistory<VectorType> solution(time_integrator_data->get_order() + 1);
+    SolutionHistory solution(time_integrator_data->get_order() + 1);
 
     for (auto &vec : solution.get_vectors())
       ns_operator->initialize_dof_vector(vec);
