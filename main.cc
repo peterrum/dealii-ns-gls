@@ -32,14 +32,11 @@
 
 #include <fstream>
 
+#include "include/config.h"
 #include "include/grid_cylinder.h"
 #include "include/grid_cylinder_old.h"
 
 using namespace dealii;
-
-using Number           = double;
-using VectorType       = LinearAlgebra::distributed::Vector<Number>;
-using SparseMatrixType = TrilinosWrappers::SparseMatrix;
 
 
 
