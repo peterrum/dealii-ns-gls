@@ -2,6 +2,7 @@
 
 #include <deal.II/multigrid/mg_tools.h>
 
+#include "config.h"
 #include "operator_base.h"
 
 using namespace dealii;

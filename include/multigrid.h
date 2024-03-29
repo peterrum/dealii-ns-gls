@@ -12,6 +12,8 @@
 #include <deal.II/multigrid/mg_transfer_global_coarsening.h>
 #include <deal.II/multigrid/multigrid.h>
 
+#include "config.h"
+#include "preconditioner.h"
 
 
 struct PreconditionerGMGAdditionalData
