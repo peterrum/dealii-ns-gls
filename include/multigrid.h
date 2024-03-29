@@ -300,6 +300,33 @@ public:
           op[level]->get_constraints());
       }
 
+    if (false)
+      for (unsigned int level = min_level; level <= max_level; ++level)
+        {
+          const auto &matrix = op[level]->get_system_matrix();
+
+          LAPACKFullMatrix<double> lapack_full_matrix;
+          lapack_full_matrix.copy_from(matrix);
+          lapack_full_matrix.compute_eigenvalues();
+
+          std::vector<double> eigenvalues;
+
+          for (unsigned int i = 0; i < lapack_full_matrix.m(); ++i)
+            eigenvalues.push_back(lapack_full_matrix.eigenvalue(i).real());
+
+          std::sort(eigenvalues.begin(), eigenvalues.end());
+
+          std::cout << level << " " << eigenvalues.size() << " "
+                    << eigenvalues[0] << " " << eigenvalues.back() << std::endl;
+
+          if (false)
+            {
+              for (const auto i : eigenvalues)
+                std::cout << i << " ";
+              std::cout << std::endl;
+            }
+        }
+
     mg_smoother = std::make_unique<
       MGSmootherPrecondition<LevelMatrixType, SmootherType, VectorType>>();
     mg_smoother->initialize(op, smoother_data);
@@ -340,8 +367,9 @@ public:
         precondition_amg =
           std::make_unique<TrilinosWrappers::PreconditionAMG>();
 
-        precondition_amg->initialize(op[min_level]->get_system_matrix(),
-                                     amg_data);
+        const auto &matrix = op[min_level]->get_system_matrix();
+
+        precondition_amg->initialize(matrix, amg_data);
       }
     else if (additional_data.coarse_grid_solver == "direct")
       {
