@@ -281,6 +281,9 @@ public:
 class OperatorBase : public Subscriptor
 {
 public:
+  using value_type = Number;
+  using size_type  = types::global_dof_index;
+
   virtual types::global_dof_index
   m() const = 0;
 
@@ -319,6 +322,24 @@ public:
   Tvmult(VectorType &dst, const VectorType &src) const
   {
     vmult(dst, src);
+  }
+
+  virtual void
+  vmult_interface_down(VectorType &dst, const VectorType &src) const
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    (void)dst;
+    (void)src;
+  }
+
+  virtual void
+  vmult_interface_up(VectorType &dst, const VectorType &src) const
+  {
+    AssertThrow(false, ExcNotImplemented());
+
+    (void)dst;
+    (void)src;
   }
 
   virtual std::vector<std::vector<bool>>
@@ -498,12 +519,7 @@ public:
 
     dst = 0.0;
 
-    try
-      {
-        solver.solve(op, dst, src, preconditioner);
-      }
-    catch (const SolverControl::NoConvergence &)
-      {}
+    solver.solve(op, dst, src, preconditioner);
 
     pcout << "    [L] solved in " << solver_control.last_step()
           << " iterations." << std::endl;
@@ -541,6 +557,8 @@ public:
 
   std::function<void(VectorType &dst, const VectorType &src)>
     solve_with_jacobian;
+
+  std::function<void(const VectorType &dst)> postprocess;
 };
 
 
@@ -614,6 +632,9 @@ public:
         this->solve_with_jacobian(inc, rhs);
 
         solution.add(1.0, inc);
+
+        if (postprocess)
+          this->postprocess(solution);
 
         // set linearization point
         this->setup_jacobian(solution);
@@ -860,7 +881,8 @@ public:
     const TimeIntegratorData<Number> &time_integrator_data,
     const bool                        consider_time_deriverative,
     const bool                        increment_form,
-    const bool                        cell_wise_stabilization)
+    const bool                        cell_wise_stabilization,
+    const unsigned int                mg_level = numbers::invalid_unsigned_int)
     : constraints_inhomogeneous(constraints_inhomogeneous)
     , theta(time_integrator_data.get_theta())
     , nu(nu)
@@ -880,6 +902,7 @@ public:
     typename MatrixFree<dim, Number>::AdditionalData additional_data;
 
     additional_data.mapping_update_flags = update_values | update_gradients;
+    additional_data.mg_level             = mg_level;
 
     matrix_free.reinit(
       mapping, mf_dof_handlers, mf_constraints, quadrature, additional_data);
@@ -890,6 +913,29 @@ public:
     if (consider_time_deriverative)
       {
         AssertThrow(theta[0] == 1.0, ExcInternalError());
+      }
+
+    if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
+      {
+        std::vector<types::global_dof_index> interface_indices;
+        IndexSet                             refinement_edge_indices;
+        refinement_edge_indices = get_refinement_edges(this->matrix_free);
+        refinement_edge_indices.fill_index_vector(interface_indices);
+
+        edge_constrained_indices.clear();
+        edge_constrained_indices.reserve(interface_indices.size());
+        edge_constrained_values.resize(interface_indices.size());
+        const IndexSet &locally_owned =
+          this->matrix_free.get_dof_handler().locally_owned_mg_dofs(
+            this->matrix_free.get_mg_level());
+        for (unsigned int i = 0; i < interface_indices.size(); ++i)
+          if (locally_owned.is_element(interface_indices[i]))
+            edge_constrained_indices.push_back(
+              locally_owned.index_within_set(interface_indices[i]));
+
+        this->has_edge_constrained_indices =
+          Utilities::MPI::max(edge_constrained_indices.size(),
+                              dof_handler.get_communicator()) > 0;
       }
   }
 
@@ -914,6 +960,9 @@ public:
   {
     std::vector<std::vector<bool>> constant_modes;
 
+    if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
+      return constant_modes; // TODO
+
     ComponentMask components(dim + 1, true);
     DoFTools::extract_constant_modes(this->matrix_free.get_dof_handler(),
                                      components,
@@ -931,6 +980,9 @@ public:
       diagonal,
       &NavierStokesOperator<dim>::do_vmult_cell<false>,
       this);
+
+    for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
+      diagonal.local_element(edge_constrained_indices[i]) = 0.0;
 
     for (auto &i : diagonal)
       i = (std::abs(i) > 1.0e-10) ? (1.0 / i) : 1.0;
@@ -1016,7 +1068,8 @@ public:
         integrator.reinit(cell);
 
         integrator.read_dof_values_plain(vec);
-        integrator.evaluate(EvaluationFlags::EvaluationFlags::gradients);
+        integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                            EvaluationFlags::EvaluationFlags::gradients);
 
         integrator_scalar.reinit(cell);
         integrator_scalar.read_dof_values_plain(vec);
@@ -1181,12 +1234,74 @@ public:
   void
   vmult(VectorType &dst, const VectorType &src) const override
   {
+    // save values for edge constrained dofs and set them to 0 in src vector
+    for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
+      {
+        edge_constrained_values[i] = std::pair<Number, Number>(
+          src.local_element(edge_constrained_indices[i]),
+          dst.local_element(edge_constrained_indices[i]));
+
+        const_cast<LinearAlgebra::distributed::Vector<Number> &>(src)
+          .local_element(edge_constrained_indices[i]) = 0.;
+      }
+
     this->matrix_free.cell_loop(
       &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
 
     for (unsigned int i = 0; i < constrained_indices.size(); ++i)
       dst.local_element(constrained_indices[i]) =
         src.local_element(constrained_indices[i]);
+
+    // restoring edge constrained dofs in src and dst
+    for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
+      {
+        const_cast<LinearAlgebra::distributed::Vector<Number> &>(src)
+          .local_element(edge_constrained_indices[i]) =
+          edge_constrained_values[i].first;
+        dst.local_element(edge_constrained_indices[i]) =
+          edge_constrained_values[i].first;
+      }
+  }
+
+  void
+  vmult_interface_down(VectorType &dst, const VectorType &src) const override
+  {
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
+
+    // set constrained dofs as the sum of current dst value and src value
+    for (unsigned int i = 0; i < constrained_indices.size(); ++i)
+      dst.local_element(constrained_indices[i]) =
+        src.local_element(constrained_indices[i]);
+  }
+
+  void
+  vmult_interface_up(VectorType &dst, const VectorType &src) const override
+  {
+    if (has_edge_constrained_indices == false)
+      {
+        dst = Number(0.);
+        return;
+      }
+
+    dst = 0.0;
+
+    // make a copy of src vector and set everything to 0 except edge
+    // constrained dofs
+    VectorType src_cpy;
+    src_cpy.reinit(src, /*omit_zeroing_entries=*/false);
+
+    for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
+      src_cpy.local_element(edge_constrained_indices[i]) =
+        src.local_element(edge_constrained_indices[i]);
+
+    // do loop with copy of src
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim>::do_vmult_range<false>,
+      this,
+      dst,
+      src_cpy,
+      false);
   }
 
   const SparseMatrixType &
@@ -1557,9 +1672,21 @@ private:
 
         TrilinosWrappers::SparsityPattern dsp;
 
-        dsp.reinit(dof_handler.locally_owned_dofs(),
+        dsp.reinit(this->matrix_free.get_mg_level() !=
+                       numbers::invalid_unsigned_int ?
+                     dof_handler.locally_owned_mg_dofs(
+                       this->matrix_free.get_mg_level()) :
+                     dof_handler.locally_owned_dofs(),
                    dof_handler.get_communicator());
-        DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints);
+
+        if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
+          MGTools::make_sparsity_pattern(dof_handler,
+                                         dsp,
+                                         this->matrix_free.get_mg_level(),
+                                         constraints);
+        else
+          DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints);
+
         dsp.compress();
 
         system_matrix.reinit(dsp);
@@ -1578,6 +1705,33 @@ private:
 
         this->valid_system = true;
       }
+  }
+
+  std::vector<unsigned int> edge_constrained_indices;
+
+  bool has_edge_constrained_indices = false;
+
+  mutable std::vector<std::pair<Number, Number>> edge_constrained_values;
+
+  std::vector<bool> edge_constrained_cell;
+
+  static IndexSet
+  get_refinement_edges(const MatrixFree<dim, Number> &matrix_free)
+  {
+    const unsigned int level = matrix_free.get_mg_level();
+
+    std::vector<IndexSet> refinement_edge_indices;
+    refinement_edge_indices.clear();
+    const unsigned int nlevels =
+      matrix_free.get_dof_handler().get_triangulation().n_global_levels();
+    refinement_edge_indices.resize(nlevels);
+    for (unsigned int l = 0; l < nlevels; l++)
+      refinement_edge_indices[l] =
+        IndexSet(matrix_free.get_dof_handler().n_dofs(l));
+
+    MGTools::extract_inner_interface_dofs(matrix_free.get_dof_handler(),
+                                          refinement_edge_indices);
+    return refinement_edge_indices[level];
   }
 };
 
@@ -1998,7 +2152,7 @@ private:
     prm.add_parameter("preconditioner",
                       preconditioner,
                       "",
-                      Patterns::Selection("AMG|GMG|ILU"));
+                      Patterns::Selection("AMG|GMG|ILU|GMG-LS"));
     gmg.add_parameters(prm);
 
     // nonlinear solver
@@ -2037,7 +2191,8 @@ public:
   };
 
   virtual void
-  create_triangulation(Triangulation<dim> &tria) const = 0;
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const = 0;
 
   virtual BoundaryDescriptor
   get_boundary_descriptor() const = 0;
@@ -2072,7 +2227,8 @@ public:
   {}
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     std::vector<unsigned int> n_subdivisions(dim, 1);
     n_subdivisions[0] *= n_stretching;
@@ -2088,6 +2244,8 @@ public:
       tria, n_subdivisions, p0, p1, true);
 
     tria.refine_global(2);
+
+    tria.refine_global(n_global_refinements);
   }
 
   virtual BoundaryDescriptor
@@ -2158,9 +2316,12 @@ public:
   }
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     ExaDG::FlowPastCylinder::create_coarse_grid(tria);
+
+    tria.refine_global(n_global_refinements);
   }
 
   virtual BoundaryDescriptor
@@ -2385,7 +2546,8 @@ public:
   }
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     if (false /* TODO */)
       cylinder(tria,
@@ -2397,6 +2559,8 @@ public:
                ExaDG::FlowPastCylinder::D);
     else
       cylinder(tria, 4.0, 2.0, 0.6, 0.5);
+
+    tria.refine_global(n_global_refinements);
   }
 
   virtual BoundaryDescriptor
@@ -2614,7 +2778,8 @@ public:
   {}
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     GridIn<dim> grid_in(tria);
     grid_in.read("../mesh/cylinder.msh");
@@ -2622,6 +2787,8 @@ public:
     Point<dim>                   circleCenter(8, 8);
     const SphericalManifold<dim> manifold_description(circleCenter);
     tria.set_manifold(0, manifold_description);
+
+    tria.refine_global(n_global_refinements);
   }
 
   virtual BoundaryDescriptor
@@ -2711,9 +2878,23 @@ public:
   {}
 
   void
-  create_triangulation(Triangulation<dim> &tria) const override
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
   {
     GridGenerator::channel_with_cylinder(tria, 0.03, 2, 2.0, true);
+
+    tria.refine_global(n_global_refinements);
+
+    if (true)
+      {
+        const auto bb =
+          BoundingBox<dim>(Point<dim>(0.2, 0.2)).create_extended(0.12);
+
+        for (const auto &cell : tria.active_cell_iterators())
+          if (bb.point_inside(cell->center()))
+            cell->set_refine_flag();
+        tria.execute_coarsening_and_refinement();
+      }
   }
 
   virtual BoundaryDescriptor
@@ -2787,6 +2968,104 @@ private:
 
 
 /**
+ * Flow-past cylinder simulation with alternative mesh.
+ */
+template <int dim>
+class SimulationRotation : public SimulationBase<dim>
+{
+public:
+  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
+
+  SimulationRotation()
+    : use_no_slip_cylinder_bc(true)
+  {}
+
+  void
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override
+  {
+    GridGenerator::hyper_shell(tria, Point<dim>(), 0.25, 1, 4, true);
+
+    tria.refine_global(n_global_refinements);
+
+    if (true)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          if (cell->at_boundary())
+            cell->set_refine_flag();
+        tria.execute_coarsening_and_refinement();
+      }
+    else if (false)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          for (const auto &face : cell->face_iterators())
+            if (face->at_boundary() && (face->boundary_id() == 0))
+              cell->set_refine_flag();
+        tria.execute_coarsening_and_refinement();
+      }
+  }
+
+  virtual BoundaryDescriptor
+  get_boundary_descriptor() const override
+  {
+    BoundaryDescriptor bcs;
+
+    // inflow
+    bcs.all_inhomogeneous_dbcs.emplace_back(
+      0, std::make_shared<InflowBoundaryValues>());
+
+    // walls
+    bcs.all_homogeneous_dbcs.push_back(1);
+
+    return bcs;
+  }
+
+  void
+  postprocess(const double           t,
+              const Mapping<dim>    &mapping,
+              const DoFHandler<dim> &dof_handler,
+              const VectorType      &solution) const override
+  {
+    // nothing to do
+    (void)t;
+    (void)mapping;
+    (void)dof_handler;
+    (void)solution;
+  }
+
+private:
+  const bool use_no_slip_cylinder_bc;
+
+  class InflowBoundaryValues : public Function<dim>
+  {
+  public:
+    InflowBoundaryValues()
+      : Function<dim>(dim + 1)
+      , t_(0.0){};
+
+    double
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      (void)p;
+
+      if (component == 0)
+        return -p[1];
+      else if (component == 1)
+        return p[0];
+      else if (component == 2)
+        return 0;
+
+      return 0;
+    }
+
+  private:
+    const double t_;
+  };
+};
+
+
+
+/**
  * Driver class for executing the simulation.
  */
 template <int dim>
@@ -2817,14 +3096,18 @@ public:
       simulation = std::make_shared<SimulationCylinderLethe<dim>>();
     else if (params.simulation_name == "cylinder lethe 2")
       simulation = std::make_shared<SimulationCylinderLethe2<dim>>();
+    else if (params.simulation_name == "rotation")
+      simulation = std::make_shared<SimulationRotation<dim>>();
     else
       AssertThrow(false, ExcNotImplemented());
 
     // set up system
-    parallel::distributed::Triangulation<dim> tria(comm);
+    parallel::distributed::Triangulation<dim> tria(
+      comm,
+      ::Triangulation<dim>::none,
+      parallel::distributed::Triangulation<dim>::construct_multigrid_hierarchy);
 
-    simulation->create_triangulation(tria);
-    tria.refine_global(params.n_global_refinements);
+    simulation->create_triangulation(tria, params.n_global_refinements);
 
     tria.reset_all_manifolds(); // TODO: problem with ChartManifold
 
@@ -2874,6 +3157,8 @@ public:
     for (const auto bci : bcs.all_slip_bcs)
       VectorTools::compute_no_normal_flux_constraints(
         dof_handler, 0, {bci}, constraints, mapping);
+
+    DoFTools::make_hanging_node_constraints(dof_handler, constraints);
 
     constraints_copy.copy_from(constraints);
 
@@ -2977,7 +3262,7 @@ public:
           MGTransferGlobalCoarseningTools::create_geometric_coarsening_sequence(
             dof_handler.get_triangulation());
 
-        if (true)
+        if (true /*TODO*/)
           {
             for (unsigned int i = 0; i < mg_trias.size(); ++i)
               {
@@ -3034,6 +3319,8 @@ public:
                                                        bci,
                                                        constraints,
                                                        mask_v);
+
+            DoFTools::make_hanging_node_constraints(dof_handler, constraints);
 
             constraints.close();
 
@@ -3103,10 +3390,121 @@ public:
             });
 
         // create preconditioner
-        preconditioner =
-          std::make_shared<PreconditionerGMG<dim>>(mg_ns_operators,
-                                                   transfer,
-                                                   params.gmg);
+        preconditioner = std::make_shared<PreconditionerGMG<dim>>(
+          dof_handler, mg_ns_operators, transfer, false, params.gmg);
+      }
+    else if (params.preconditioner == "GMG-LS")
+      {
+        dof_handler.distribute_mg_dofs(); // TODO
+
+        unsigned int minlevel = 0;
+        unsigned int maxlevel = tria.n_global_levels() - 1;
+
+        mg_constraints.resize(minlevel, maxlevel);
+        mg_ns_operators.resize(minlevel, maxlevel);
+
+        MGConstrainedDoFs mg_constrained_dofs;
+        mg_constrained_dofs.initialize(dof_handler);
+
+        for (const auto bci : bcs.all_homogeneous_dbcs)
+          mg_constrained_dofs.make_zero_boundary_constraints(dof_handler,
+                                                             {bci},
+                                                             mask_v);
+
+        for (const auto bci : bcs.all_homogeneous_nbcs)
+          mg_constrained_dofs.make_zero_boundary_constraints(dof_handler,
+                                                             {bci},
+                                                             mask_p);
+
+        for (const auto &[bci, _] : bcs.all_inhomogeneous_dbcs)
+          mg_constrained_dofs.make_zero_boundary_constraints(dof_handler,
+                                                             {bci},
+                                                             mask_v);
+
+        for (unsigned int level = minlevel; level <= maxlevel; ++level)
+          {
+            AffineConstraints<Number> constraints;
+
+            const auto &refinement_edge_indices =
+              mg_constrained_dofs.get_refinement_edge_indices(level);
+
+            const auto locally_relevant_dofs =
+              DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
+            constraints.reinit(locally_relevant_dofs);
+
+            for (const auto bci : bcs.all_slip_bcs)
+              VectorTools::compute_no_normal_flux_constraints_on_level(
+                dof_handler,
+                0,
+                {bci},
+                constraints,
+                mapping,
+                refinement_edge_indices,
+                level);
+
+            constraints.close();
+
+            mg_constrained_dofs.add_user_constraints(level, constraints);
+          }
+
+        for (unsigned int level = minlevel; level <= maxlevel; ++level)
+          {
+            auto &constraints = mg_constraints[level];
+
+            const auto locally_relevant_dofs =
+              DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
+            constraints.reinit(locally_relevant_dofs);
+
+            mg_constrained_dofs.merge_constraints(
+              constraints, level, true, false, true, true);
+
+            if (params.use_matrix_free_ns_operator)
+              {
+                const bool increment_form = params.nonlinear_solver == "Newton";
+                mg_ns_operators[level] =
+                  std::make_shared<NavierStokesOperator<dim>>(
+                    mapping,
+                    dof_handler,
+                    constraints,
+                    constraints,
+                    constraints,
+                    quadrature,
+                    params.nu,
+                    params.c_1,
+                    params.c_2,
+                    *time_integrator_data,
+                    params.consider_time_deriverative,
+                    increment_form,
+                    params.cell_wise_stabilization,
+                    level);
+              }
+            else
+              {
+                AssertThrow(false, ExcNotImplemented());
+              }
+          }
+
+
+        // create transfer operator for interpolation to the levels (without
+        // constraints)
+        mg_transfer_no_constraints =
+          std::make_shared<MGTransferGlobalCoarsening<dim, VectorType>>();
+        mg_transfer_no_constraints->build(
+          dof_handler, [&](const auto l, auto &vec) {
+            mg_ns_operators[l]->initialize_dof_vector(vec);
+          });
+
+        // create transfer operator for preconditioner (with constraints)
+        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>> transfer =
+          std::make_shared<MGTransferGlobalCoarsening<dim, VectorType>>(
+            mg_constrained_dofs);
+        transfer->build(dof_handler, [&](const auto l, auto &vec) {
+          mg_ns_operators[l]->initialize_dof_vector(vec);
+        });
+
+        // create preconditioner
+        preconditioner = std::make_shared<PreconditionerGMG<dim>>(
+          dof_handler, mg_ns_operators, transfer, true, params.gmg);
       }
     else
       AssertThrow(false, ExcNotImplemented());
@@ -3144,7 +3542,7 @@ public:
       [&](const SolutionHistory<VectorType> &solution) {
         ns_operator->set_previous_solution(solution);
 
-        if (params.preconditioner == "GMG")
+        if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
           {
             MGLevelObject<SolutionHistory<VectorType>> all_mg_solution(
               mg_ns_operators.min_level(),
@@ -3181,7 +3579,7 @@ public:
     };
 
     nonlinear_solver->setup_preconditioner = [&](const VectorType &solution) {
-      if (params.preconditioner == "GMG")
+      if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
         {
           MGLevelObject<VectorType> mg_solution(mg_ns_operators.min_level(),
                                                 mg_ns_operators.max_level());
@@ -3213,8 +3611,15 @@ public:
 
     nonlinear_solver->solve_with_jacobian = [&](VectorType       &dst,
                                                 const VectorType &src) {
+      constraints_homogeneous.set_zero(const_cast<VectorType &>(src));
       linear_solver->solve(dst, src);
+      constraints_homogeneous.distribute(dst);
     };
+
+    if (false)
+      nonlinear_solver->postprocess = [&](const VectorType &dst) {
+        output(0.0, mapping, dof_handler, dst, true);
+      };
 
     // initialize solution
     SolutionHistory<VectorType> solution(time_integrator_data->get_order() + 1);
@@ -3277,7 +3682,7 @@ public:
 
         ns_operator->invalidate_system(); // TODO
 
-        if (params.preconditioner == "GMG")
+        if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
           {
             for (unsigned int l = mg_ns_operators.min_level();
                  l <= mg_ns_operators.max_level();
@@ -3319,12 +3724,13 @@ private:
   output(const double           time,
          const Mapping<dim>    &mapping,
          const DoFHandler<dim> &dof_handler,
-         const VectorType      &vector) const
+         const VectorType      &vector,
+         const bool             force = false) const
   {
     static unsigned int counter = 0;
 
-    if ((time + std::numeric_limits<double>::epsilon()) <
-        counter * params.output_granularity)
+    if ((force == false) && ((time + std::numeric_limits<double>::epsilon()) <
+                             counter * params.output_granularity))
       return;
 
     const std::string file_name =

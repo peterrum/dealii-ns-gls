@@ -1,0 +1,40 @@
+{
+  "dim"                  : 2,
+  "fe degree"            : 1,
+  "mapping degree"       : 1,
+  "n global refinements" : 3,
+
+  "simulation name" : "rotation",
+
+  "dt"             : 0.0,
+  "cfl"            : 0.1,
+  "t final"        : 20.0,
+  "theta"          : 1.0,
+  "bdf order"      : 1,
+  "time intration" : "bdf",
+
+  "c1" : 2.00,
+  "c2" : 0.0,
+  "nu" : 6.25e-00,
+  "consider time deriverative" : true,
+  "cell wise stabilization"    : false,
+
+  "use matrix free ns operator" : true,
+
+  "lin absolute tolerance" : 1e-8,
+  "lin relative tolerance" : 1e-4,
+
+  "preconditioner" : "GMG",
+
+  "gmg smoothing n iterations"   : 5,
+  "gmg coarse grid solver"       : "AMG",
+  "gmg coarse grid iterate"      : false,
+  "gmg coarse grid gmres reltol" : 1e-2,
+
+  "nonlinear solver" : "Newton",
+
+  "paraview prefix"    : "results_mf",
+  "output granularity" : 0.0001,
+  
+  "no slip" : true
+}
