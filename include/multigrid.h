@@ -1,6 +1,10 @@
 #pragma once
 
+#include <deal.II/base/conditional_ostream.h>
+#include <deal.II/base/parameter_handler.h>
+
 #include <deal.II/lac/precondition.h>
+#include <deal.II/lac/solver_gmres.h>
 #include <deal.II/lac/trilinos_solver.h>
 
 #include <deal.II/matrix_free/operators.h>
@@ -119,5 +123,3 @@ private:
   mutable std::unique_ptr<PreconditionMG<dim, VectorType, MGTransferType>>
     preconditioner;
 };
-
-#include "multigrid.cc"
