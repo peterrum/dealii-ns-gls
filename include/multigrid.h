@@ -18,6 +18,7 @@
 
 #include "config.h"
 #include "preconditioner.h"
+#include "timer.h"
 
 
 struct PreconditionerGMGAdditionalData
@@ -129,4 +130,6 @@ private:
     preconditioner;
 
   mutable std::vector<unsigned int> n_coarse_iterations;
+
+  mutable MyTimerOutput timer;
 };

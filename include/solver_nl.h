@@ -4,6 +4,7 @@
 
 #include "config.h"
 #include "operator_base.h"
+#include "timer.h"
 
 using namespace dealii;
 
@@ -64,6 +65,8 @@ private:
 
   const double       newton_tolerance;
   const unsigned int newton_max_iteration;
+
+  mutable MyTimerOutput timer;
 };
 
 

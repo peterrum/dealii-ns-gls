@@ -34,6 +34,8 @@ NonLinearSolverNewton::NonLinearSolverNewton()
 void
 NonLinearSolverNewton::solve(VectorType &solution) const
 {
+  MyScope scope(timer, "newton::solve");
+
   VectorType rhs, inc;
   rhs.reinit(solution);
   inc.reinit(solution);

@@ -5,6 +5,7 @@
 #include "config.h"
 #include "operator_base.h"
 #include "preconditioner.h"
+#include "timer.h"
 
 using namespace dealii;
 
@@ -50,4 +51,6 @@ private:
   const double       relative_tolerance;
 
   const ConditionalOStream pcout;
+
+  mutable MyTimerOutput timer;
 };

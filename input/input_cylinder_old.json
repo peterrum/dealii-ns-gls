@@ -7,7 +7,7 @@
   "simulation name" : "cylinder old",
 
   "cfl"            : 0.1,
-  "t final"        : 20.0,
+  "t final"        : 0.1,
   "theta"          : 1.0,
   "bdf order"      : 1,
   "time intration" : "bdf",
@@ -21,7 +21,7 @@
 
   "lin relative tolerance" : 1e-2,
 
-  "preconditioner" : "GMG",
+  "preconditioner" : "GMG-LS",
 
   "nonlinear solver" : "Newton",
 
