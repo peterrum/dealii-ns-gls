@@ -167,7 +167,8 @@ PreconditionerGMGAdditionalData::add_parameters(ParameterHandler &prm)
   prm.add_parameter("gmg coarse grid gmres reltol", coarse_grid_gmres_reltol);
 
   // coarse-grid AMG
-  // TODO
+  prm.add_parameter("gmg coarse grid amg use default parameters",
+                    coarse_grid_amg_use_default_parameters);
 }
 
 
@@ -326,22 +327,27 @@ PreconditionerGMG<dim>::initialize()
   if (additional_data.coarse_grid_solver == "AMG")
     {
       TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
-      amg_data.elliptic = additional_data.coarse_grid_amg_elliptic;
-      amg_data.higher_order_elements =
-        additional_data.coarse_grid_amg_higher_order_elements;
-      amg_data.n_cycles = additional_data.coarse_grid_amg_n_cycles;
-      amg_data.aggregation_threshold =
-        additional_data.coarse_grid_amg_aggregation_threshold;
-      amg_data.smoother_sweeps =
-        additional_data.coarse_grid_amg_smoother_sweeps;
-      amg_data.smoother_overlap =
-        additional_data.coarse_grid_amg_smoother_overlap;
-      amg_data.output_details = additional_data.coarse_grid_amg_output_details;
-      amg_data.smoother_type =
-        additional_data.coarse_grid_amg_smoother_type.c_str();
-      amg_data.coarse_type =
-        additional_data.coarse_grid_amg_coarse_type.c_str();
-      amg_data.constant_modes = op[min_level]->extract_constant_modes();
+
+      if (!additional_data.coarse_grid_amg_use_default_parameters)
+        {
+          amg_data.elliptic = additional_data.coarse_grid_amg_elliptic;
+          amg_data.higher_order_elements =
+            additional_data.coarse_grid_amg_higher_order_elements;
+          amg_data.n_cycles = additional_data.coarse_grid_amg_n_cycles;
+          amg_data.aggregation_threshold =
+            additional_data.coarse_grid_amg_aggregation_threshold;
+          amg_data.smoother_sweeps =
+            additional_data.coarse_grid_amg_smoother_sweeps;
+          amg_data.smoother_overlap =
+            additional_data.coarse_grid_amg_smoother_overlap;
+          amg_data.output_details =
+            additional_data.coarse_grid_amg_output_details;
+          amg_data.smoother_type =
+            additional_data.coarse_grid_amg_smoother_type.c_str();
+          amg_data.coarse_type =
+            additional_data.coarse_grid_amg_coarse_type.c_str();
+          amg_data.constant_modes = op[min_level]->extract_constant_modes();
+        }
 
       precondition_amg = std::make_unique<TrilinosWrappers::PreconditionAMG>();
 

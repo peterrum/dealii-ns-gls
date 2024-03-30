@@ -37,15 +37,16 @@ struct PreconditionerGMGAdditionalData
   double       coarse_grid_gmres_reltol  = 1e-4;
 
   // coarse-grid AMG
-  bool         coarse_grid_amg_elliptic              = false;
-  bool         coarse_grid_amg_higher_order_elements = false;
-  unsigned int coarse_grid_amg_n_cycles              = 1;
-  double       coarse_grid_amg_aggregation_threshold = 1e-14;
-  unsigned int coarse_grid_amg_smoother_sweeps       = 2;
-  unsigned int coarse_grid_amg_smoother_overlap      = 1;
-  bool         coarse_grid_amg_output_details        = false;
-  std::string  coarse_grid_amg_smoother_type         = "ILU";
-  std::string  coarse_grid_amg_coarse_type           = "ILU";
+  bool         coarse_grid_amg_use_default_parameters = true;
+  bool         coarse_grid_amg_elliptic               = false;
+  bool         coarse_grid_amg_higher_order_elements  = false;
+  unsigned int coarse_grid_amg_n_cycles               = 1;
+  double       coarse_grid_amg_aggregation_threshold  = 1e-14;
+  unsigned int coarse_grid_amg_smoother_sweeps        = 2;
+  unsigned int coarse_grid_amg_smoother_overlap       = 1;
+  bool         coarse_grid_amg_output_details         = false;
+  std::string  coarse_grid_amg_smoother_type          = "ILU";
+  std::string  coarse_grid_amg_coarse_type            = "ILU";
 
   void
   add_parameters(ParameterHandler &prm);
