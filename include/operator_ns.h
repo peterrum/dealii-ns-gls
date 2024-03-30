@@ -7,6 +7,7 @@
 
 #include "config.h"
 #include "operator_base.h"
+#include "timer.h"
 
 using namespace dealii;
 
@@ -139,6 +140,8 @@ private:
 
   IndexSet
   get_refinement_edges(const MatrixFree<dim, Number> &matrix_free);
+
+  mutable MyTimerOutput timer;
 };
 
 

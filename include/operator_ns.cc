@@ -130,6 +130,8 @@ template <int dim>
 void
 NavierStokesOperator<dim>::compute_inverse_diagonal(VectorType &diagonal) const
 {
+  MyScope scope(timer, "ns::compute_inverse_diagonal");
+
   matrix_free.initialize_dof_vector(diagonal);
   MatrixFreeTools::compute_diagonal(
     matrix_free,
@@ -155,6 +157,8 @@ template <int dim>
 void
 NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
 {
+  MyScope scope(timer, "ns::set_previous_solution");
+
   this->valid_system = false;
 
   const unsigned n_cells             = matrix_free.n_cell_batches();
@@ -305,6 +309,8 @@ template <int dim>
 void
 NavierStokesOperator<dim>::set_linearization_point(const VectorType &vec)
 {
+  MyScope scope(timer, "ns::set_linearization_point");
+
   this->valid_system = false;
 
   const unsigned n_cells             = matrix_free.n_cell_batches();
@@ -351,6 +357,8 @@ template <int dim>
 void
 NavierStokesOperator<dim>::evaluate_rhs(VectorType &dst) const
 {
+  MyScope scope(timer, "ns::evaluate_rhs");
+
   // apply inhomogeneous DBC
   VectorType src;
   src.reinit(dst);
@@ -372,6 +380,8 @@ void
 NavierStokesOperator<dim>::evaluate_residual(VectorType       &dst,
                                              const VectorType &src) const
 {
+  MyScope scope(timer, "ns::evaluate_residual");
+
   // apply inhomogeneous DBC
   VectorType tmp = src;                      // TODO: needed?
   constraints_inhomogeneous.distribute(tmp); //
@@ -390,6 +400,8 @@ template <int dim>
 void
 NavierStokesOperator<dim>::vmult(VectorType &dst, const VectorType &src) const
 {
+  MyScope scope(timer, "ns::vmult");
+
   // save values for edge constrained dofs and set them to 0 in src vector
   for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
     {
@@ -424,6 +436,8 @@ void
 NavierStokesOperator<dim>::vmult_interface_down(VectorType       &dst,
                                                 const VectorType &src) const
 {
+  MyScope scope(timer, "ns::vmult_interface_down");
+
   this->matrix_free.cell_loop(
     &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
 
@@ -438,6 +452,8 @@ void
 NavierStokesOperator<dim>::vmult_interface_up(VectorType       &dst,
                                               const VectorType &src) const
 {
+  MyScope scope(timer, "ns::vmult_interface_up");
+
   if (has_edge_constrained_indices == false)
     {
       dst = Number(0.);
@@ -792,6 +808,8 @@ template <int dim>
 void
 NavierStokesOperator<dim>::initialize_system_matrix() const
 {
+  MyScope scope(timer, "ns::initialize_system_matrix");
+
   const auto &dof_handler = matrix_free.get_dof_handler();
   const auto &constraints = matrix_free.get_affine_constraints();
 

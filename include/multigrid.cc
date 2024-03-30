@@ -197,6 +197,8 @@ template <int dim>
 void
 PreconditionerGMG<dim>::vmult(VectorType &dst, const VectorType &src) const
 {
+  MyScope scope(timer, "gmg::vmult");
+
   Assert(preconditioner, ExcInternalError());
   preconditioner->vmult(dst, src);
 
@@ -208,6 +210,8 @@ PreconditionerGMG<dim>::vmult(VectorType &dst, const VectorType &src) const
 
       n_coarse_iterations.emplace_back(coarse_grid_solver_control->last_step());
     }
+  else
+    n_coarse_iterations.emplace_back(1);
 }
 
 
@@ -236,6 +240,8 @@ template <int dim>
 void
 PreconditionerGMG<dim>::initialize()
 {
+  MyScope scope(timer, "gmg::initialize");
+
   pcout_cond << "    [M] initialize" << std::endl;
 
   const unsigned int min_level = transfer->min_level();

@@ -90,6 +90,7 @@ struct Parameters
 
   // nonlinear solver
   std::string nonlinear_solver = "linearized";
+  bool        newton_inexact   = false;
 
   // output
   std::string paraview_prefix    = "results";
@@ -160,6 +161,7 @@ private:
                       "",
                       Patterns::Selection(
                         "linearized|Picard simple|Picard|Newton"));
+    prm.add_parameter("newton inexact", newton_inexact);
 
     // output
     prm.add_parameter("paraview prefix", paraview_prefix);
@@ -641,7 +643,8 @@ public:
       nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
         time_integrator_data->get_theta());
     else if (params.nonlinear_solver == "Newton")
-      nonlinear_solver = std::make_shared<NonLinearSolverNewton>();
+      nonlinear_solver =
+        std::make_shared<NonLinearSolverNewton>(params.newton_inexact);
     else
       AssertThrow(false, ExcNotImplemented());
 
@@ -677,6 +680,9 @@ public:
     };
 
     nonlinear_solver->setup_jacobian = [&](const VectorType &src) {
+      ScopedName sc("setup_jacobian");
+      MyScope    scope(timer, sc);
+
       ns_operator->set_linearization_point(src);
 
       // note: for the level operators, this is done during setup of
@@ -684,6 +690,9 @@ public:
     };
 
     nonlinear_solver->setup_preconditioner = [&](const VectorType &solution) {
+      ScopedName sc("setup_preconditioner");
+      MyScope    scope(timer, sc);
+
       if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
         {
           MGLevelObject<VectorType> mg_solution(mg_ns_operators.min_level(),
@@ -706,16 +715,25 @@ public:
     };
 
     nonlinear_solver->evaluate_rhs = [&](VectorType &dst) {
+      ScopedName sc("evaluate_rhs");
+      MyScope    scope(timer, sc);
+
       ns_operator->evaluate_rhs(dst);
     };
 
     nonlinear_solver->evaluate_residual = [&](VectorType       &dst,
                                               const VectorType &src) {
+      ScopedName sc("evaluate_residual");
+      MyScope    scope(timer, sc);
+
       ns_operator->evaluate_residual(dst, src);
     };
 
     nonlinear_solver->solve_with_jacobian = [&](VectorType       &dst,
                                                 const VectorType &src) {
+      ScopedName sc("solve_with_jacobian");
+      MyScope    scope(timer, sc);
+
       constraints_homogeneous.set_zero(const_cast<VectorType &>(src));
       linear_solver->solve(dst, src);
       constraints_homogeneous.distribute(dst);
@@ -764,6 +782,9 @@ public:
     // perform time loop
     for (; t < params.t_final; ++counter)
       {
+        ScopedName sc("loop");
+        MyScope    scope(timer, sc);
+
         pcout << "\ncycle\t" << counter << " at time t = " << t;
         pcout << " with delta_t = " << dt << std::endl;
 
@@ -818,12 +839,16 @@ public:
         output(t, mapping, dof_handler, current_solution);
         simulation->postprocess(t, mapping, dof_handler, current_solution);
       }
+
+    TimerCollection::print_all_wall_time_statistics(true);
   }
 
 private:
   const Parameters         params;
   const MPI_Comm           comm;
   const ConditionalOStream pcout;
+
+  mutable MyTimerOutput timer;
 
   void
   output(const double           time,
@@ -837,6 +862,9 @@ private:
     if ((force == false) && ((time + std::numeric_limits<double>::epsilon()) <
                              counter * params.output_granularity))
       return;
+
+    ScopedName sc("postprocess");
+    MyScope    scope(timer, sc);
 
     const std::string file_name =
       params.paraview_prefix + "." + std::to_string(counter) + ".vtu";

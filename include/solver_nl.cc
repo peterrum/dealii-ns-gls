@@ -25,15 +25,18 @@ NonLinearSolverLinearized::solve(VectorType &solution) const
 
 
 
-NonLinearSolverNewton::NonLinearSolverNewton()
+NonLinearSolverNewton::NonLinearSolverNewton(const bool inexact_newton)
   : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   , newton_tolerance(1.0e-7) // TODO
   , newton_max_iteration(30) // TODO
+  , inexact_newton(inexact_newton)
 {}
 
 void
 NonLinearSolverNewton::solve(VectorType &solution) const
 {
+  MyScope scope(timer, "newton::solve");
+
   VectorType rhs, inc;
   rhs.reinit(solution);
   inc.reinit(solution);
@@ -54,7 +57,8 @@ NonLinearSolverNewton::solve(VectorType &solution) const
     {
       inc = 0.0;
 
-      this->setup_preconditioner(solution);
+      if (num_iteration == 0 || (inexact_newton == false))
+        this->setup_preconditioner(solution);
       this->solve_with_jacobian(inc, rhs);
 
       solution.add(1.0, inc);

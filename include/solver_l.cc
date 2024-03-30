@@ -24,6 +24,8 @@ LinearSolverGMRES::initialize()
 void
 LinearSolverGMRES::solve(VectorType &dst, const VectorType &src) const
 {
+  MyScope scope(timer, "gmres::solve");
+
   const double linear_solver_tolerance =
     std::max(relative_tolerance * src.l2_norm(), absolute_tolerance);
 
