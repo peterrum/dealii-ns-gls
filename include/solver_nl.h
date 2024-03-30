@@ -55,7 +55,7 @@ private:
 class NonLinearSolverNewton : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverNewton();
+  NonLinearSolverNewton(const bool inexact_newton);
 
   void
   solve(VectorType &solution) const override;
@@ -65,6 +65,7 @@ private:
 
   const double       newton_tolerance;
   const unsigned int newton_max_iteration;
+  const bool         inexact_newton;
 
   mutable MyTimerOutput timer;
 };

@@ -90,6 +90,7 @@ struct Parameters
 
   // nonlinear solver
   std::string nonlinear_solver = "linearized";
+  bool        newton_inexact   = false;
 
   // output
   std::string paraview_prefix    = "results";
@@ -160,6 +161,7 @@ private:
                       "",
                       Patterns::Selection(
                         "linearized|Picard simple|Picard|Newton"));
+    prm.add_parameter("newton inexact", newton_inexact);
 
     // output
     prm.add_parameter("paraview prefix", paraview_prefix);
@@ -641,7 +643,8 @@ public:
       nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
         time_integrator_data->get_theta());
     else if (params.nonlinear_solver == "Newton")
-      nonlinear_solver = std::make_shared<NonLinearSolverNewton>();
+      nonlinear_solver =
+        std::make_shared<NonLinearSolverNewton>(params.newton_inexact);
     else
       AssertThrow(false, ExcNotImplemented());
 
