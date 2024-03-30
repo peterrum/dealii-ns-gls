@@ -1,5 +1,8 @@
 #pragma once
 
+#include <deal.II/matrix_free/fe_evaluation.h>
+#include <deal.II/matrix_free/matrix_free.h>
+
 #include <deal.II/multigrid/mg_tools.h>
 
 #include "config.h"
