@@ -201,6 +201,28 @@ PreconditionerGMG<dim>::vmult(VectorType &dst, const VectorType &src) const
 
   pcout_cond << "    [C] solved in " << coarse_grid_solver_control->last_step()
              << " iterations." << std::endl;
+
+  n_coarse_iterations.emplace_back(coarse_grid_solver_control->last_step());
+}
+
+
+
+template <int dim>
+void
+PreconditionerGMG<dim>::print_stats() const
+{
+  if (n_coarse_iterations.empty())
+    {
+      pcout << "    [C] solved in 0 iterations." << std::endl;
+      return;
+    }
+
+  pcout << "    [C] solved in [" << n_coarse_iterations[0];
+  for (unsigned int i = 1; i < n_coarse_iterations.size(); ++i)
+    pcout << " + " << n_coarse_iterations[i];
+  pcout << "] iterations." << std::endl;
+
+  n_coarse_iterations.clear();
 }
 
 

@@ -77,6 +77,9 @@ public:
   vmult(VectorType &dst, const VectorType &src) const override;
 
   void
+  print_stats() const override;
+
+  void
   initialize() override;
 
 private:
@@ -123,4 +126,6 @@ private:
 
   mutable std::unique_ptr<PreconditionMG<dim, VectorType, MGTransferType>>
     preconditioner;
+
+  mutable std::vector<unsigned int> n_coarse_iterations;
 };
