@@ -1,5 +1,7 @@
 #pragma once
 
+#include <deal.II/lac/affine_constraints.h>
+
 #include "config.h"
 #include "time_integration.h"
 

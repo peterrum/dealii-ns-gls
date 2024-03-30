@@ -37,95 +37,32 @@ public:
 class TimeIntegratorDataBDF : public TimeIntegratorData
 {
 public:
-  TimeIntegratorDataBDF(const unsigned int order)
-    : order(order)
-    , dt(order)
-    , weights(order + 1)
-  {}
+  TimeIntegratorDataBDF(const unsigned int order);
 
   void
-  update_dt(const Number dt_new) override
-  {
-    for (int i = get_order() - 2; i >= 0; i--)
-      {
-        dt[i + 1] = dt[i];
-      }
-
-    dt[0] = dt_new;
-
-    update_weights();
-  }
+  update_dt(const Number dt_new) override;
 
   Number
-  get_primary_weight() const override
-  {
-    return weights[0];
-  }
+  get_primary_weight() const override;
 
   const std::vector<Number> &
-  get_weights() const override
-  {
-    return weights;
-  }
+  get_weights() const override;
 
   unsigned int
-  get_order() const override
-  {
-    return order;
-  }
+  get_order() const override;
 
   Number
-  get_current_dt() const override
-  {
-    return dt[0];
-  }
+  get_current_dt() const override;
 
   Number
-  get_theta() const override
-  {
-    return 1.0;
-  }
+  get_theta() const override;
 
 private:
   unsigned int
-  effective_order() const
-  {
-    return std::count_if(dt.begin(), dt.end(), [](const auto &v) {
-      return v > 0;
-    });
-  }
+  effective_order() const;
 
   void
-  update_weights()
-  {
-    std::fill(weights.begin(), weights.end(), 0);
-
-    if (effective_order() == 3)
-      {
-        weights[1] = -(dt[0] + dt[1]) * (dt[0] + dt[1] + dt[2]) /
-                     (dt[0] * dt[1] * (dt[1] + dt[2]));
-        weights[2] =
-          dt[0] * (dt[0] + dt[1] + dt[2]) / (dt[1] * dt[2] * (dt[0] + dt[1]));
-        weights[3] = -dt[0] * (dt[0] + dt[1]) /
-                     (dt[2] * (dt[1] + dt[2]) * (dt[0] + dt[1] + dt[2]));
-        weights[0] = -(weights[1] + weights[2] + weights[3]);
-      }
-    else if (effective_order() == 2)
-      {
-        weights[0] = (2 * dt[0] + dt[1]) / (dt[0] * (dt[0] + dt[1]));
-        weights[1] = -(dt[0] + dt[1]) / (dt[0] * dt[1]);
-        weights[2] = dt[0] / (dt[1] * (dt[0] + dt[1]));
-      }
-    else if (effective_order() == 1)
-      {
-        weights[0] = 1.0 / dt[0];
-        weights[1] = -1.0 / dt[0];
-      }
-    else
-      {
-        AssertThrow(effective_order() <= 3, ExcMessage("Not implemented"));
-      }
-  }
+  update_weights();
 
   unsigned int        order;
   std::vector<Number> dt;
@@ -140,49 +77,25 @@ private:
 class TimeIntegratorDataTheta : public TimeIntegratorData
 {
 public:
-  TimeIntegratorDataTheta(const Number theta)
-    : theta(theta)
-    , weights(2)
-  {}
+  TimeIntegratorDataTheta(const Number theta);
 
   void
-  update_dt(const Number dt_new) override
-  {
-    this->dt = dt_new;
-
-    weights[0] = +1.0 / this->dt;
-    weights[1] = -1.0 / this->dt;
-  }
+  update_dt(const Number dt_new) override;
 
   Number
-  get_primary_weight() const override
-  {
-    return weights[0];
-  }
+  get_primary_weight() const override;
 
   const std::vector<Number> &
-  get_weights() const override
-  {
-    return weights;
-  }
+  get_weights() const override;
 
   unsigned int
-  get_order() const override
-  {
-    return 1;
-  }
+  get_order() const override;
 
   Number
-  get_current_dt() const override
-  {
-    return dt;
-  }
+  get_current_dt() const override;
 
   Number
-  get_theta() const override
-  {
-    return theta;
-  }
+  get_theta() const override;
 
 private:
   Number              theta;
@@ -198,34 +111,19 @@ private:
 class SolutionHistory
 {
 public:
-  SolutionHistory(const unsigned int size)
-    : solutions(size)
-  {}
+  SolutionHistory(const unsigned int size);
 
   VectorType &
-  get_current_solution()
-  {
-    return solutions[0];
-  }
+  get_current_solution();
 
   std::vector<VectorType> &
-  get_vectors()
-  {
-    return solutions;
-  }
+  get_vectors();
 
   const std::vector<VectorType> &
-  get_vectors() const
-  {
-    return solutions;
-  }
+  get_vectors() const;
 
   void
-  commit_solution()
-  {
-    for (int i = solutions.size() - 2; i >= 0; --i)
-      solutions[i + 1].copy_locally_owned_data_from(solutions[i]);
-  }
+  commit_solution();
 
   std::vector<VectorType> solutions;
 };
