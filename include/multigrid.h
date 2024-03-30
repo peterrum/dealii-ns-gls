@@ -81,6 +81,7 @@ public:
 
 private:
   const ConditionalOStream pcout;
+  const ConditionalOStream pcout_cond;
 
   const DoFHandler<dim>                              &dof_handler;
   const MGLevelObject<std::shared_ptr<OperatorBase>> &op;

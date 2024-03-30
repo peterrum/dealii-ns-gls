@@ -179,9 +179,10 @@ PreconditionerGMG<dim>::PreconditionerGMG(
   const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType>> &transfer,
   const bool                             consider_edge_constraints,
   const PreconditionerGMGAdditionalData &additional_data)
-  : pcout(std::cout,
-          (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) &&
-            false /*TODO: introduce verbosity*/)
+  : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+  , pcout_cond(std::cout,
+               (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) &&
+                 false /*TODO: introduce verbosity*/)
   , dof_handler(dof_handler)
   , op(op)
   , transfer(transfer)
@@ -197,6 +198,9 @@ PreconditionerGMG<dim>::vmult(VectorType &dst, const VectorType &src) const
 {
   Assert(preconditioner, ExcInternalError());
   preconditioner->vmult(dst, src);
+
+  pcout_cond << "    [C] solved in " << coarse_grid_solver_control->last_step()
+             << " iterations." << std::endl;
 }
 
 
@@ -205,7 +209,7 @@ template <int dim>
 void
 PreconditionerGMG<dim>::initialize()
 {
-  pcout << "    [M] initialize" << std::endl;
+  pcout_cond << "    [M] initialize" << std::endl;
 
   const unsigned int min_level = transfer->min_level();
   const unsigned int max_level = transfer->max_level();
@@ -291,10 +295,10 @@ PreconditionerGMG<dim>::initialize()
       op[level]->initialize_dof_vector(vec);
       const auto ev = mg_smoother->smoothers[level].estimate_eigenvalues(vec);
 
-      pcout << "    [M]  - level: " << level
-            << ", omega: " << mg_smoother->smoothers[level].get_relaxation()
-            << ", ev_min: " << ev.min_eigenvalue_estimate
-            << ", ev_max: " << ev.max_eigenvalue_estimate << std::endl;
+      pcout_cond << "    [M]  - level: " << level << ", omega: "
+                 << mg_smoother->smoothers[level].get_relaxation()
+                 << ", ev_min: " << ev.min_eigenvalue_estimate
+                 << ", ev_max: " << ev.max_eigenvalue_estimate << std::endl;
     }
 
   if (additional_data.coarse_grid_solver == "AMG")
@@ -403,7 +407,7 @@ PreconditionerGMG<dim>::initialize()
     std::make_unique<PreconditionMG<dim, VectorType, MGTransferType>>(
       dof_handler, *mg, *transfer);
 
-  pcout << std::endl;
+  pcout_cond << std::endl;
 }
 
 template class PreconditionerGMG<2>;
