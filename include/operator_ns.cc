@@ -110,13 +110,18 @@ NavierStokesOperator<dim>::extract_constant_modes() const
 {
   std::vector<std::vector<bool>> constant_modes;
 
-  if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
-    return constant_modes; // TODO
-
   ComponentMask components(dim + 1, true);
-  DoFTools::extract_constant_modes(this->matrix_free.get_dof_handler(),
-                                   components,
-                                   constant_modes);
+
+  if (this->matrix_free.get_mg_level() == numbers::invalid_unsigned_int)
+    DoFTools::extract_constant_modes(this->matrix_free.get_dof_handler(),
+                                     components,
+                                     constant_modes);
+  else
+    DoFTools::extract_level_constant_modes(this->matrix_free.get_mg_level(),
+                                           this->matrix_free.get_dof_handler(),
+                                           components,
+                                           constant_modes);
+
 
   return constant_modes;
 }

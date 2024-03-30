@@ -26,6 +26,12 @@ PreconditionerILU::vmult(VectorType &dst, const VectorType &src) const
   precon.vmult(dst, src);
 }
 
+void
+PreconditionerILU::print_stats() const
+{
+  // nothing to do
+}
+
 
 
 PreconditionerAMG::PreconditionerAMG(
@@ -60,4 +66,10 @@ void
 PreconditionerAMG::vmult(VectorType &dst, const VectorType &src) const
 {
   precon.vmult(dst, src);
+}
+
+void
+PreconditionerAMG::print_stats() const
+{
+  // nothing to do
 }

@@ -45,4 +45,6 @@ LinearSolverGMRES::solve(VectorType &dst, const VectorType &src) const
 
   pcout << "    [L] solved in " << solver_control.last_step() << " iterations."
         << std::endl;
+
+  preconditioner.print_stats();
 }

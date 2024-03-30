@@ -18,6 +18,9 @@ public:
 
   virtual void
   vmult(VectorType &dst, const VectorType &src) const = 0;
+
+  virtual void
+  print_stats() const = 0;
 };
 
 
@@ -32,6 +35,9 @@ public:
 
   void
   vmult(VectorType &dst, const VectorType &src) const override;
+
+  void
+  print_stats() const override;
 
 private:
   const OperatorBase &op;
@@ -52,6 +58,9 @@ public:
 
   void
   vmult(VectorType &dst, const VectorType &src) const override;
+
+  void
+  print_stats() const override;
 
 private:
   const OperatorBase &op;
