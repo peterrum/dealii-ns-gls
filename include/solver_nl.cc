@@ -1,7 +1,5 @@
 #include "solver_nl.h"
 
-#include <deal.II/base/conditional_ostream.h>
-
 #include <deal.II/lac/affine_constraints.h>
 
 

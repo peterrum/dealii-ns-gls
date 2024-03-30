@@ -20,11 +20,7 @@ public:
   m() const = 0;
 
   Number
-  el(unsigned int, unsigned int) const
-  {
-    Assert(false, ExcNotImplemented());
-    return 0;
-  }
+  el(unsigned int, unsigned int) const;
 
   virtual void
   compute_inverse_diagonal(VectorType &diagonal) const = 0;
@@ -51,35 +47,16 @@ public:
   vmult(VectorType &dst, const VectorType &src) const = 0;
 
   void
-  Tvmult(VectorType &dst, const VectorType &src) const
-  {
-    vmult(dst, src);
-  }
+  Tvmult(VectorType &dst, const VectorType &src) const;
 
   virtual void
-  vmult_interface_down(VectorType &dst, const VectorType &src) const
-  {
-    AssertThrow(false, ExcNotImplemented());
-
-    (void)dst;
-    (void)src;
-  }
+  vmult_interface_down(VectorType &dst, const VectorType &src) const;
 
   virtual void
-  vmult_interface_up(VectorType &dst, const VectorType &src) const
-  {
-    AssertThrow(false, ExcNotImplemented());
-
-    (void)dst;
-    (void)src;
-  }
+  vmult_interface_up(VectorType &dst, const VectorType &src) const;
 
   virtual std::vector<std::vector<bool>>
-  extract_constant_modes() const
-  {
-    AssertThrow(false, ExcNotImplemented());
-    return {};
-  }
+  extract_constant_modes() const;
 
   virtual const AffineConstraints<Number> &
   get_constraints() const = 0;

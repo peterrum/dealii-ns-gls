@@ -1,5 +1,7 @@
 #pragma once
 
+#include <deal.II/base/conditional_ostream.h>
+
 #include "config.h"
 #include "operator_base.h"
 
