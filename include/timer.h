@@ -19,6 +19,8 @@
 
 #include <deal.II/base/timer.h>
 
+#include <boost/algorithm/string/join.hpp>
+
 inline void
 monitor(const std::string label)
 {
@@ -408,4 +410,31 @@ private:
 #ifdef WITH_TIMING
   std::unique_ptr<dealii::TimerOutput::Scope> scope;
 #endif
+};
+
+
+class ScopedName
+{
+public:
+  ScopedName(const std::string name)
+    : name(name)
+  {
+    path.push_back(name);
+  }
+
+  ~ScopedName()
+  {
+    AssertThrow(path.back() == name, dealii::ExcInternalError());
+    path.pop_back();
+  }
+
+  operator std::string() const
+  {
+    return boost::algorithm::join(path, "::");
+    ;
+  }
+
+private:
+  const std::string                      name;
+  inline static std::vector<std::string> path;
 };

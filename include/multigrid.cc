@@ -210,6 +210,8 @@ PreconditionerGMG<dim>::vmult(VectorType &dst, const VectorType &src) const
 
       n_coarse_iterations.emplace_back(coarse_grid_solver_control->last_step());
     }
+  else
+    n_coarse_iterations.emplace_back(1);
 }
 
 

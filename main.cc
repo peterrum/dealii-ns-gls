@@ -677,7 +677,8 @@ public:
     };
 
     nonlinear_solver->setup_jacobian = [&](const VectorType &src) {
-      MyScope scope(timer, "setup_jacobian");
+      ScopedName sc("setup_jacobian");
+      MyScope    scope(timer, sc);
 
       ns_operator->set_linearization_point(src);
 
@@ -686,7 +687,8 @@ public:
     };
 
     nonlinear_solver->setup_preconditioner = [&](const VectorType &solution) {
-      MyScope scope(timer, "setup_preconditioner");
+      ScopedName sc("setup_preconditioner");
+      MyScope    scope(timer, sc);
 
       if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
         {
@@ -710,21 +712,24 @@ public:
     };
 
     nonlinear_solver->evaluate_rhs = [&](VectorType &dst) {
-      MyScope scope(timer, "evaluate_rhs");
+      ScopedName sc("evaluate_rhs");
+      MyScope    scope(timer, sc);
 
       ns_operator->evaluate_rhs(dst);
     };
 
     nonlinear_solver->evaluate_residual = [&](VectorType       &dst,
                                               const VectorType &src) {
-      MyScope scope(timer, "evaluate_residual");
+      ScopedName sc("evaluate_residual");
+      MyScope    scope(timer, sc);
 
       ns_operator->evaluate_residual(dst, src);
     };
 
     nonlinear_solver->solve_with_jacobian = [&](VectorType       &dst,
                                                 const VectorType &src) {
-      MyScope scope(timer, "solve_with_jacobian");
+      ScopedName sc("solve_with_jacobian");
+      MyScope    scope(timer, sc);
 
       constraints_homogeneous.set_zero(const_cast<VectorType &>(src));
       linear_solver->solve(dst, src);
@@ -774,7 +779,8 @@ public:
     // perform time loop
     for (; t < params.t_final; ++counter)
       {
-        MyScope scope(timer, "loop");
+        ScopedName sc("loop");
+        MyScope    scope(timer, sc);
 
         pcout << "\ncycle\t" << counter << " at time t = " << t;
         pcout << " with delta_t = " << dt << std::endl;
@@ -854,7 +860,8 @@ private:
                              counter * params.output_granularity))
       return;
 
-    MyScope scope(timer, "postprocess");
+    ScopedName sc("postprocess");
+    MyScope    scope(timer, sc);
 
     const std::string file_name =
       params.paraview_prefix + "." + std::to_string(counter) + ".vtu";
