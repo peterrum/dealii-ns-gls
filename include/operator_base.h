@@ -52,7 +52,7 @@ public:
   virtual void
   vmult_interface_down(VectorType &dst, const VectorType &src) const;
 
-  virtual void
+  void
   vmult_interface_up(VectorType &dst, const VectorType &src) const;
 
   virtual std::vector<std::vector<bool>>

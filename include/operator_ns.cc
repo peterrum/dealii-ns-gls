@@ -448,38 +448,6 @@ NavierStokesOperator<dim>::vmult_interface_down(VectorType       &dst,
 }
 
 template <int dim>
-void
-NavierStokesOperator<dim>::vmult_interface_up(VectorType       &dst,
-                                              const VectorType &src) const
-{
-  MyScope scope(timer, "ns::vmult_interface_up");
-
-  if (has_edge_constrained_indices == false)
-    {
-      dst = Number(0.);
-      return;
-    }
-
-  dst = 0.0;
-
-  // make a copy of src vector and set everything to 0 except edge
-  // constrained dofs
-  VectorType src_cpy;
-  src_cpy.reinit(src, /*omit_zeroing_entries=*/false);
-
-  for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
-    src_cpy.local_element(edge_constrained_indices[i]) =
-      src.local_element(edge_constrained_indices[i]);
-
-  // do loop with copy of src
-  this->matrix_free.cell_loop(&NavierStokesOperator<dim>::do_vmult_range<false>,
-                              this,
-                              dst,
-                              src_cpy,
-                              false);
-}
-
-template <int dim>
 const SparseMatrixType &
 NavierStokesOperator<dim>::get_system_matrix() const
 {
