@@ -72,9 +72,6 @@ public:
   void
   vmult_interface_down(VectorType &dst, const VectorType &src) const override;
 
-  void
-  vmult_interface_up(VectorType &dst, const VectorType &src) const override;
-
   const SparseMatrixType &
   get_system_matrix() const override;
 
