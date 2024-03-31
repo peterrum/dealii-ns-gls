@@ -274,22 +274,27 @@ PreconditionerGMG<dim>::initialize()
   MGLevelObject<typename SmootherType::AdditionalData> smoother_data(min_level,
                                                                      max_level);
 
-  for (unsigned int level = min_level; level <= max_level; ++level)
-    {
-      smoother_data[level].preconditioner =
-        std::make_shared<SmootherPreconditionerType>();
-      op[level]->compute_inverse_diagonal(
-        smoother_data[level].preconditioner->get_vector());
-      smoother_data[level].relaxation      = 0.0;
-      smoother_data[level].smoothing_range = additional_data.smoothing_range;
-      smoother_data[level].n_iterations =
-        additional_data.smoothing_n_iterations;
-      smoother_data[level].eig_cg_n_iterations =
-        additional_data.smoothing_eig_cg_n_iterations;
-      smoother_data[level].eigenvalue_algorithm =
-        SmootherType::AdditionalData::EigenvalueAlgorithm::power_iteration;
-      smoother_data[level].constraints.copy_from(op[level]->get_constraints());
-    }
+  {
+    MyScope scope(timer, "gmg::initialize::smoother::init0");
+
+    for (unsigned int level = min_level; level <= max_level; ++level)
+      {
+        smoother_data[level].preconditioner =
+          std::make_shared<SmootherPreconditionerType>();
+        op[level]->compute_inverse_diagonal(
+          smoother_data[level].preconditioner->get_vector());
+        smoother_data[level].relaxation      = 0.0;
+        smoother_data[level].smoothing_range = additional_data.smoothing_range;
+        smoother_data[level].n_iterations =
+          additional_data.smoothing_n_iterations;
+        smoother_data[level].eig_cg_n_iterations =
+          additional_data.smoothing_eig_cg_n_iterations;
+        smoother_data[level].eigenvalue_algorithm =
+          SmootherType::AdditionalData::EigenvalueAlgorithm::power_iteration;
+        smoother_data[level].constraints.copy_from(
+          op[level]->get_constraints());
+      }
+  }
 
   if (false)
     for (unsigned int level = min_level; level <= max_level; ++level)
@@ -322,20 +327,25 @@ PreconditionerGMG<dim>::initialize()
     MGSmootherPrecondition<LevelMatrixType, SmootherType, VectorType>>();
   mg_smoother->initialize(op, smoother_data);
 
-  for (unsigned int level = min_level; level <= max_level; ++level)
-    {
-      VectorType vec;
-      op[level]->initialize_dof_vector(vec);
-      const auto ev = mg_smoother->smoothers[level].estimate_eigenvalues(vec);
+  {
+    MyScope scope(timer, "gmg::initialize::smoother::init1");
+    for (unsigned int level = min_level; level <= max_level; ++level)
+      {
+        VectorType vec;
+        op[level]->initialize_dof_vector(vec);
+        const auto ev = mg_smoother->smoothers[level].estimate_eigenvalues(vec);
 
-      pcout_cond << "    [M]  - level: " << level << ", omega: "
-                 << mg_smoother->smoothers[level].get_relaxation()
-                 << ", ev_min: " << ev.min_eigenvalue_estimate
-                 << ", ev_max: " << ev.max_eigenvalue_estimate << std::endl;
-    }
+        pcout_cond << "    [M]  - level: " << level << ", omega: "
+                   << mg_smoother->smoothers[level].get_relaxation()
+                   << ", ev_min: " << ev.min_eigenvalue_estimate
+                   << ", ev_max: " << ev.max_eigenvalue_estimate << std::endl;
+      }
+  }
 
   if (additional_data.coarse_grid_solver == "AMG")
     {
+      MyScope scope(timer, "gmg::initialize::amg");
+
       TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
 
       if (!additional_data.coarse_grid_amg_use_default_parameters)
@@ -367,6 +377,8 @@ PreconditionerGMG<dim>::initialize()
     }
   else if (additional_data.coarse_grid_solver == "direct")
     {
+      MyScope scope(timer, "gmg::initialize::direct");
+
       precondition_direct = std::make_unique<TrilinosWrappers::SolverDirect>();
 
       precondition_direct->initialize(op[min_level]->get_system_matrix());
