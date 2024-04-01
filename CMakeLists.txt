@@ -52,6 +52,14 @@ deal_ii_setup_target(${projectName})
 
 target_link_libraries(${projectName} ${libName})
 
+set(projectName "gls-vmult")
+
+message("-- building executable: gls-vmult")
+add_executable(${projectName} performance.cc)
+deal_ii_setup_target(${projectName})
+
+target_link_libraries(${projectName} ${libName})
+
 # Define custom targets to easily switch the build type:
 add_custom_target(
   debug
