@@ -88,6 +88,8 @@ struct Parameters
   std::string                     preconditioner = "ILU";
   PreconditionerGMGAdditionalData gmg;
 
+  bool gmg_constraint_coarse_pressure_dof = false;
+
   // nonlinear solver
   std::string nonlinear_solver = "linearized";
   bool        newton_inexact   = false;
@@ -154,6 +156,8 @@ private:
                       "",
                       Patterns::Selection("AMG|GMG|ILU|GMG-LS"));
     gmg.add_parameters(prm);
+    prm.add_parameter("gmg constraint coarse pressure dof",
+                      gmg_constraint_coarse_pressure_dof);
 
     // nonlinear solver
     prm.add_parameter("nonlinear solver",
@@ -407,6 +411,32 @@ public:
 
             constraints.reinit(locally_relevant_dofs);
 
+            if (params.gmg_constraint_coarse_pressure_dof &&
+                (level == minlevel))
+              {
+                unsigned int min_index = numbers::invalid_unsigned_int;
+
+                std::vector<types::global_dof_index> dof_indices;
+
+                for (const auto &cell : dof_handler.active_cell_iterators())
+                  if (cell->is_locally_owned())
+                    {
+                      const auto &fe = cell->get_fe();
+
+                      dof_indices.resize(fe.n_dofs_per_cell());
+                      cell->get_dof_indices(dof_indices);
+
+                      for (unsigned int i = 0; i < dof_indices.size(); ++i)
+                        if (fe.system_to_component_index(i).first == dim)
+                          min_index = std::min(min_index, dof_indices[i]);
+                    }
+
+                min_index = Utilities::MPI::min(min_index, comm);
+
+                if (locally_relevant_dofs.is_element(min_index))
+                  constraints.add_line(min_index);
+              }
+
             for (const auto bci : bcs.all_homogeneous_dbcs)
               DoFTools::make_zero_boundary_constraints(dof_handler,
                                                        bci,
@@ -540,6 +570,33 @@ public:
             const auto locally_relevant_dofs =
               DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
             constraints.reinit(locally_relevant_dofs);
+
+            if (params.gmg_constraint_coarse_pressure_dof &&
+                (level == minlevel))
+              {
+                unsigned int min_index = numbers::invalid_unsigned_int;
+
+                std::vector<types::global_dof_index> dof_indices;
+
+                for (const auto &cell :
+                     dof_handler.mg_cell_iterators_on_level(minlevel))
+                  if (cell->is_locally_owned_on_level())
+                    {
+                      const auto &fe = cell->get_fe();
+
+                      dof_indices.resize(fe.n_dofs_per_cell());
+                      cell->get_mg_dof_indices(dof_indices);
+
+                      for (unsigned int i = 0; i < dof_indices.size(); ++i)
+                        if (fe.system_to_component_index(i).first == dim)
+                          min_index = std::min(min_index, dof_indices[i]);
+                    }
+
+                min_index = Utilities::MPI::min(min_index, comm);
+
+                if (locally_relevant_dofs.is_element(min_index))
+                  constraints.add_line(min_index);
+              }
 
             for (const auto bci : bcs.all_slip_bcs)
               VectorTools::compute_no_normal_flux_constraints_on_level(

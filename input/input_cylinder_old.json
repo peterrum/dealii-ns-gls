@@ -21,9 +21,13 @@
 
   "lin relative tolerance" : 1e-2,
 
-  "preconditioner" : "GMG-LS",
+  "preconditioner" : "GMG",
+
+  "gmg coarse grid solver"       : "direct",
+  "gmg coarse grid iterate"      : false,
 
   "nonlinear solver" : "Newton",
+  "newton inexact" : true,
 
   "paraview prefix"    : "results_mf",
   "output granularity" : 0.1,

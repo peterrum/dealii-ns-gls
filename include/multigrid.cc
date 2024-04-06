@@ -297,7 +297,7 @@ PreconditionerGMG<dim>::initialize()
   }
 
   if (false)
-    for (unsigned int level = min_level; level <= max_level; ++level)
+    for (unsigned int level = min_level; level <= min_level; ++level)
       {
         const auto &matrix = op[level]->get_system_matrix();
 

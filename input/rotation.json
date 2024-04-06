@@ -24,12 +24,14 @@
   "lin absolute tolerance" : 1e-8,
   "lin relative tolerance" : 1e-4,
 
-  "preconditioner" : "GMG",
+  "preconditioner" : "GMG-LS",
 
   "gmg smoothing n iterations"   : 5,
   "gmg coarse grid solver"       : "AMG",
   "gmg coarse grid iterate"      : false,
   "gmg coarse grid gmres reltol" : 1e-2,
+  "gmg coarse grid amg use default parameters" : false, 
+  "gmg constraint coarse pressure dof" : true,
 
   "nonlinear solver" : "Newton",
 
