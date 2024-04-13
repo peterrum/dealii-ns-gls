@@ -252,12 +252,12 @@ private:
  * Flow-past cylinder simulation with alternative mesh.
  */
 template <int dim>
-class SimulationCylinderLethe2 : public SimulationBase<dim>
+class SimulationCylinderDealii : public SimulationBase<dim>
 {
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinderLethe2();
+  SimulationCylinderDealii();
 
   void
   create_triangulation(Triangulation<dim> &tria,

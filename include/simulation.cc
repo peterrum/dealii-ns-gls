@@ -449,13 +449,13 @@ SimulationCylinderOld<dim>::postprocess(const double           t,
  * Flow-past cylinder simulation with alternative mesh.
  */
 template <int dim>
-SimulationCylinderLethe2<dim>::SimulationCylinderLethe2()
+SimulationCylinderDealii<dim>::SimulationCylinderDealii()
   : use_no_slip_cylinder_bc(true)
 {}
 
 template <int dim>
 void
-SimulationCylinderLethe2<dim>::create_triangulation(
+SimulationCylinderDealii<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
@@ -476,8 +476,8 @@ SimulationCylinderLethe2<dim>::create_triangulation(
 }
 
 template <int dim>
-SimulationCylinderLethe2<dim>::BoundaryDescriptor
-SimulationCylinderLethe2<dim>::get_boundary_descriptor() const
+SimulationCylinderDealii<dim>::BoundaryDescriptor
+SimulationCylinderDealii<dim>::get_boundary_descriptor() const
 {
   BoundaryDescriptor bcs;
 
@@ -499,7 +499,7 @@ SimulationCylinderLethe2<dim>::get_boundary_descriptor() const
 
 template <int dim>
 void
-SimulationCylinderLethe2<dim>::postprocess(const double           t,
+SimulationCylinderDealii<dim>::postprocess(const double           t,
                                            const Mapping<dim>    &mapping,
                                            const DoFHandler<dim> &dof_handler,
                                            const VectorType &solution) const
@@ -584,7 +584,7 @@ template class SimulationCylinder<2>;
 template class SimulationCylinder<3>;
 template class SimulationCylinderOld<2>;
 template class SimulationCylinderOld<3>;
-template class SimulationCylinderLethe2<2>;
-template class SimulationCylinderLethe2<3>;
+template class SimulationCylinderDealii<2>;
+template class SimulationCylinderDealii<3>;
 template class SimulationRotation<2>;
 template class SimulationRotation<3>;

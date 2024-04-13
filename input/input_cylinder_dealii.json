@@ -4,7 +4,7 @@
   "mapping degree"       : 1,
   "n global refinements" : 1,
 
-  "simulation name" : "cylinder lethe 2",
+  "simulation name" : "cylinder dealii",
 
   "dt"             : 0.00205384,
   "cfl"            : 0.1,
