@@ -94,14 +94,14 @@ private:
  * Flow-past cylinder simulation.
  */
 template <int dim>
-class SimulationCylinder : public SimulationBase<dim>
+class SimulationCylinderExadg : public SimulationBase<dim>
 {
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinder(const double nu, const bool use_no_slip_cylinder_bc);
+  SimulationCylinderExadg(const double nu, const bool use_no_slip_cylinder_bc);
 
-  ~SimulationCylinder();
+  ~SimulationCylinderExadg();
 
   void
   create_triangulation(Triangulation<dim> &tria,

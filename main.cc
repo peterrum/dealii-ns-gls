@@ -199,9 +199,10 @@ public:
 
     if (params.simulation_name == "channel")
       simulation = std::make_shared<SimulationChannel<dim>>();
-    else if (params.simulation_name == "cylinder")
+    else if (params.simulation_name == "cylinder exadg")
       simulation =
-        std::make_shared<SimulationCylinder<dim>>(params.nu, params.no_slip);
+        std::make_shared<SimulationCylinderExadg<dim>>(params.nu,
+                                                       params.no_slip);
     else if (params.simulation_name == "cylinder old")
       simulation =
         std::make_shared<SimulationCylinderOld<dim>>(params.nu, params.no_slip);

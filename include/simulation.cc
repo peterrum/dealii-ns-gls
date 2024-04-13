@@ -78,8 +78,9 @@ SimulationChannel<dim>::get_boundary_descriptor() const
  * Flow-past cylinder simulation.
  */
 template <int dim>
-SimulationCylinder<dim>::SimulationCylinder(const double nu,
-                                            const bool use_no_slip_cylinder_bc)
+SimulationCylinderExadg<dim>::SimulationCylinderExadg(
+  const double nu,
+  const bool   use_no_slip_cylinder_bc)
   : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
   , nu(nu)
 {
@@ -87,14 +88,14 @@ SimulationCylinder<dim>::SimulationCylinder(const double nu,
 }
 
 template <int dim>
-SimulationCylinder<dim>::~SimulationCylinder()
+SimulationCylinderExadg<dim>::~SimulationCylinderExadg()
 {
   drag_lift_pressure_file.close();
 }
 
 template <int dim>
 void
-SimulationCylinder<dim>::create_triangulation(
+SimulationCylinderExadg<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
@@ -104,8 +105,8 @@ SimulationCylinder<dim>::create_triangulation(
 }
 
 template <int dim>
-SimulationCylinder<dim>::BoundaryDescriptor
-SimulationCylinder<dim>::get_boundary_descriptor() const
+SimulationCylinderExadg<dim>::BoundaryDescriptor
+SimulationCylinderExadg<dim>::get_boundary_descriptor() const
 {
   BoundaryDescriptor bcs;
 
@@ -130,10 +131,10 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
 
 template <int dim>
 void
-SimulationCylinder<dim>::postprocess(const double           t,
-                                     const Mapping<dim>    &mapping,
-                                     const DoFHandler<dim> &dof_handler,
-                                     const VectorType      &solution) const
+SimulationCylinderExadg<dim>::postprocess(const double           t,
+                                          const Mapping<dim>    &mapping,
+                                          const DoFHandler<dim> &dof_handler,
+                                          const VectorType      &solution) const
 {
   const bool has_ghost_elements = solution.has_ghost_elements();
 
@@ -580,8 +581,8 @@ template class SimulationBase<2>;
 template class SimulationBase<3>;
 template class SimulationChannel<2>;
 template class SimulationChannel<3>;
-template class SimulationCylinder<2>;
-template class SimulationCylinder<3>;
+template class SimulationCylinderExadg<2>;
+template class SimulationCylinderExadg<3>;
 template class SimulationCylinderOld<2>;
 template class SimulationCylinderOld<3>;
 template class SimulationCylinderDealii<2>;
