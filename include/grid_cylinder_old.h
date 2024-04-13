@@ -27,7 +27,7 @@ cylinder(Triangulation<2, 2> &triangulation,
 
   using namespace dealii;
 
-  const double shift = symm ? 0.00 : 0.01;
+  const double shift = symm ? 0.00 : 0.005;
 
   dealii::Triangulation<dim, dim> tria1, tria2, tria3, tria4, tria5, tria6,
     tria7, tria8, tria9, tria_tmp;
@@ -38,13 +38,13 @@ cylinder(Triangulation<2, 2> &triangulation,
 
   GridGenerator::subdivided_hyper_rectangle(
     tria2,
-    {2, 1},
+    {2, 2},
     Point<2>(-cylinder_diameter, -cylinder_diameter),
     Point<2>(cylinder_diameter, -height / 2. + shift));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria3,
-    {2, 1},
+    {2, 2},
     Point<2>(-cylinder_diameter, cylinder_diameter),
     Point<2>(cylinder_diameter, height / 2. + shift));
 
@@ -57,18 +57,15 @@ cylinder(Triangulation<2, 2> &triangulation,
 
   GridGenerator::subdivided_hyper_rectangle(
     tria5,
-    {18, 1},
+    {18, 2},
     Point<2>(cylinder_diameter, cylinder_diameter),
     Point<2>(length - cylinder_position, height / 2. + shift));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria6,
-    {18, 1},
+    {18, 2},
     Point<2>(cylinder_diameter, -height / 2. + shift),
     Point<2>(length - cylinder_position, -cylinder_diameter));
-
-  std::cout << ((length - cylinder_position) - cylinder_diameter) / 18
-            << std::endl;
 
   // left
   GridGenerator::subdivided_hyper_rectangle(
@@ -79,13 +76,13 @@ cylinder(Triangulation<2, 2> &triangulation,
 
   GridGenerator::subdivided_hyper_rectangle(
     tria8,
-    {2, 1},
+    {2, 2},
     Point<2>(-cylinder_position, cylinder_diameter),
     Point<2>(-cylinder_diameter, height / 2. + shift));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria9,
-    {2, 1},
+    {2, 2},
     Point<2>(-cylinder_position, -height / 2. + shift),
     Point<2>(-cylinder_diameter, -cylinder_diameter));
 
