@@ -75,10 +75,10 @@ private:
 /**
  * Simple Picard fixed-point iteration solver.
  */
-class NonLinearSolverPicardSimple : public NonLinearSolverBase
+class NonLinearSolverPicard : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverPicardSimple();
+  NonLinearSolverPicard();
 
   void
   solve(VectorType &solution) const override;

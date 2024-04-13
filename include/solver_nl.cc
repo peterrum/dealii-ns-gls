@@ -90,14 +90,14 @@ NonLinearSolverNewton::solve(VectorType &solution) const
 
 
 
-NonLinearSolverPicardSimple::NonLinearSolverPicardSimple()
+NonLinearSolverPicard::NonLinearSolverPicard()
   : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   , picard_tolerance(1.0e-7) // TODO
   , picard_max_iteration(30) // TODO
 {}
 
 void
-NonLinearSolverPicardSimple::solve(VectorType &solution) const
+NonLinearSolverPicard::solve(VectorType &solution) const
 {
   double       l2_norm       = 1e10;
   unsigned int num_iteration = 0;

@@ -163,8 +163,7 @@ private:
     prm.add_parameter("nonlinear solver",
                       nonlinear_solver,
                       "",
-                      Patterns::Selection(
-                        "linearized|Picard simple|Picard|Newton"));
+                      Patterns::Selection("linearized|Picard|Newton"));
     prm.add_parameter("newton inexact", newton_inexact);
 
     // output
@@ -693,8 +692,8 @@ public:
 
     if (params.nonlinear_solver == "linearized")
       nonlinear_solver = std::make_shared<NonLinearSolverLinearized>();
-    else if (params.nonlinear_solver == "Picard simple")
-      nonlinear_solver = std::make_shared<NonLinearSolverPicardSimple>();
+    else if (params.nonlinear_solver == "Picard")
+      nonlinear_solver = std::make_shared<NonLinearSolverPicard>();
     else if (params.nonlinear_solver == "Newton")
       nonlinear_solver =
         std::make_shared<NonLinearSolverNewton>(params.newton_inexact);
