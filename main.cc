@@ -695,9 +695,6 @@ public:
       nonlinear_solver = std::make_shared<NonLinearSolverLinearized>();
     else if (params.nonlinear_solver == "Picard simple")
       nonlinear_solver = std::make_shared<NonLinearSolverPicardSimple>();
-    else if (params.nonlinear_solver == "Picard")
-      nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
-        time_integrator_data->get_theta());
     else if (params.nonlinear_solver == "Newton")
       nonlinear_solver =
         std::make_shared<NonLinearSolverNewton>(params.newton_inexact);
