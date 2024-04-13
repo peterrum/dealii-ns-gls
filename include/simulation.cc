@@ -449,71 +449,6 @@ SimulationCylinderOld<dim>::postprocess(const double           t,
  * Flow-past cylinder simulation with alternative mesh.
  */
 template <int dim>
-SimulationCylinderLethe<dim>::SimulationCylinderLethe()
-  : use_no_slip_cylinder_bc(true)
-{}
-
-template <int dim>
-void
-SimulationCylinderLethe<dim>::create_triangulation(
-  Triangulation<dim> &tria,
-  const unsigned int  n_global_refinements) const
-{
-  GridIn<dim> grid_in(tria);
-  grid_in.read("../mesh/cylinder.msh");
-
-  Point<dim>                   circleCenter(8, 8);
-  const SphericalManifold<dim> manifold_description(circleCenter);
-  tria.set_manifold(0, manifold_description);
-
-  tria.refine_global(n_global_refinements);
-}
-
-template <int dim>
-SimulationCylinderLethe<dim>::BoundaryDescriptor
-SimulationCylinderLethe<dim>::get_boundary_descriptor() const
-{
-  BoundaryDescriptor bcs;
-
-  // inflow
-  bcs.all_inhomogeneous_dbcs.emplace_back(
-    1, std::make_shared<InflowBoundaryValues>());
-
-  // outflow
-  // bcs.all_homogeneous_nbcs.push_back(4);
-
-  // walls
-  bcs.all_slip_bcs.push_back(2);
-
-  // cylinder
-  if (use_no_slip_cylinder_bc)
-    bcs.all_homogeneous_dbcs.push_back(0);
-  else
-    bcs.all_slip_bcs.push_back(0);
-
-  return bcs;
-}
-
-template <int dim>
-void
-SimulationCylinderLethe<dim>::postprocess(const double           t,
-                                          const Mapping<dim>    &mapping,
-                                          const DoFHandler<dim> &dof_handler,
-                                          const VectorType      &solution) const
-{
-  // nothing to do
-  (void)t;
-  (void)mapping;
-  (void)dof_handler;
-  (void)solution;
-}
-
-
-
-/**
- * Flow-past cylinder simulation with alternative mesh.
- */
-template <int dim>
 SimulationCylinderLethe2<dim>::SimulationCylinderLethe2()
   : use_no_slip_cylinder_bc(true)
 {}
@@ -649,8 +584,6 @@ template class SimulationCylinder<2>;
 template class SimulationCylinder<3>;
 template class SimulationCylinderOld<2>;
 template class SimulationCylinderOld<3>;
-template class SimulationCylinderLethe<2>;
-template class SimulationCylinderLethe<3>;
 template class SimulationCylinderLethe2<2>;
 template class SimulationCylinderLethe2<3>;
 template class SimulationRotation<2>;

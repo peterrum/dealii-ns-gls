@@ -252,66 +252,6 @@ private:
  * Flow-past cylinder simulation with alternative mesh.
  */
 template <int dim>
-class SimulationCylinderLethe : public SimulationBase<dim>
-{
-public:
-  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
-
-  SimulationCylinderLethe();
-
-  void
-  create_triangulation(Triangulation<dim> &tria,
-                       const unsigned int  n_global_refinements) const override;
-
-  virtual BoundaryDescriptor
-  get_boundary_descriptor() const override;
-
-  void
-  postprocess(const double           t,
-              const Mapping<dim>    &mapping,
-              const DoFHandler<dim> &dof_handler,
-              const VectorType      &solution) const override;
-
-private:
-  const bool use_no_slip_cylinder_bc;
-
-  class InflowBoundaryValues : public Function<dim>
-  {
-  public:
-    InflowBoundaryValues()
-      : Function<dim>(dim + 1)
-      , t_(0.0){};
-
-    double
-    value(const Point<dim> &p, const unsigned int component) const override
-    {
-      (void)p;
-
-      const double u_val = 1.0;
-      const double v_val = 0.0;
-      const double p_val = 0.0;
-
-      if (component == 0)
-        return u_val;
-      else if (component == 1)
-        return v_val;
-      else if (component == 2)
-        return p_val;
-
-      return 0;
-    }
-
-  private:
-    const double t_;
-  };
-};
-
-
-
-/**
- * Flow-past cylinder simulation with alternative mesh.
- */
-template <int dim>
 class SimulationCylinderLethe2 : public SimulationBase<dim>
 {
 public:
