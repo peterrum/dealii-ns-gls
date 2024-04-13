@@ -220,8 +220,6 @@ public:
 
     simulation->create_triangulation(tria, params.n_global_refinements);
 
-    tria.reset_all_manifolds(); // TODO: problem with ChartManifold
-
     const auto bcs = simulation->get_boundary_descriptor();
 
     FESystem<dim> fe(FE_Q<dim>(params.fe_degree), dim + 1);

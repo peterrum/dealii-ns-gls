@@ -102,6 +102,8 @@ SimulationCylinderExadg<dim>::create_triangulation(
   ExaDG::FlowPastCylinder::create_coarse_grid(tria);
 
   tria.refine_global(n_global_refinements);
+
+  tria.reset_all_manifolds(); // TODO: problem with ChartManifold
 }
 
 template <int dim>
@@ -451,7 +453,7 @@ SimulationCylinderOld<dim>::postprocess(const double           t,
  */
 template <int dim>
 SimulationCylinderDealii<dim>::SimulationCylinderDealii()
-  : use_no_slip_cylinder_bc(true)
+  : use_no_slip_cylinder_bc(false)
 {}
 
 template <int dim>
@@ -464,7 +466,7 @@ SimulationCylinderDealii<dim>::create_triangulation(
 
   tria.refine_global(n_global_refinements);
 
-  if (true)
+  if (false)
     {
       const auto bb =
         BoundingBox<dim>(Point<dim>(0.2, 0.2)).create_extended(0.12);
