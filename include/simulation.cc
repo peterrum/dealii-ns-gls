@@ -470,13 +470,15 @@ namespace dealii
                              const double       shell_region_width,
                              const unsigned int n_shells,
                              const double       skewness,
-                             const bool         colorize)
+                             const bool         colorize,
+                             const bool         symm)
     {
       Assert(0.0 <= shell_region_width && shell_region_width < 0.05,
              ExcMessage("The width of the shell region must be less than 0.05 "
                         "(and preferably close to 0.03)"));
       const types::manifold_id polar_manifold_id = 0;
       const types::manifold_id tfi_manifold_id   = 1;
+      const double             height            = symm ? 0.40 : 0.41;
 
       // We begin by setting up a grid that is 4 by 22 cells. While not
       // squares, these have pretty good aspect ratios.
@@ -484,7 +486,7 @@ namespace dealii
       GridGenerator::subdivided_hyper_rectangle(bulk_tria,
                                                 {22u, 4u},
                                                 Point<2>(0.0, 0.0),
-                                                Point<2>(2.2, 0.41));
+                                                Point<2>(2.2, height));
       // bulk_tria now looks like this:
       //
       //   +--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+--+
@@ -539,16 +541,16 @@ namespace dealii
       Triangulation<2> cylinder_tria;
       GridGenerator::hyper_cube_with_cylindrical_hole(cylinder_tria,
                                                       0.05 + shell_region_width,
-                                                      0.41 / 4.0);
+                                                      height / 4.0);
       // The bulk cells are not quite squares, so we need to move the left
       // and right sides of cylinder_tria inwards so that it fits in
       // bulk_tria:
       for (const auto &cell : cylinder_tria.active_cell_iterators())
         for (const unsigned int vertex_n : GeometryInfo<2>::vertex_indices())
           {
-            if (std::abs(cell->vertex(vertex_n)[0] - -0.41 / 4.0) < 1e-10)
+            if (std::abs(cell->vertex(vertex_n)[0] - -height / 4.0) < 1e-10)
               cell->vertex(vertex_n)[0] = -0.1;
-            else if (std::abs(cell->vertex(vertex_n)[0] - 0.41 / 4.0) < 1e-10)
+            else if (std::abs(cell->vertex(vertex_n)[0] - height / 4.0) < 1e-10)
               cell->vertex(vertex_n)[0] = 0.1;
           }
 
@@ -687,7 +689,7 @@ namespace dealii
               else
                 {
                   Assert(std::abs(center[1] - 0.00) < 1.0e-10 ||
-                           std::abs(center[1] - 0.41) < 1.0e-10,
+                           std::abs(center[1] - height) < 1.0e-10,
                          ExcInternalError());
                   face->set_boundary_id(3);
                 }
@@ -699,12 +701,15 @@ namespace dealii
                              const double       shell_region_width,
                              const unsigned int n_shells,
                              const double       skewness,
-                             const bool         colorize)
+                             const bool         colorize,
+                             const bool         symm)
     {
+      const double height = symm ? 0.40 : 0.41;
+
       Triangulation<2> tria_2;
       my_channel_with_cylinder(
-        tria_2, shell_region_width, n_shells, skewness, colorize);
-      extrude_triangulation(tria_2, 5, 0.41, tria, true);
+        tria_2, shell_region_width, n_shells, skewness, colorize, symm);
+      extrude_triangulation(tria_2, 5, height, tria, true);
 
       // set up the new 3d manifolds
       const types::manifold_id      cylindrical_manifold_id = 0;
@@ -742,8 +747,10 @@ namespace dealii
  */
 template <int dim>
 SimulationCylinderDealii<dim>::SimulationCylinderDealii(
-  const bool use_no_slip_cylinder_bc)
+  const bool use_no_slip_cylinder_bc,
+  const bool symm)
   : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
+  , symm(symm)
 {}
 
 template <int dim>
@@ -752,7 +759,7 @@ SimulationCylinderDealii<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
-  GridGenerator::my_channel_with_cylinder(tria, 0.03, 2, 2.0, true);
+  GridGenerator::my_channel_with_cylinder(tria, 0.03, 2, 2.0, true, symm);
 
   tria.refine_global(n_global_refinements);
 

@@ -99,7 +99,8 @@ struct Parameters
   double      output_granularity = 0.0;
 
   // simulation-specific parameters (TODO)
-  bool no_slip = true;
+  bool no_slip   = true;
+  bool symmetric = true;
 
   void
   parse(const std::string file_name)
@@ -172,6 +173,7 @@ private:
 
     // simulation-specific
     prm.add_parameter("no slip", no_slip);
+    prm.add_parameter("symmetric", symmetric);
   }
 };
 
@@ -207,7 +209,8 @@ public:
         std::make_shared<SimulationCylinderOld<dim>>(params.nu, params.no_slip);
     else if (params.simulation_name == "cylinder dealii")
       simulation =
-        std::make_shared<SimulationCylinderDealii<dim>>(params.no_slip);
+        std::make_shared<SimulationCylinderDealii<dim>>(params.no_slip,
+                                                        params.symmetric);
     else if (params.simulation_name == "rotation")
       simulation = std::make_shared<SimulationRotation<dim>>();
     else

@@ -257,7 +257,7 @@ class SimulationCylinderDealii : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinderDealii(const bool use_no_slip_cylinder_bc);
+  SimulationCylinderDealii(const bool use_no_slip_cylinder_bc, const bool symm);
 
   void
   create_triangulation(Triangulation<dim> &tria,
@@ -274,6 +274,7 @@ public:
 
 private:
   const bool use_no_slip_cylinder_bc;
+  const bool symm;
 
   class InflowBoundaryValues : public Function<dim>
   {
