@@ -178,7 +178,9 @@ class SimulationCylinderOld : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinderOld(const double nu, const bool use_no_slip_cylinder_bc);
+  SimulationCylinderOld(const double nu,
+                        const bool   use_no_slip_cylinder_bc,
+                        const bool   symm);
 
   ~SimulationCylinderOld();
 
@@ -198,6 +200,7 @@ public:
 private:
   const bool   use_no_slip_cylinder_bc;
   const double nu;
+  const bool   symm;
 
   std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 

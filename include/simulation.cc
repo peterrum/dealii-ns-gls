@@ -263,9 +263,11 @@ SimulationCylinderExadg<dim>::postprocess(const double           t,
 template <int dim>
 SimulationCylinderOld<dim>::SimulationCylinderOld(
   const double nu,
-  const bool   use_no_slip_cylinder_bc)
+  const bool   use_no_slip_cylinder_bc,
+  const bool   symm)
   : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
   , nu(nu)
+  , symm(symm)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -282,16 +284,7 @@ SimulationCylinderOld<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
-  if (false /* TODO */)
-    cylinder(tria,
-             ExaDG::FlowPastCylinder::L2 - ((dim == 2) ?
-                                              ExaDG::FlowPastCylinder::L1 :
-                                              ExaDG::FlowPastCylinder::X_0),
-             ExaDG::FlowPastCylinder::H,
-             ExaDG::FlowPastCylinder::X_C,
-             ExaDG::FlowPastCylinder::D);
-  else
-    cylinder(tria, 4.0, 2.0, 0.6, 0.5);
+  cylinder(tria, 4.0, 2.0, 0.6, 0.5, symm);
 
   tria.refine_global(n_global_refinements);
 }
