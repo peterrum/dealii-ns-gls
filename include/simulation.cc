@@ -284,7 +284,7 @@ SimulationCylinderOld<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
-  cylinder(tria, 4.0, 2.0, 0.6, 0.5, symm);
+  cylinder(tria, 4.0, 2.0, 1.5, 0.5, symm);
 
   tria.refine_global(n_global_refinements);
 }
