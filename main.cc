@@ -206,7 +206,8 @@ public:
       simulation =
         std::make_shared<SimulationCylinderOld<dim>>(params.nu, params.no_slip);
     else if (params.simulation_name == "cylinder dealii")
-      simulation = std::make_shared<SimulationCylinderDealii<dim>>();
+      simulation =
+        std::make_shared<SimulationCylinderDealii<dim>>(params.no_slip);
     else if (params.simulation_name == "rotation")
       simulation = std::make_shared<SimulationRotation<dim>>();
     else

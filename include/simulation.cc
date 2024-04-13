@@ -452,8 +452,9 @@ SimulationCylinderOld<dim>::postprocess(const double           t,
  * Flow-past cylinder simulation with alternative mesh.
  */
 template <int dim>
-SimulationCylinderDealii<dim>::SimulationCylinderDealii()
-  : use_no_slip_cylinder_bc(false)
+SimulationCylinderDealii<dim>::SimulationCylinderDealii(
+  const bool use_no_slip_cylinder_bc)
+  : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
 {}
 
 template <int dim>

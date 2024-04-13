@@ -257,7 +257,7 @@ class SimulationCylinderDealii : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinderDealii();
+  SimulationCylinderDealii(const bool use_no_slip_cylinder_bc);
 
   void
   create_triangulation(Triangulation<dim> &tria,
