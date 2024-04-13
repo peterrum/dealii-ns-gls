@@ -2,12 +2,12 @@
   "dim"                  : 2,
   "fe degree"            : 1,
   "mapping degree"       : 1,
-  "n global refinements" : 2,
+  "n global refinements" : 3,
 
   "simulation name" : "cylinder old",
 
   "cfl"            : 0.1,
-  "t final"        : 0.1,
+  "t final"        : 20.0,
   "theta"          : 1.0,
   "bdf order"      : 1,
   "time intration" : "bdf",
@@ -26,7 +26,7 @@
   "gmg coarse grid solver"       : "direct",
   "gmg coarse grid iterate"      : false,
 
-  "nonlinear solver" : "Newton",
+  "nonlinear solver" : "Picard simple",
   "newton inexact" : true,
 
   "paraview prefix"    : "results_mf",
