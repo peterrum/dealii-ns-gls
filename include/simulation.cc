@@ -164,9 +164,6 @@ SimulationCylinderExadg<dim>::postprocess(const double           t,
   std::vector<dealii::SymmetricTensor<2, dim>> eps_u(n_q_points);
   std::vector<double>                          p(n_q_points);
 
-  Tensor<2, dim> fluid_stress;
-  Tensor<1, dim> forces;
-
   double drag_local = 0;
   double lift_local = 0;
 
@@ -346,9 +343,6 @@ SimulationCylinderOld<dim>::postprocess(const double           t,
 
   std::vector<dealii::SymmetricTensor<2, dim>> eps_u(n_q_points);
   std::vector<double>                          p(n_q_points);
-
-  Tensor<2, dim> fluid_stress;
-  Tensor<1, dim> forces;
 
   double drag_local = 0;
   double lift_local = 0;

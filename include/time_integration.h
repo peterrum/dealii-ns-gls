@@ -10,6 +10,8 @@ using namespace dealii;
 class TimeIntegratorData
 {
 public:
+  virtual ~TimeIntegratorData() = default;
+
   virtual void
   update_dt(const Number dt_new) = 0;
 
