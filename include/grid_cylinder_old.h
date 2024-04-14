@@ -86,8 +86,6 @@ cylinder(Triangulation<2, 2> &triangulation,
     Point<2>(-cylinder_position, -height / 2. + shift),
     Point<2>(-cylinder_diameter, -cylinder_diameter));
 
-  std::cout << ((-cylinder_diameter) - (-cylinder_position)) / 2 << std::endl;
-
   tria_tmp.set_mesh_smoothing(triangulation.get_mesh_smoothing());
   GridGenerator::merge_triangulations(
     {&tria1, &tria2, &tria3, &tria4, &tria5, &tria6, &tria7, &tria8, &tria9},
