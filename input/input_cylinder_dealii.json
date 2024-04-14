@@ -1,7 +1,7 @@
 {
   "dim"                  : 2,
   "fe degree"            : 1,
-  "mapping degree"       : 1,
+  "mapping degree"       : 0,
   "n global refinements" : 4,
 
   "simulation name" : "cylinder dealii",

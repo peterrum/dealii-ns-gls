@@ -240,7 +240,8 @@ public:
 
     QGauss<dim> quadrature(params.fe_degree + 1);
 
-    MappingQ<dim> mapping(params.mapping_degree);
+    MappingQ<dim> mapping((params.mapping_degree == 0) ? params.fe_degree :
+                                                         params.mapping_degree);
 
     // set up constraints
     ComponentMask mask_v(dim + 1, true);
