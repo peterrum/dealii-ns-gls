@@ -15,6 +15,8 @@ using namespace dealii;
 class LinearSolverBase
 {
 public:
+  virtual ~LinearSolverBase() = default;
+
   virtual void
   initialize() = 0;
 

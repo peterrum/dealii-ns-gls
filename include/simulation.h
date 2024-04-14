@@ -29,6 +29,8 @@ public:
     std::vector<unsigned int> all_slip_bcs;
   };
 
+  virtual ~SimulationBase() = default;
+
   virtual void
   create_triangulation(Triangulation<dim> &tria,
                        const unsigned int  n_global_refinements) const = 0;

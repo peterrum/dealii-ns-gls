@@ -14,6 +14,8 @@ using namespace dealii;
 class NonLinearSolverBase
 {
 public:
+  virtual ~NonLinearSolverBase() = default;
+
   virtual void
   solve(VectorType &solution) const = 0;
 
