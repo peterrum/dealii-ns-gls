@@ -94,14 +94,14 @@ private:
  * Flow-past cylinder simulation.
  */
 template <int dim>
-class SimulationCylinder : public SimulationBase<dim>
+class SimulationCylinderExadg : public SimulationBase<dim>
 {
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinder(const double nu, const bool use_no_slip_cylinder_bc);
+  SimulationCylinderExadg(const double nu, const bool use_no_slip_cylinder_bc);
 
-  ~SimulationCylinder();
+  ~SimulationCylinderExadg();
 
   void
   create_triangulation(Triangulation<dim> &tria,
@@ -178,7 +178,9 @@ class SimulationCylinderOld : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinderOld(const double nu, const bool use_no_slip_cylinder_bc);
+  SimulationCylinderOld(const double nu,
+                        const bool   use_no_slip_cylinder_bc,
+                        const bool   symm);
 
   ~SimulationCylinderOld();
 
@@ -198,6 +200,7 @@ public:
 private:
   const bool   use_no_slip_cylinder_bc;
   const double nu;
+  const bool   symm;
 
   std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
@@ -252,12 +255,12 @@ private:
  * Flow-past cylinder simulation with alternative mesh.
  */
 template <int dim>
-class SimulationCylinderLethe : public SimulationBase<dim>
+class SimulationCylinderDealii : public SimulationBase<dim>
 {
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinderLethe();
+  SimulationCylinderDealii(const bool use_no_slip_cylinder_bc, const bool symm);
 
   void
   create_triangulation(Triangulation<dim> &tria,
@@ -274,66 +277,7 @@ public:
 
 private:
   const bool use_no_slip_cylinder_bc;
-
-  class InflowBoundaryValues : public Function<dim>
-  {
-  public:
-    InflowBoundaryValues()
-      : Function<dim>(dim + 1)
-      , t_(0.0){};
-
-    double
-    value(const Point<dim> &p, const unsigned int component) const override
-    {
-      (void)p;
-
-      const double u_val = 1.0;
-      const double v_val = 0.0;
-      const double p_val = 0.0;
-
-      if (component == 0)
-        return u_val;
-      else if (component == 1)
-        return v_val;
-      else if (component == 2)
-        return p_val;
-
-      return 0;
-    }
-
-  private:
-    const double t_;
-  };
-};
-
-
-
-/**
- * Flow-past cylinder simulation with alternative mesh.
- */
-template <int dim>
-class SimulationCylinderLethe2 : public SimulationBase<dim>
-{
-public:
-  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
-
-  SimulationCylinderLethe2();
-
-  void
-  create_triangulation(Triangulation<dim> &tria,
-                       const unsigned int  n_global_refinements) const override;
-
-  virtual BoundaryDescriptor
-  get_boundary_descriptor() const override;
-
-  void
-  postprocess(const double           t,
-              const Mapping<dim>    &mapping,
-              const DoFHandler<dim> &dof_handler,
-              const VectorType      &solution) const override;
-
-private:
-  const bool use_no_slip_cylinder_bc;
+  const bool symm;
 
   class InflowBoundaryValues : public Function<dim>
   {

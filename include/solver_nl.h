@@ -75,32 +75,10 @@ private:
 /**
  * Simple Picard fixed-point iteration solver.
  */
-class NonLinearSolverPicardSimple : public NonLinearSolverBase
-{
-public:
-  NonLinearSolverPicardSimple();
-
-  void
-  solve(VectorType &solution) const override;
-
-private:
-  const ConditionalOStream pcout;
-
-  const double       picard_tolerance;
-  const unsigned int picard_max_iteration;
-};
-
-
-
-/**
- * Advanced Picard fixed-point iteration solver.
- *
- * TODO: Not working yet.
- */
 class NonLinearSolverPicard : public NonLinearSolverBase
 {
 public:
-  NonLinearSolverPicard(const double theta);
+  NonLinearSolverPicard();
 
   void
   solve(VectorType &solution) const override;
@@ -108,12 +86,6 @@ public:
 private:
   const ConditionalOStream pcout;
 
-  mutable bool need_to_recompute_matrix;
-
   const double       picard_tolerance;
   const unsigned int picard_max_iteration;
-  const bool         linear_always_recompute_matrix;
-  const double       picard_reduction_ratio_admissible;
-  const double       picard_reduction_ratio_recompute;
-  const double       theta;
 };

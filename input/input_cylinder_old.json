@@ -1,13 +1,13 @@
 {
   "dim"                  : 2,
-  "fe degree"            : 1,
-  "mapping degree"       : 1,
+  "fe degree"            : 2,
+  "mapping degree"       : 0,
   "n global refinements" : 2,
 
   "simulation name" : "cylinder old",
 
   "cfl"            : 0.1,
-  "t final"        : 0.1,
+  "t final"        : 20.0,
   "theta"          : 1.0,
   "bdf order"      : 1,
   "time intration" : "bdf",
@@ -32,5 +32,6 @@
   "paraview prefix"    : "results_mf",
   "output granularity" : 0.1,
   
-  "no slip" : true
+  "no slip" : true,
+  "symmetric" : false
 }

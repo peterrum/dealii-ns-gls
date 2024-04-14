@@ -99,7 +99,8 @@ struct Parameters
   double      output_granularity = 0.0;
 
   // simulation-specific parameters (TODO)
-  bool no_slip = true;
+  bool no_slip   = true;
+  bool symmetric = true;
 
   void
   parse(const std::string file_name)
@@ -163,8 +164,7 @@ private:
     prm.add_parameter("nonlinear solver",
                       nonlinear_solver,
                       "",
-                      Patterns::Selection(
-                        "linearized|Picard simple|Picard|Newton"));
+                      Patterns::Selection("linearized|Picard|Newton"));
     prm.add_parameter("newton inexact", newton_inexact);
 
     // output
@@ -173,6 +173,7 @@ private:
 
     // simulation-specific
     prm.add_parameter("no slip", no_slip);
+    prm.add_parameter("symmetric", symmetric);
   }
 };
 
@@ -199,16 +200,19 @@ public:
 
     if (params.simulation_name == "channel")
       simulation = std::make_shared<SimulationChannel<dim>>();
-    else if (params.simulation_name == "cylinder")
+    else if (params.simulation_name == "cylinder exadg")
       simulation =
-        std::make_shared<SimulationCylinder<dim>>(params.nu, params.no_slip);
+        std::make_shared<SimulationCylinderExadg<dim>>(params.nu,
+                                                       params.no_slip);
     else if (params.simulation_name == "cylinder old")
       simulation =
-        std::make_shared<SimulationCylinderOld<dim>>(params.nu, params.no_slip);
-    else if (params.simulation_name == "cylinder lethe")
-      simulation = std::make_shared<SimulationCylinderLethe<dim>>();
-    else if (params.simulation_name == "cylinder lethe 2")
-      simulation = std::make_shared<SimulationCylinderLethe2<dim>>();
+        std::make_shared<SimulationCylinderOld<dim>>(params.nu,
+                                                     params.no_slip,
+                                                     params.symmetric);
+    else if (params.simulation_name == "cylinder dealii")
+      simulation =
+        std::make_shared<SimulationCylinderDealii<dim>>(params.no_slip,
+                                                        params.symmetric);
     else if (params.simulation_name == "rotation")
       simulation = std::make_shared<SimulationRotation<dim>>();
     else
@@ -221,8 +225,6 @@ public:
       parallel::distributed::Triangulation<dim>::construct_multigrid_hierarchy);
 
     simulation->create_triangulation(tria, params.n_global_refinements);
-
-    tria.reset_all_manifolds(); // TODO: problem with ChartManifold
 
     const auto bcs = simulation->get_boundary_descriptor();
 
@@ -238,7 +240,8 @@ public:
 
     QGauss<dim> quadrature(params.fe_degree + 1);
 
-    MappingQ<dim> mapping(params.mapping_degree);
+    MappingQ<dim> mapping((params.mapping_degree == 0) ? params.fe_degree :
+                                                         params.mapping_degree);
 
     // set up constraints
     ComponentMask mask_v(dim + 1, true);
@@ -694,11 +697,8 @@ public:
 
     if (params.nonlinear_solver == "linearized")
       nonlinear_solver = std::make_shared<NonLinearSolverLinearized>();
-    else if (params.nonlinear_solver == "Picard simple")
-      nonlinear_solver = std::make_shared<NonLinearSolverPicardSimple>();
     else if (params.nonlinear_solver == "Picard")
-      nonlinear_solver = std::make_shared<NonLinearSolverPicard>(
-        time_integrator_data->get_theta());
+      nonlinear_solver = std::make_shared<NonLinearSolverPicard>();
     else if (params.nonlinear_solver == "Newton")
       nonlinear_solver =
         std::make_shared<NonLinearSolverNewton>(params.newton_inexact);
