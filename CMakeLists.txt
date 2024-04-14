@@ -1,4 +1,27 @@
-cmake_minimum_required(VERSION 3.3)
+#
+# Sanity check:
+#
+
+get_filename_component(_source "${CMAKE_SOURCE_DIR}" REALPATH)
+get_filename_component(_build  "${CMAKE_BINARY_DIR}" REALPATH)
+if("${_source}" STREQUAL "${_build}")
+  message(FATAL_ERROR
+    "\nRefusing to configure the project in the source directory. This "
+    "operation would globber important files. You need to configure in a "
+    "separate build directory. It is easiest to simply invoke $ make, which "
+    "will configure ryujin in the directory ./build.\n"
+    "You will need to clean up ./CMakeCache.txt and ./CMakeFiles by hand, "
+    "or by running $ make cleanup_insource which will delete these files "
+    "and directories for you"
+    )
+endif()
+
+#
+# Set up project:
+#
+
+cmake_minimum_required(VERSION 3.5)
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
 set(CMAKE_CXX_STANDARD 20)
 
 project(gls)
