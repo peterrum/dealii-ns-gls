@@ -203,6 +203,7 @@ private:
   const bool   use_no_slip_cylinder_bc;
   const double nu;
   const bool   symm;
+  const bool   rotate;
 
   std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 

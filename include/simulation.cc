@@ -3,6 +3,8 @@
 
 #include <deal.II/grid/grid_in.h>
 
+#include <deal.II/physics/transformations.h>
+
 #include "grid_cylinder.h"
 #include "grid_cylinder_old.h"
 
@@ -265,6 +267,7 @@ SimulationCylinderOld<dim>::SimulationCylinderOld(
   : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
   , nu(nu)
   , symm(symm)
+  , rotate(false /*TODO: make parameter*/)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -281,9 +284,50 @@ SimulationCylinderOld<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
-  cylinder(tria, 2.2, 0.4, 0.2, 0.05, symm);
+  const double diameter = 0.05;
+
+  cylinder(tria, 2.2, 0.4, 0.2, diameter, symm);
 
   tria.refine_global(n_global_refinements);
+
+  if (rotate)
+    {
+      const double angle = 0.2;
+
+      const auto matrix =
+        Physics::Transformations::Rotations::rotation_matrix_2d(angle);
+
+      const auto bb =
+        BoundingBox<2>(Point<2>()).create_extended(diameter - 1e-6);
+
+      std::vector<bool> vertex_state(tria.n_vertices(), false);
+
+      for (auto cell : tria.cell_iterators())
+        for (const auto v : cell->vertex_indices())
+          if (vertex_state[cell->vertex_index(v)] == false)
+            {
+              auto &vertex = cell->vertex(v);
+
+              Point<2> vertex_2D(vertex[0], vertex[1]);
+
+              if (bb.point_inside(vertex_2D))
+                {
+                  double factor = diameter / std::max(std::abs(vertex_2D[0]),
+                                                      std::abs(vertex_2D[1]));
+
+                  factor = (vertex_2D.norm() - (diameter / 2)) /
+                           (vertex_2D.norm() * factor - (diameter / 2));
+
+                  vertex_2D = (matrix * vertex_2D) * (1.0 - factor) +
+                              vertex_2D * (factor);
+
+                  vertex[0] = vertex_2D[0];
+                  vertex[1] = vertex_2D[1];
+                }
+
+              vertex_state[cell->vertex_index(v)] = true;
+            }
+    }
 }
 
 template <int dim>
