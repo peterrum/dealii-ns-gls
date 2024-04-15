@@ -180,7 +180,8 @@ public:
 
   SimulationCylinderOld(const double nu,
                         const bool   use_no_slip_cylinder_bc,
-                        const bool   symm);
+                        const bool   symm,
+                        const double t_init);
 
   ~SimulationCylinderOld();
 
@@ -202,6 +203,7 @@ private:
   const double nu;
   const bool   symm;
   const bool   rotate;
+  const double t_init;
 
   std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
@@ -210,28 +212,19 @@ private:
   class InflowBoundaryValues : public Function<dim>
   {
   public:
-    InflowBoundaryValues()
+    InflowBoundaryValues(const double t_init)
       : Function<dim>(dim + 1)
-      , t_(0.0){};
+      , t_init(t_init)
+    {}
 
     double
     value(const Point<dim> &p, const unsigned int component) const override
     {
-      const double Um = 1.5;
-      const double H  = 0.41;
-      const double y  = p[1];
+      (void)p;
 
-      (void)Um;
-      (void)H;
-      (void)y;
+      const double u_val =
+        1.0 * ((t_init == 0) ? 1.0 : std::min(this->get_time() / t_init, 1.0));
 
-      /// FIXME here. Somehow the velocity is too small
-      /// I don't know why.
-      const double u_val = 1.0;
-      // const double u_val = 2.0 * 4.0 * Um * (y + H / 2.0) * (H / 2.0 - y)
-      //*
-      //  std::sin((t_+1e-10) * numbers::PI / 8.0) / (H * H)
-      ;
       const double v_val = 0.0;
       const double p_val = 0.0;
 
@@ -246,7 +239,7 @@ private:
     }
 
   private:
-    const double t_;
+    const double t_init;
   };
 };
 
