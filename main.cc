@@ -206,22 +206,14 @@ public:
 
     if (params.simulation_name == "channel")
       simulation = std::make_shared<SimulationChannel<dim>>();
-    else if (params.simulation_name == "cylinder exadg")
+    else if (params.simulation_name == "cylinder")
       simulation =
-        std::make_shared<SimulationCylinderExadg<dim>>(params.nu,
-                                                       params.no_slip);
-    else if (params.simulation_name == "cylinder old")
-      simulation = std::make_shared<SimulationCylinderOld<dim>>(
-        params.nu,
-        params.no_slip,
-        params.symmetric,
-        params.rotate,
-        params.t_init,
-        params.reset_manifold_level);
-    else if (params.simulation_name == "cylinder dealii")
-      simulation =
-        std::make_shared<SimulationCylinderDealii<dim>>(params.no_slip,
-                                                        params.symmetric);
+        std::make_shared<SimulationCylinder<dim>>(params.nu,
+                                                  params.no_slip,
+                                                  params.symmetric,
+                                                  params.rotate,
+                                                  params.t_init,
+                                                  params.reset_manifold_level);
     else if (params.simulation_name == "rotation")
       simulation = std::make_shared<SimulationRotation<dim>>();
     else
