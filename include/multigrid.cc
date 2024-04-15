@@ -154,6 +154,9 @@ void
 PreconditionerGMGAdditionalData::add_parameters(ParameterHandler &prm)
 {
   // smoother
+  prm.add_parameter("gmg output details", output_details);
+
+  // smoother
   prm.add_parameter("gmg smoothing n iterations", smoothing_n_iterations);
 
   // coarse-grid solver
@@ -183,7 +186,7 @@ PreconditionerGMG<dim>::PreconditionerGMG(
   : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   , pcout_cond(std::cout,
                (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) &&
-                 false /*TODO: introduce verbosity*/)
+                 additional_data.output_details)
   , dof_handler(dof_handler)
   , op(op)
   , transfer(transfer)

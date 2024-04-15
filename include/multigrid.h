@@ -23,6 +23,8 @@
 
 struct PreconditionerGMGAdditionalData
 {
+  bool output_details = false;
+
   // smoother (relaxation + point Jacobi)
   double       smoothing_range               = 20;
   unsigned int smoothing_n_iterations        = 5;

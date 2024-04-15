@@ -24,6 +24,7 @@
 
   "preconditioner" : "GMG",
 
+  "gmg output details"           : false,
   "gmg coarse grid solver"       : "direct",
   "gmg coarse grid iterate"      : false,
 
