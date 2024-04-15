@@ -97,13 +97,6 @@ struct Parameters
   std::string paraview_prefix    = "results";
   double      output_granularity = 0.0;
 
-  // simulation-specific parameters (TODO)
-  bool   no_slip              = true;
-  bool   symmetric            = true;
-  bool   rotate               = false;
-  double t_init               = 0.0;
-  int    reset_manifold_level = -1;
-
   void
   parse(const std::string file_name)
   {
@@ -174,13 +167,6 @@ private:
     // output
     prm.add_parameter("paraview prefix", paraview_prefix);
     prm.add_parameter("output granularity", output_granularity);
-
-    // simulation-specific
-    prm.add_parameter("no slip", no_slip);
-    prm.add_parameter("symmetric", symmetric);
-    prm.add_parameter("rotate", rotate);
-    prm.add_parameter("t init", t_init);
-    prm.add_parameter("reset manifold level", reset_manifold_level);
   }
 };
 
@@ -210,13 +196,7 @@ public:
     if (params.simulation_name == "channel")
       simulation = std::make_shared<SimulationChannel<dim>>();
     else if (params.simulation_name == "cylinder")
-      simulation =
-        std::make_shared<SimulationCylinder<dim>>(params.nu,
-                                                  params.no_slip,
-                                                  params.symmetric,
-                                                  params.rotate,
-                                                  params.t_init,
-                                                  params.reset_manifold_level);
+      simulation = std::make_shared<SimulationCylinder<dim>>();
     else if (params.simulation_name == "rotation")
       simulation = std::make_shared<SimulationRotation<dim>>();
     else

@@ -1,5 +1,6 @@
-
 #include "simulation.h"
+
+#include <deal.II/base/parameter_handler.h>
 
 #include <deal.II/grid/grid_in.h>
 
@@ -90,18 +91,13 @@ SimulationChannel<dim>::get_boundary_descriptor() const
  * Flow-past cylinder simulation with alternative mesh.
  */
 template <int dim>
-SimulationCylinder<dim>::SimulationCylinder(const double nu,
-                                            const bool use_no_slip_cylinder_bc,
-                                            const bool symm,
-                                            const bool rotate,
-                                            const double t_init,
-                                            const int    reset_manifold_level)
-  : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
-  , nu(nu)
-  , symm(symm)
-  , rotate(rotate)
-  , t_init(t_init)
-  , reset_manifold_level(reset_manifold_level)
+SimulationCylinder<dim>::SimulationCylinder()
+  : use_no_slip_cylinder_bc(true)
+  , nu(0.0)
+  , symm(true)
+  , rotate(false)
+  , t_init(0.0)
+  , reset_manifold_level(-1)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -116,8 +112,19 @@ template <int dim>
 void
 SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
 {
-  // to be implemented in derived classes
-  (void)file_name;
+  if (file_name == "")
+    return;
+
+  dealii::ParameterHandler prm;
+
+  prm.add_parameter("nu", nu);
+  prm.add_parameter("no slip", use_no_slip_cylinder_bc);
+  prm.add_parameter("symmetric", symm);
+  prm.add_parameter("rotate", rotate);
+  prm.add_parameter("t init", t_init);
+  prm.add_parameter("reset manifold level", reset_manifold_level);
+
+  prm.parse_input(file_name, "", true);
 }
 
 template <int dim>

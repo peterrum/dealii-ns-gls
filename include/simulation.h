@@ -102,12 +102,7 @@ class SimulationCylinder : public SimulationBase<dim>
 public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
-  SimulationCylinder(const double nu,
-                     const bool   use_no_slip_cylinder_bc,
-                     const bool   symm,
-                     const bool   rotate,
-                     const double t_init,
-                     const int    reset_manifold_level);
+  SimulationCylinder();
 
   ~SimulationCylinder();
 
@@ -128,12 +123,12 @@ public:
   parse_parameters(const std::string &file_name) override;
 
 private:
-  const bool   use_no_slip_cylinder_bc;
-  const double nu;
-  const bool   symm;
-  const bool   rotate;
-  const double t_init;
-  const int    reset_manifold_level;
+  bool   use_no_slip_cylinder_bc;
+  double nu;
+  bool   symm;
+  bool   rotate;
+  double t_init;
+  int    reset_manifold_level;
 
   std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
