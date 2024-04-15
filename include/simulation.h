@@ -108,6 +108,7 @@ private:
   bool   rotate;
   double t_init;
   int    reset_manifold_level;
+  double u_max;
 
   std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 

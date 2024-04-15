@@ -17,9 +17,10 @@ namespace InflowBoundaryValues
   class Channel : public Function<dim>
   {
   public:
-    Channel(const double t_init)
+    Channel(const double t_init, const double u_max)
       : Function<dim>(dim + 1)
       , t_init(t_init)
+      , u_max(u_max)
     {}
 
     double
@@ -32,16 +33,17 @@ namespace InflowBoundaryValues
       const double alpha =
         (t_init == 0) ? 1.0 : std::min(this->get_time() / t_init, 1.0);
 
-      const double u_max = 1.0;
+      const double u_val = u_max;
 
       if (component == 0)
-        return u_max * alpha;
+        return u_val * alpha;
       else
         return 0;
     }
 
   private:
     const double t_init;
+    const double u_max;
   };
 
   template <int dim>
@@ -127,7 +129,7 @@ SimulationChannel<dim>::get_boundary_descriptor() const
   BoundaryDescriptor bcs;
 
   bcs.all_inhomogeneous_dbcs.emplace_back(
-    0, std::make_shared<InflowBoundaryValues::Channel<dim>>(0.0));
+    0, std::make_shared<InflowBoundaryValues::Channel<dim>>(0.0, 1.0));
 
   bcs.all_homogeneous_nbcs.push_back(1);
 
@@ -153,6 +155,7 @@ SimulationCylinder<dim>::SimulationCylinder()
   , rotate(false)
   , t_init(0.0)
   , reset_manifold_level(-1)
+  , u_max(1.0)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -178,6 +181,7 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("simulation rotate", rotate);
   prm.add_parameter("simulation t init", t_init);
   prm.add_parameter("simulation reset manifold level", reset_manifold_level);
+  prm.add_parameter("simulation u max", u_max);
 
   prm.parse_input(file_name, "", true);
 }
@@ -262,7 +266,7 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
 
   // inflow
   bcs.all_inhomogeneous_dbcs.emplace_back(
-    0, std::make_shared<InflowBoundaryValues::Channel<dim>>(t_init));
+    0, std::make_shared<InflowBoundaryValues::Channel<dim>>(t_init, u_max));
 
   // outflow
   bcs.all_homogeneous_nbcs.push_back(1);
