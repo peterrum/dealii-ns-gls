@@ -221,6 +221,7 @@ public:
       simulation = std::make_shared<SimulationRotation<dim>>();
     else
       AssertThrow(false, ExcNotImplemented());
+    simulation->parse_parameters(parameter_file_name);
 
     // set up system
     parallel::distributed::Triangulation<dim> tria(

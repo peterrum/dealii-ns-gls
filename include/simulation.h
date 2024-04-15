@@ -41,6 +41,9 @@ public:
               const Mapping<dim>    &mapping,
               const DoFHandler<dim> &dof_handler,
               const VectorType      &vector) const;
+
+  virtual void
+  parse_parameters(const std::string &file_name);
 };
 
 
@@ -120,6 +123,9 @@ public:
               const Mapping<dim>    &mapping,
               const DoFHandler<dim> &dof_handler,
               const VectorType      &solution) const override;
+
+  void
+  parse_parameters(const std::string &file_name) override;
 
 private:
   const bool   use_no_slip_cylinder_bc;

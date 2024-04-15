@@ -27,6 +27,16 @@ SimulationBase<dim>::postprocess(const double           t,
 
 
 template <int dim>
+void
+SimulationBase<dim>::parse_parameters(const std::string &file_name)
+{
+  // to be implemented in derived classes
+  (void)file_name;
+}
+
+
+
+template <int dim>
 SimulationChannel<dim>::SimulationChannel()
   : n_stretching(4)
 {}
@@ -100,6 +110,14 @@ template <int dim>
 SimulationCylinder<dim>::~SimulationCylinder()
 {
   drag_lift_pressure_file.close();
+}
+
+template <int dim>
+void
+SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
+{
+  // to be implemented in derived classes
+  (void)file_name;
 }
 
 template <int dim>
