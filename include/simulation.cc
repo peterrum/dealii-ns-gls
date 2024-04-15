@@ -205,7 +205,17 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("simulation reset manifold level", reset_manifold_level);
   prm.add_parameter("simulation u max", u_max);
 
+  std::string paraview_prefix;
+  prm.add_parameter("paraview prefix", paraview_prefix);
+
   prm.parse_input(file_name, "", true);
+
+  if (paraview_prefix != "")
+    {
+      drag_lift_pressure_file.close();
+      drag_lift_pressure_file.open(paraview_prefix + "_drag_lift_pressure.m",
+                                   std::ios::out);
+    }
 }
 
 
@@ -333,6 +343,8 @@ SimulationCylinder<dim>::postprocess(const double           t,
   if (has_ghost_elements == false)
     solution.update_ghost_values();
 
+  const double diameter = 0.1;
+
   double drag = 0, lift = 0, p_diff = 0;
 
   const MPI_Comm comm = dof_handler.get_communicator();
@@ -400,15 +412,13 @@ SimulationCylinder<dim>::postprocess(const double           t,
 
   // calculate pressure drop
 
-  // 1) set up evaluation routine (TODO: can be reused!)
-  std::shared_ptr<Utilities::MPI::RemotePointEvaluation<dim>> rpe;
-
+  // 1) set up evaluation routine
   if (rpe == nullptr)
     {
       Point<dim> p1, p2;
-      p1[0] = ExaDG::FlowPastCylinder::X_C - ExaDG::FlowPastCylinder::D * 0.5;
-      p2[0] = ExaDG::FlowPastCylinder::X_C + ExaDG::FlowPastCylinder::D * 0.5;
-      p1[1] = p2[1] = ExaDG::FlowPastCylinder::H / 2.0;
+      p1[0] = -diameter / 2.0;
+      p2[0] = +diameter / 2.0;
+      p1[1] = p2[1] = 0.0;
 
       std::vector<Point<dim>> points;
 
