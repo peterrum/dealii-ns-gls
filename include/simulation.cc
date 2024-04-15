@@ -150,6 +150,7 @@ SimulationChannel<dim>::get_boundary_descriptor() const
 template <int dim>
 SimulationCylinder<dim>::SimulationCylinder()
   : use_no_slip_cylinder_bc(true)
+  , use_no_slip_wall_bc(true)
   , nu(0.0)
   , symm(true)
   , rotate(false)
@@ -176,7 +177,8 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   dealii::ParameterHandler prm;
 
   prm.add_parameter("nu", nu);
-  prm.add_parameter("simulation no slip", use_no_slip_cylinder_bc);
+  prm.add_parameter("simulation no slip cylinder", use_no_slip_cylinder_bc);
+  prm.add_parameter("simulation no slip wall", use_no_slip_wall_bc);
   prm.add_parameter("simulation symmetric", symm);
   prm.add_parameter("simulation rotate", rotate);
   prm.add_parameter("simulation t init", t_init);
@@ -272,7 +274,10 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
   bcs.all_homogeneous_nbcs.push_back(1);
 
   // walls
-  bcs.all_slip_bcs.push_back(2);
+  if (use_no_slip_wall_bc)
+    bcs.all_homogeneous_dbcs.push_back(2);
+  else
+    bcs.all_slip_bcs.push_back(2);
 
   // cylinder
   if (use_no_slip_cylinder_bc)
@@ -412,7 +417,6 @@ SimulationCylinder<dim>::postprocess(const double           t,
 
 template <int dim>
 SimulationRotation<dim>::SimulationRotation()
-  : use_no_slip_cylinder_bc(true)
 {}
 
 template <int dim>

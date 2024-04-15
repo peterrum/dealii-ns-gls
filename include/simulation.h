@@ -103,6 +103,7 @@ public:
 
 private:
   bool   use_no_slip_cylinder_bc;
+  bool   use_no_slip_wall_bc;
   double nu;
   bool   symm;
   bool   rotate;
@@ -142,5 +143,4 @@ public:
               const VectorType      &solution) const override;
 
 private:
-  const bool use_no_slip_cylinder_bc;
 };

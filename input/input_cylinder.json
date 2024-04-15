@@ -33,7 +33,8 @@
   "paraview prefix"    : "results_mf",
   "output granularity" : 0.1,
   
-  "simulation no slip"              : false,
+  "simulation no slip cylinder"     : false,
+  "simulation no slip wall"         : false,
   "simulation symmetric"            : false,
   "simulation rotate"               : false,
   "simulation t init"               : 0.01,
