@@ -33,9 +33,9 @@
   "paraview prefix"    : "results_mf",
   "output granularity" : 0.1,
   
-  "no slip"              : false,
-  "symmetric"            : false,
-  "rotate"               : false,
-  "t init"               : 0.01,
-  "reset manifold level" : -1
+  "simulation no slip"              : false,
+  "simulation symmetric"            : false,
+  "simulation rotate"               : false,
+  "simulation t init"               : 0.01,
+  "simulation reset manifold level" : -1
 }

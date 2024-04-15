@@ -118,11 +118,11 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   dealii::ParameterHandler prm;
 
   prm.add_parameter("nu", nu);
-  prm.add_parameter("no slip", use_no_slip_cylinder_bc);
-  prm.add_parameter("symmetric", symm);
-  prm.add_parameter("rotate", rotate);
-  prm.add_parameter("t init", t_init);
-  prm.add_parameter("reset manifold level", reset_manifold_level);
+  prm.add_parameter("simulation no slip", use_no_slip_cylinder_bc);
+  prm.add_parameter("simulation symmetric", symm);
+  prm.add_parameter("simulation rotate", rotate);
+  prm.add_parameter("simulation t init", t_init);
+  prm.add_parameter("simulation reset manifold level", reset_manifold_level);
 
   prm.parse_input(file_name, "", true);
 }
