@@ -52,7 +52,6 @@ using namespace dealii;
 struct Parameters
 {
   // system
-  unsigned int dim                  = 2;
   unsigned int fe_degree            = 1;
   unsigned int mapping_degree       = 1;
   unsigned int n_global_refinements = 0;
@@ -108,6 +107,9 @@ struct Parameters
   void
   parse(const std::string file_name)
   {
+    if (file_name == "")
+      return;
+
     dealii::ParameterHandler prm;
     add_parameters(prm);
 
@@ -119,7 +121,6 @@ private:
   add_parameters(ParameterHandler &prm)
   {
     // system
-    prm.add_parameter("dim", dim);
     prm.add_parameter("fe degree", fe_degree);
     prm.add_parameter("mapping degree", mapping_degree);
     prm.add_parameter("n global refinements", n_global_refinements);
@@ -192,11 +193,13 @@ template <int dim>
 class Driver
 {
 public:
-  Driver(const Parameters &params)
-    : params(params)
+  Driver(const std::string &parameter_file_name)
+    : parameter_file_name(parameter_file_name)
     , comm(MPI_COMM_WORLD)
     , pcout(std::cout, Utilities::MPI::this_mpi_process(comm) == 0)
-  {}
+  {
+    params.parse(parameter_file_name);
+  }
 
   void
   run()
@@ -902,7 +905,8 @@ public:
   }
 
 private:
-  const Parameters         params;
+  const std::string        parameter_file_name;
+  Parameters               params;
   const MPI_Comm           comm;
   const ConditionalOStream pcout;
 
@@ -966,19 +970,26 @@ main(int argc, char *argv[])
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-  Parameters params;
+  // parse input file to get dimension
+  const std::string file_name = (argc == 1) ? "" : argv[1];
+  unsigned int      dim       = 2;
 
-  if (argc > 1)
-    params.parse(std::string(argv[1]));
+  dealii::ParameterHandler prm;
+  prm.add_parameter("dim", dim);
 
-  if (params.dim == 2)
+  if (file_name != "")
+    prm.parse_input(file_name, "", true);
+
+  if (dim == 2)
     {
-      Driver<2> driver(params);
+      // 2D simulation
+      Driver<2> driver(file_name);
       driver.run();
     }
-  else if (params.dim == 3)
+  else if (dim == 3)
     {
-      Driver<3> driver(params);
+      // 3D simulation
+      Driver<3> driver(file_name);
       driver.run();
     }
   else
