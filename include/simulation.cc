@@ -205,7 +205,17 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("simulation reset manifold level", reset_manifold_level);
   prm.add_parameter("simulation u max", u_max);
 
+  std::string paraview_prefix;
+  prm.add_parameter("paraview prefix", paraview_prefix);
+
   prm.parse_input(file_name, "", true);
+
+  if (paraview_prefix != "")
+    {
+      drag_lift_pressure_file.close();
+      drag_lift_pressure_file.open(paraview_prefix + "_drag_lift_pressure.m",
+                                   std::ios::out);
+    }
 }
 
 
