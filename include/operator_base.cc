@@ -39,3 +39,10 @@ OperatorBase::extract_constant_modes() const
   AssertThrow(false, ExcNotImplemented());
   return {};
 }
+
+double
+OperatorBase::get_max_u(const VectorType &src) const
+{
+  (void)src;
+  return 1.0; // TODO
+}

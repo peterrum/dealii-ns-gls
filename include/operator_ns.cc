@@ -305,6 +305,47 @@ NavierStokesOperator<dim>::set_previous_solution(const VectorType &vec)
     vec.zero_out_ghost_values();
 }
 
+
+
+template <int dim>
+double
+NavierStokesOperator<dim>::get_max_u(const VectorType &vec) const
+{
+  FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+  FEEvaluation<dim, -1, 0, 1, Number> integrator_scalar(matrix_free, 0, 0, dim);
+
+  const bool has_ghost_elements = vec.has_ghost_elements();
+
+  AssertThrow(has_ghost_elements == false, ExcInternalError());
+
+  if (has_ghost_elements == false)
+    vec.update_ghost_values();
+
+  VectorizedArray<Number> u_max = 0.0;
+
+  for (unsigned int cell = 0; cell < matrix_free.n_cell_batches(); ++cell)
+    {
+      integrator.reinit(cell);
+
+      integrator.read_dof_values_plain(vec);
+      integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                          EvaluationFlags::EvaluationFlags::gradients);
+
+      for (const auto q : integrator.quadrature_point_indices())
+        u_max = std::max(integrator.get_value(q).norm(), u_max);
+    }
+
+  Number u_max_scalar = 0.0;
+
+  for (const auto v : u_max)
+    u_max_scalar = std::max(u_max_scalar, v);
+
+  if (has_ghost_elements == false)
+    vec.zero_out_ghost_values();
+
+  return Utilities::MPI::max(u_max_scalar, MPI_COMM_WORLD);
+}
+
 template <int dim>
 void
 NavierStokesOperator<dim>::set_linearization_point(const VectorType &vec)

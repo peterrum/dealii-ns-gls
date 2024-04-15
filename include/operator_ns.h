@@ -81,6 +81,9 @@ public:
   void
   initialize_dof_vector(VectorType &vec) const override;
 
+  double
+  get_max_u(const VectorType &src) const override;
+
 private:
   const AffineConstraints<Number> &constraints_inhomogeneous;
 

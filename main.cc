@@ -807,11 +807,6 @@ public:
       constraints_inhomogeneous.distribute(solution.get_current_solution());
     }
 
-    const double dt = (params.dt != 0.0) ?
-                        params.dt :
-                        (GridTools::minimal_cell_diameter(tria, mapping) *
-                         params.cfl / simulation->get_u_max());
-
     double       t       = 0.0;
     unsigned int counter = 1;
 
@@ -821,14 +816,25 @@ public:
                             dof_handler,
                             solution.get_current_solution());
 
+    const double min_dx = GridTools::minimal_cell_diameter(tria, mapping);
+
     // perform time loop
     for (; t < params.t_final; ++counter)
       {
         ScopedName sc("loop");
         MyScope    scope(timer, sc);
 
+        const double u_max =
+          ns_operator->get_max_u(solution.get_current_solution());
+
+        const double dt =
+          (params.dt != 0.0) ?
+            params.dt :
+            (min_dx * params.cfl / std::max(u_max, simulation->get_u_max()));
+
         pcout << "\ncycle\t" << counter << " at time t = " << t;
-        pcout << " with delta_t = " << dt << std::endl;
+        pcout << " with delta_t = " << dt << " and u_max = " << u_max
+              << std::endl;
 
         // set time-dependent inhomogeneous DBCs
         constraints_inhomogeneous.clear();
