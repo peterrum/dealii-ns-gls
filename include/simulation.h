@@ -183,6 +183,7 @@ public:
   SimulationCylinderOld(const double nu,
                         const bool   use_no_slip_cylinder_bc,
                         const bool   symm,
+                        const bool   rotate,
                         const double t_init,
                         const int    reset_manifold_level);
 

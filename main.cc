@@ -101,6 +101,7 @@ struct Parameters
   // simulation-specific parameters (TODO)
   bool   no_slip              = true;
   bool   symmetric            = true;
+  bool   rotate               = false;
   double t_init               = 0.0;
   int    reset_manifold_level = -1;
 
@@ -176,6 +177,7 @@ private:
     // simulation-specific
     prm.add_parameter("no slip", no_slip);
     prm.add_parameter("symmetric", symmetric);
+    prm.add_parameter("rotate", rotate);
     prm.add_parameter("t init", t_init);
     prm.add_parameter("reset manifold level", reset_manifold_level);
   }
@@ -213,6 +215,7 @@ public:
         params.nu,
         params.no_slip,
         params.symmetric,
+        params.rotate,
         params.t_init,
         params.reset_manifold_level);
     else if (params.simulation_name == "cylinder dealii")

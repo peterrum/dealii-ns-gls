@@ -264,12 +264,13 @@ SimulationCylinderOld<dim>::SimulationCylinderOld(
   const double nu,
   const bool   use_no_slip_cylinder_bc,
   const bool   symm,
+  const bool   rotate,
   const double t_init,
   const int    reset_manifold_level)
   : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
   , nu(nu)
   , symm(symm)
-  , rotate(false /*TODO: make parameter*/)
+  , rotate(rotate)
   , t_init(t_init)
   , reset_manifold_level(reset_manifold_level)
 {
@@ -312,6 +313,10 @@ SimulationCylinderOld<dim>::create_triangulation(
   if (rotate)
     {
       const double angle = 0.2;
+      const double factor_i =
+        (reset_manifold_level == -1) ?
+          1.0 :
+          std::cos(numbers::PI / 8.0 / (1 + reset_manifold_level));
 
       const auto matrix =
         Physics::Transformations::Rotations::rotation_matrix_2d(angle);
@@ -334,8 +339,9 @@ SimulationCylinderOld<dim>::create_triangulation(
                   double factor = diameter / std::max(std::abs(vertex_2D[0]),
                                                       std::abs(vertex_2D[1]));
 
-                  factor = (vertex_2D.norm() - (diameter / 2)) /
-                           (vertex_2D.norm() * factor - (diameter / 2));
+                  factor =
+                    (vertex_2D.norm() - (factor_i * diameter / 2)) /
+                    (vertex_2D.norm() * factor - (factor_i * diameter / 2));
 
                   vertex_2D = (matrix * vertex_2D) * (1.0 - factor) +
                               vertex_2D * (factor);
