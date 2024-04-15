@@ -27,20 +27,17 @@ namespace InflowBoundaryValues
     {
       (void)p;
 
-      const double u_val =
-        1.0 * ((t_init == 0) ? 1.0 : std::min(this->get_time() / t_init, 1.0));
+      AssertDimension(dim, 2);
 
-      const double v_val = 0.0;
-      const double p_val = 0.0;
+      const double alpha =
+        (t_init == 0) ? 1.0 : std::min(this->get_time() / t_init, 1.0);
+
+      const double u_max = 1.0;
 
       if (component == 0)
-        return u_val;
-      else if (component == 1)
-        return v_val;
-      else if (component == 2)
-        return p_val;
-
-      return 0;
+        return u_max * alpha;
+      else
+        return 0;
     }
 
   private:
@@ -57,16 +54,12 @@ namespace InflowBoundaryValues
     double
     value(const Point<dim> &p, const unsigned int component) const override
     {
-      (void)p;
-
       if (component == 0)
         return -p[1];
       else if (component == 1)
         return p[0];
-      else if (component == 2)
+      else
         return 0;
-
-      return 0;
     }
 
   private:
