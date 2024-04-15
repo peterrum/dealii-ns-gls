@@ -44,6 +44,9 @@ public:
 
   virtual void
   parse_parameters(const std::string &file_name);
+
+  virtual double
+  get_u_max() const;
 };
 
 
@@ -100,6 +103,9 @@ public:
 
   void
   parse_parameters(const std::string &file_name) override;
+
+  double
+  get_u_max() const override;
 
 private:
   bool   use_no_slip_cylinder_bc;

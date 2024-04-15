@@ -6,8 +6,8 @@
 
   "simulation name" : "cylinder",
 
-  "cfl"            : 1.0,
-  "t final"        : 2.0,
+  "cfl"            : 0.1,
+  "t final"        : 1.0,
   "theta"          : 1.0,
   "bdf order"      : 2,
   "time intration" : "bdf",
@@ -31,13 +31,13 @@
   "newton inexact"   : true,
 
   "paraview prefix"    : "results_turek_2D_Re3900",
-  "output granularity" : 0.01,
+  "output granularity" : 0.001,
   
   "simulation no slip cylinder"     : true,
   "simulation no slip wall"         : true,
   "simulation symmetric"            : false,
   "simulation rotate"               : false,
-  "simulation t init"               : 0.1,
+  "simulation t init"               : 0.01,
   "simulation reset manifold level" : -1,
   "simulation u max"                : 58.5
 }

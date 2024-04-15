@@ -106,6 +106,15 @@ SimulationBase<dim>::parse_parameters(const std::string &file_name)
 
 
 template <int dim>
+double
+SimulationBase<dim>::get_u_max() const
+{
+  return 1.0;
+}
+
+
+
+template <int dim>
 SimulationChannel<dim>::SimulationChannel()
   : n_stretching(4)
 {}
@@ -197,6 +206,15 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("simulation u max", u_max);
 
   prm.parse_input(file_name, "", true);
+}
+
+
+
+template <int dim>
+double
+SimulationCylinder<dim>::get_u_max() const
+{
+  return u_max;
 }
 
 template <int dim>

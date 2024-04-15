@@ -807,10 +807,10 @@ public:
       constraints_inhomogeneous.distribute(solution.get_current_solution());
     }
 
-    const double dt =
-      (params.dt != 0.0) ?
-        params.dt :
-        (GridTools::minimal_cell_diameter(tria, mapping) * params.cfl);
+    const double dt = (params.dt != 0.0) ?
+                        params.dt :
+                        (GridTools::minimal_cell_diameter(tria, mapping) *
+                         params.cfl / simulation->get_u_max());
 
     double       t       = 0.0;
     unsigned int counter = 1;
