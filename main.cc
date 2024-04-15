@@ -99,9 +99,10 @@ struct Parameters
   double      output_granularity = 0.0;
 
   // simulation-specific parameters (TODO)
-  bool   no_slip   = true;
-  bool   symmetric = true;
-  double t_init    = 0.0;
+  bool   no_slip              = true;
+  bool   symmetric            = true;
+  double t_init               = 0.0;
+  int    reset_manifold_level = -1;
 
   void
   parse(const std::string file_name)
@@ -176,6 +177,7 @@ private:
     prm.add_parameter("no slip", no_slip);
     prm.add_parameter("symmetric", symmetric);
     prm.add_parameter("t init", t_init);
+    prm.add_parameter("reset manifold level", reset_manifold_level);
   }
 };
 
@@ -208,7 +210,11 @@ public:
                                                        params.no_slip);
     else if (params.simulation_name == "cylinder old")
       simulation = std::make_shared<SimulationCylinderOld<dim>>(
-        params.nu, params.no_slip, params.symmetric, params.t_init);
+        params.nu,
+        params.no_slip,
+        params.symmetric,
+        params.t_init,
+        params.reset_manifold_level);
     else if (params.simulation_name == "cylinder dealii")
       simulation =
         std::make_shared<SimulationCylinderDealii<dim>>(params.no_slip,

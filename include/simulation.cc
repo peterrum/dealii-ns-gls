@@ -267,12 +267,14 @@ SimulationCylinderOld<dim>::SimulationCylinderOld(
   const double nu,
   const bool   use_no_slip_cylinder_bc,
   const bool   symm,
-  const double t_init)
+  const double t_init,
+  const int    reset_manifold_level)
   : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
   , nu(nu)
   , symm(symm)
   , rotate(false /*TODO: make parameter*/)
   , t_init(t_init)
+  , reset_manifold_level(reset_manifold_level)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -293,14 +295,13 @@ SimulationCylinderOld<dim>::create_triangulation(
 
   cylinder(tria, 2.2, 0.4, 0.2, diameter, symm);
 
-  const unsigned int reset_manifold_level = -1;
-
   if (reset_manifold_level == 0)
     {
       tria.reset_all_manifolds();
       tria.refine_global(n_global_refinements);
     }
-  else if (reset_manifold_level > n_global_refinements)
+  else if (static_cast<unsigned int>(reset_manifold_level) >
+           n_global_refinements)
     {
       tria.refine_global(n_global_refinements);
     }

@@ -181,7 +181,8 @@ public:
   SimulationCylinderOld(const double nu,
                         const bool   use_no_slip_cylinder_bc,
                         const bool   symm,
-                        const double t_init);
+                        const double t_init,
+                        const int    reset_manifold_level);
 
   ~SimulationCylinderOld();
 
@@ -204,6 +205,7 @@ private:
   const bool   symm;
   const bool   rotate;
   const double t_init;
+  const int    reset_manifold_level;
 
   std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
