@@ -11,6 +11,70 @@
 
 using namespace dealii;
 
+namespace InflowBoundaryValues
+{
+  template <int dim>
+  class Channel : public Function<dim>
+  {
+  public:
+    Channel(const double t_init)
+      : Function<dim>(dim + 1)
+      , t_init(t_init)
+    {}
+
+    double
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      (void)p;
+
+      const double u_val =
+        1.0 * ((t_init == 0) ? 1.0 : std::min(this->get_time() / t_init, 1.0));
+
+      const double v_val = 0.0;
+      const double p_val = 0.0;
+
+      if (component == 0)
+        return u_val;
+      else if (component == 1)
+        return v_val;
+      else if (component == 2)
+        return p_val;
+
+      return 0;
+    }
+
+  private:
+    const double t_init;
+  };
+
+  template <int dim>
+  class Rotation : public Function<dim>
+  {
+  public:
+    Rotation()
+      : Function<dim>(dim + 1)
+      , t_(0.0){};
+
+    double
+    value(const Point<dim> &p, const unsigned int component) const override
+    {
+      (void)p;
+
+      if (component == 0)
+        return -p[1];
+      else if (component == 1)
+        return p[0];
+      else if (component == 2)
+        return 0;
+
+      return 0;
+    }
+
+  private:
+    const double t_;
+  };
+} // namespace InflowBoundaryValues
+
 template <int dim>
 void
 SimulationBase<dim>::postprocess(const double           t,
@@ -71,8 +135,8 @@ SimulationChannel<dim>::get_boundary_descriptor() const
 {
   BoundaryDescriptor bcs;
 
-  bcs.all_inhomogeneous_dbcs.emplace_back(0,
-                                          std::make_shared<InflowVelocity>());
+  bcs.all_inhomogeneous_dbcs.emplace_back(
+    0, std::make_shared<InflowBoundaryValues::Channel<dim>>(0.0));
 
   bcs.all_homogeneous_nbcs.push_back(1);
 
@@ -207,7 +271,7 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
 
   // inflow
   bcs.all_inhomogeneous_dbcs.emplace_back(
-    0, std::make_shared<InflowBoundaryValues>(t_init));
+    0, std::make_shared<InflowBoundaryValues::Channel<dim>>(t_init));
 
   // outflow
   bcs.all_homogeneous_nbcs.push_back(1);
@@ -391,7 +455,7 @@ SimulationRotation<dim>::get_boundary_descriptor() const
 
   // inflow
   bcs.all_inhomogeneous_dbcs.emplace_back(
-    0, std::make_shared<InflowBoundaryValues>());
+    0, std::make_shared<InflowBoundaryValues::Rotation<dim>>());
 
   // walls
   bcs.all_homogeneous_dbcs.push_back(1);

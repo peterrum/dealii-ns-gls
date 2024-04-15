@@ -68,27 +68,6 @@ public:
 
 private:
   const unsigned int n_stretching;
-
-  class InflowVelocity : public Function<dim, Number>
-  {
-  public:
-    InflowVelocity()
-      : Function<dim>(dim + 1)
-    {}
-
-    Number
-    value(const Point<dim> &p, const unsigned int component) const override
-    {
-      (void)p;
-
-      if (component == 0)
-        return 1.0;
-      else
-        return 0.0;
-    }
-
-  private:
-  };
 };
 
 
@@ -133,39 +112,6 @@ private:
   std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
   mutable std::ofstream drag_lift_pressure_file;
-
-  class InflowBoundaryValues : public Function<dim>
-  {
-  public:
-    InflowBoundaryValues(const double t_init)
-      : Function<dim>(dim + 1)
-      , t_init(t_init)
-    {}
-
-    double
-    value(const Point<dim> &p, const unsigned int component) const override
-    {
-      (void)p;
-
-      const double u_val =
-        1.0 * ((t_init == 0) ? 1.0 : std::min(this->get_time() / t_init, 1.0));
-
-      const double v_val = 0.0;
-      const double p_val = 0.0;
-
-      if (component == 0)
-        return u_val;
-      else if (component == 1)
-        return v_val;
-      else if (component == 2)
-        return p_val;
-
-      return 0;
-    }
-
-  private:
-    const double t_init;
-  };
 };
 
 
@@ -196,30 +142,4 @@ public:
 
 private:
   const bool use_no_slip_cylinder_bc;
-
-  class InflowBoundaryValues : public Function<dim>
-  {
-  public:
-    InflowBoundaryValues()
-      : Function<dim>(dim + 1)
-      , t_(0.0){};
-
-    double
-    value(const Point<dim> &p, const unsigned int component) const override
-    {
-      (void)p;
-
-      if (component == 0)
-        return -p[1];
-      else if (component == 1)
-        return p[0];
-      else if (component == 2)
-        return 0;
-
-      return 0;
-    }
-
-  private:
-    const double t_;
-  };
 };
