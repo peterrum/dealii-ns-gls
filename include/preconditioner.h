@@ -13,6 +13,8 @@ using namespace dealii;
 class PreconditionerBase
 {
 public:
+  virtual ~PreconditionerBase() = default;
+
   virtual void
   initialize() = 0;
 
