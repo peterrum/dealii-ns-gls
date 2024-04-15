@@ -263,11 +263,13 @@ template <int dim>
 SimulationCylinderOld<dim>::SimulationCylinderOld(
   const double nu,
   const bool   use_no_slip_cylinder_bc,
-  const bool   symm)
+  const bool   symm,
+  const double t_init)
   : use_no_slip_cylinder_bc(use_no_slip_cylinder_bc)
   , nu(nu)
   , symm(symm)
   , rotate(false /*TODO: make parameter*/)
+  , t_init(t_init)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -288,7 +290,23 @@ SimulationCylinderOld<dim>::create_triangulation(
 
   cylinder(tria, 2.2, 0.4, 0.2, diameter, symm);
 
-  tria.refine_global(n_global_refinements);
+  const unsigned int reset_manifold_level = -1;
+
+  if (reset_manifold_level == 0)
+    {
+      tria.reset_all_manifolds();
+      tria.refine_global(n_global_refinements);
+    }
+  else if (reset_manifold_level > n_global_refinements)
+    {
+      tria.refine_global(n_global_refinements);
+    }
+  else
+    {
+      tria.refine_global(reset_manifold_level);
+      tria.reset_all_manifolds();
+      tria.refine_global(n_global_refinements - reset_manifold_level);
+    }
 
   if (rotate)
     {
@@ -338,7 +356,7 @@ SimulationCylinderOld<dim>::get_boundary_descriptor() const
 
   // inflow
   bcs.all_inhomogeneous_dbcs.emplace_back(
-    0, std::make_shared<InflowBoundaryValues>());
+    0, std::make_shared<InflowBoundaryValues>(t_init));
 
   // outflow
   bcs.all_homogeneous_nbcs.push_back(1);
