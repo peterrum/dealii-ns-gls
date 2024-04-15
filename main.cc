@@ -886,6 +886,8 @@ public:
         // postprocessing
         output(t, mapping, dof_handler, current_solution);
         simulation->postprocess(t, mapping, dof_handler, current_solution);
+
+        pcout << "\x1B[2J\x1B[H";
       }
 
     TimerCollection::print_all_wall_time_statistics(true);
