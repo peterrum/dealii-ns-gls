@@ -119,7 +119,7 @@ private:
   int    reset_manifold_level;
   double u_max;
 
-  std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
+  mutable std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
   mutable std::ofstream drag_lift_pressure_file;
 };
