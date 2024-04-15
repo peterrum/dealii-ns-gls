@@ -52,8 +52,7 @@ namespace InflowBoundaryValues
   {
   public:
     Rotation()
-      : Function<dim>(dim + 1)
-      , t_(0.0){};
+      : Function<dim>(dim + 1){};
 
     double
     value(const Point<dim> &p, const unsigned int component) const override
@@ -71,7 +70,6 @@ namespace InflowBoundaryValues
     }
 
   private:
-    const double t_;
   };
 } // namespace InflowBoundaryValues
 
