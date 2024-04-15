@@ -38,13 +38,13 @@ cylinder(Triangulation<2, 2> &triangulation,
 
   GridGenerator::subdivided_hyper_rectangle(
     tria2,
-    {2, 2},
+    {2, 1},
     Point<2>(-cylinder_diameter, -cylinder_diameter),
     Point<2>(cylinder_diameter, -height / 2. + shift));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria3,
-    {2, 2},
+    {2, 1},
     Point<2>(-cylinder_diameter, cylinder_diameter),
     Point<2>(cylinder_diameter, height / 2. + shift));
 
@@ -57,32 +57,32 @@ cylinder(Triangulation<2, 2> &triangulation,
 
   GridGenerator::subdivided_hyper_rectangle(
     tria5,
-    {18, 2},
+    {18, 1},
     Point<2>(cylinder_diameter, cylinder_diameter),
     Point<2>(length - cylinder_position, height / 2. + shift));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria6,
-    {18, 2},
+    {18, 1},
     Point<2>(cylinder_diameter, -height / 2. + shift),
     Point<2>(length - cylinder_position, -cylinder_diameter));
 
   // left
   GridGenerator::subdivided_hyper_rectangle(
     tria7,
-    {2, 2},
+    {1, 2},
     Point<2>(-cylinder_position, -cylinder_diameter),
     Point<2>(-cylinder_diameter, cylinder_diameter));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria8,
-    {2, 2},
+    {1, 1},
     Point<2>(-cylinder_position, cylinder_diameter),
     Point<2>(-cylinder_diameter, height / 2. + shift));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria9,
-    {2, 2},
+    {1, 1},
     Point<2>(-cylinder_position, -height / 2. + shift),
     Point<2>(-cylinder_diameter, -cylinder_diameter));
 

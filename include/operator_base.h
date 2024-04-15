@@ -66,4 +66,7 @@ public:
 
   virtual void
   initialize_dof_vector(VectorType &src) const = 0;
+
+  virtual double
+  get_max_u(const VectorType &src) const;
 };

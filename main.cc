@@ -52,7 +52,6 @@ using namespace dealii;
 struct Parameters
 {
   // system
-  unsigned int dim                  = 2;
   unsigned int fe_degree            = 1;
   unsigned int mapping_degree       = 1;
   unsigned int n_global_refinements = 0;
@@ -98,16 +97,12 @@ struct Parameters
   std::string paraview_prefix    = "results";
   double      output_granularity = 0.0;
 
-  // simulation-specific parameters (TODO)
-  bool   no_slip              = true;
-  bool   symmetric            = true;
-  bool   rotate               = false;
-  double t_init               = 0.0;
-  int    reset_manifold_level = -1;
-
   void
   parse(const std::string file_name)
   {
+    if (file_name == "")
+      return;
+
     dealii::ParameterHandler prm;
     add_parameters(prm);
 
@@ -119,7 +114,6 @@ private:
   add_parameters(ParameterHandler &prm)
   {
     // system
-    prm.add_parameter("dim", dim);
     prm.add_parameter("fe degree", fe_degree);
     prm.add_parameter("mapping degree", mapping_degree);
     prm.add_parameter("n global refinements", n_global_refinements);
@@ -173,13 +167,6 @@ private:
     // output
     prm.add_parameter("paraview prefix", paraview_prefix);
     prm.add_parameter("output granularity", output_granularity);
-
-    // simulation-specific
-    prm.add_parameter("no slip", no_slip);
-    prm.add_parameter("symmetric", symmetric);
-    prm.add_parameter("rotate", rotate);
-    prm.add_parameter("t init", t_init);
-    prm.add_parameter("reset manifold level", reset_manifold_level);
   }
 };
 
@@ -192,11 +179,13 @@ template <int dim>
 class Driver
 {
 public:
-  Driver(const Parameters &params)
-    : params(params)
+  Driver(const std::string &parameter_file_name)
+    : parameter_file_name(parameter_file_name)
     , comm(MPI_COMM_WORLD)
     , pcout(std::cout, Utilities::MPI::this_mpi_process(comm) == 0)
-  {}
+  {
+    params.parse(parameter_file_name);
+  }
 
   void
   run()
@@ -206,26 +195,13 @@ public:
 
     if (params.simulation_name == "channel")
       simulation = std::make_shared<SimulationChannel<dim>>();
-    else if (params.simulation_name == "cylinder exadg")
-      simulation =
-        std::make_shared<SimulationCylinderExadg<dim>>(params.nu,
-                                                       params.no_slip);
-    else if (params.simulation_name == "cylinder old")
-      simulation = std::make_shared<SimulationCylinderOld<dim>>(
-        params.nu,
-        params.no_slip,
-        params.symmetric,
-        params.rotate,
-        params.t_init,
-        params.reset_manifold_level);
-    else if (params.simulation_name == "cylinder dealii")
-      simulation =
-        std::make_shared<SimulationCylinderDealii<dim>>(params.no_slip,
-                                                        params.symmetric);
+    else if (params.simulation_name == "cylinder")
+      simulation = std::make_shared<SimulationCylinder<dim>>();
     else if (params.simulation_name == "rotation")
       simulation = std::make_shared<SimulationRotation<dim>>();
     else
       AssertThrow(false, ExcNotImplemented());
+    simulation->parse_parameters(parameter_file_name);
 
     // set up system
     parallel::distributed::Triangulation<dim> tria(
@@ -831,11 +807,6 @@ public:
       constraints_inhomogeneous.distribute(solution.get_current_solution());
     }
 
-    const double dt =
-      (params.dt != 0.0) ?
-        params.dt :
-        (GridTools::minimal_cell_diameter(tria, mapping) * params.cfl);
-
     double       t       = 0.0;
     unsigned int counter = 1;
 
@@ -845,14 +816,25 @@ public:
                             dof_handler,
                             solution.get_current_solution());
 
+    const double min_dx = GridTools::minimal_cell_diameter(tria, mapping);
+
     // perform time loop
     for (; t < params.t_final; ++counter)
       {
         ScopedName sc("loop");
         MyScope    scope(timer, sc);
 
+        const double u_max =
+          ns_operator->get_max_u(solution.get_current_solution());
+
+        const double dt =
+          (params.dt != 0.0) ?
+            params.dt :
+            (min_dx * params.cfl / std::max(u_max, simulation->get_u_max()));
+
         pcout << "\ncycle\t" << counter << " at time t = " << t;
-        pcout << " with delta_t = " << dt << std::endl;
+        pcout << " with delta_t = " << dt << " and u_max = " << u_max
+              << std::endl;
 
         // set time-dependent inhomogeneous DBCs
         constraints_inhomogeneous.clear();
@@ -904,13 +886,16 @@ public:
         // postprocessing
         output(t, mapping, dof_handler, current_solution);
         simulation->postprocess(t, mapping, dof_handler, current_solution);
+
+        pcout << "\x1B[2J\x1B[H";
       }
 
     TimerCollection::print_all_wall_time_statistics(true);
   }
 
 private:
-  const Parameters         params;
+  const std::string        parameter_file_name;
+  Parameters               params;
   const MPI_Comm           comm;
   const ConditionalOStream pcout;
 
@@ -974,19 +959,26 @@ main(int argc, char *argv[])
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-  Parameters params;
+  // parse input file to get dimension
+  const std::string file_name = (argc == 1) ? "" : argv[1];
+  unsigned int      dim       = 2;
 
-  if (argc > 1)
-    params.parse(std::string(argv[1]));
+  dealii::ParameterHandler prm;
+  prm.add_parameter("dim", dim);
 
-  if (params.dim == 2)
+  if (file_name != "")
+    prm.parse_input(file_name, "", true);
+
+  if (dim == 2)
     {
-      Driver<2> driver(params);
+      // 2D simulation
+      Driver<2> driver(file_name);
       driver.run();
     }
-  else if (params.dim == 3)
+  else if (dim == 3)
     {
-      Driver<3> driver(params);
+      // 3D simulation
+      Driver<3> driver(file_name);
       driver.run();
     }
   else

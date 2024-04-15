@@ -2,9 +2,9 @@
   "dim"                  : 2,
   "fe degree"            : 2,
   "mapping degree"       : 0,
-  "n global refinements" : 2,
+  "n global refinements" : 4,
 
-  "simulation name" : "cylinder old",
+  "simulation name" : "cylinder",
 
   "cfl"            : 0.1,
   "t final"        : 20.0,
@@ -14,8 +14,9 @@
 
   "c1" : 2.00,
   "c2" : 1.0,
-  "nu" : 0.00,
+  "nu" : 0.001,
   "consider time deriverative" : true,
+  "cell wise stabilization"    : false,
 
   "use matrix free ns operator" : true,
 
@@ -23,18 +24,21 @@
 
   "preconditioner" : "GMG",
 
+  "gmg output details"           : false,
   "gmg coarse grid solver"       : "direct",
   "gmg coarse grid iterate"      : false,
 
   "nonlinear solver" : "Newton",
-  "newton inexact" : true,
+  "newton inexact"   : true,
 
   "paraview prefix"    : "results_mf",
   "output granularity" : 0.1,
   
-  "no slip"              : true,
-  "symmetric"            : false,
-  "rotate"               : false,
-  "t init"               : 0.01,
-  "reset manifold level" : -1
+  "simulation no slip cylinder"     : false,
+  "simulation no slip wall"         : false,
+  "simulation symmetric"            : false,
+  "simulation rotate"               : false,
+  "simulation t init"               : 0.01,
+  "simulation reset manifold level" : -1,
+  "simulation u max"                : 1.0
 }
