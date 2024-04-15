@@ -17,23 +17,31 @@ namespace InflowBoundaryValues
   class Channel : public Function<dim>
   {
   public:
-    Channel(const double t_init, const double u_max)
+    Channel(const double t_init,
+            const double u_max,
+            const bool   no_slip_bc = false,
+            const double H          = 0.0,
+            const double shift      = 0.0)
       : Function<dim>(dim + 1)
       , t_init(t_init)
       , u_max(u_max)
+      , no_slip_bc(no_slip_bc)
+      , H(H)
+      , shift(shift)
     {}
 
     double
     value(const Point<dim> &p, const unsigned int component) const override
     {
-      (void)p;
-
       AssertDimension(dim, 2);
 
       const double alpha =
         (t_init == 0) ? 1.0 : std::min(this->get_time() / t_init, 1.0);
 
-      const double u_val = u_max;
+      const double y = p[1] - shift;
+
+      const double u_val =
+        u_max * (no_slip_bc ? (4 * y * (H - y) / H / H) : 1.0);
 
       if (component == 0)
         return u_val * alpha;
@@ -44,6 +52,9 @@ namespace InflowBoundaryValues
   private:
     const double t_init;
     const double u_max;
+    const bool   no_slip_bc;
+    const double H;
+    const double shift;
   };
 
   template <int dim>
@@ -268,7 +279,9 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
 
   // inflow
   bcs.all_inhomogeneous_dbcs.emplace_back(
-    0, std::make_shared<InflowBoundaryValues::Channel<dim>>(t_init, u_max));
+    0,
+    std::make_shared<InflowBoundaryValues::Channel<dim>>(
+      t_init, u_max, use_no_slip_wall_bc, 0.41, symm ? -0.205 : -0.200));
 
   // outflow
   bcs.all_homogeneous_nbcs.push_back(1);

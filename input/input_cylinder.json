@@ -38,5 +38,6 @@
   "simulation symmetric"            : false,
   "simulation rotate"               : false,
   "simulation t init"               : 0.01,
-  "simulation reset manifold level" : -1
+  "simulation reset manifold level" : -1,
+  "simulation u max"                : 1.0
 }
