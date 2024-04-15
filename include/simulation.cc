@@ -292,9 +292,9 @@ SimulationCylinderOld<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
-  const double diameter = 0.05;
+  const double diameter = 0.1;
 
-  cylinder(tria, 2.2, 0.4, 0.2, diameter, symm);
+  cylinder(tria, 2.2, 0.41, 0.2, diameter, symm);
 
   if (reset_manifold_level == 0)
     {
