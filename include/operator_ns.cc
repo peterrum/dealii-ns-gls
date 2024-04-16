@@ -36,7 +36,8 @@ NavierStokesOperator<dim>::NavierStokesOperator(
   , c_1(c_1)
   , c_2(c_2)
   , time_integrator_data(time_integrator_data)
-  , consider_time_deriverative(consider_time_deriverative)
+  , consider_time_deriverative(consider_time_deriverative &&
+                               (time_integrator_data.get_order() > 0))
   , increment_form(increment_form)
   , cell_wise_stabilization(cell_wise_stabilization)
   , compute_penalty_parameters_for_previous_solution(false)
@@ -162,6 +163,9 @@ NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
 
   this->valid_system = false;
 
+  if (this->time_integrator_data.get_order() == 0)
+    return;
+
   const unsigned n_cells             = matrix_free.n_cell_batches();
   const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
@@ -258,7 +262,8 @@ NavierStokesOperator<dim>::compute_penalty_parameters(const VectorType &vec)
   if (has_ghost_elements == false)
     vec.update_ghost_values();
 
-  const auto tau = this->time_integrator_data.get_current_dt();
+  const auto tau  = this->time_integrator_data.get_current_dt();
+  const auto stau = (tau == 0.0) ? 0.0 : (1.0 / tau);
 
   delta_1.resize(n_cells);
   delta_2.resize(n_cells);
@@ -287,8 +292,9 @@ NavierStokesOperator<dim>::compute_penalty_parameters(const VectorType &vec)
 
           if (nu[0] < h)
             {
-              delta_1[cell][v] = c_1 / std::sqrt(1. / (tau * tau) +
-                                                 u_max[v] * u_max[v] / (h * h));
+              delta_1[cell][v] =
+                c_1 / std::sqrt(Utilities::fixed_power<2>(stau) +
+                                u_max[v] * u_max[v] / (h * h));
               delta_2[cell][v] = c_2 * h;
             }
           else
@@ -323,7 +329,7 @@ NavierStokesOperator<dim>::compute_penalty_parameters(const VectorType &vec)
               Utilities::fixed_power<2>(integrator.get_value(q)[k]);
 
           delta_1_q[cell][q] =
-            1. / std::sqrt(Utilities::fixed_power<2>(1.0 / tau) +
+            1. / std::sqrt(Utilities::fixed_power<2>(stau) +
                            4. * u_mag_squared / h / h +
                            9. * Utilities::fixed_power<2>(4. * nu / (h * h)));
 

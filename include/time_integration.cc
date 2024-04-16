@@ -138,6 +138,47 @@ TimeIntegratorDataTheta::get_theta() const
 
 
 
+TimeIntegratorDataNone::TimeIntegratorDataNone()
+{}
+
+void
+TimeIntegratorDataNone::update_dt(const Number dt_new)
+{
+  (void)dt_new;
+}
+
+Number
+TimeIntegratorDataNone::get_primary_weight() const
+{
+  return 0.0;
+}
+
+const std::vector<Number> &
+TimeIntegratorDataNone::get_weights() const
+{
+  return weights;
+}
+
+unsigned int
+TimeIntegratorDataNone::get_order() const
+{
+  return 0;
+}
+
+Number
+TimeIntegratorDataNone::get_current_dt() const
+{
+  return 1.0;
+}
+
+Number
+TimeIntegratorDataNone::get_theta() const
+{
+  return 1.0;
+}
+
+
+
 SolutionHistory::SolutionHistory(const unsigned int size)
   : solutions(size)
 {}
