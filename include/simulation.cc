@@ -354,18 +354,14 @@ SimulationCylinder<dim>::postprocess(const double           t,
 
   FEFaceValues<dim> fe_face_values(dof_handler.get_fe(),
                                    face_quadrature_formula,
-                                   update_values | update_quadrature_points |
-                                     update_gradients | update_JxW_values |
-                                     update_normal_vectors);
+                                   update_values | update_gradients |
+                                     update_JxW_values | update_normal_vectors);
 
   FEValuesViews::Vector<dim> velocities(fe_face_values, 0);
   FEValuesViews::Scalar<dim> pressure(fe_face_values, dim);
 
   std::vector<dealii::SymmetricTensor<2, dim>> eps_u(n_q_points);
   std::vector<double>                          p(n_q_points);
-
-  Tensor<2, dim> fluid_stress;
-  Tensor<1, dim> forces;
 
   double drag_local = 0;
   double lift_local = 0;
@@ -380,8 +376,6 @@ SimulationCylinder<dim>::postprocess(const double           t,
             (cell->face(face)->boundary_id() == 3))
           {
             fe_face_values.reinit(cell, face);
-            std::vector<Point<dim>> q_points =
-              fe_face_values.get_quadrature_points();
 
             velocities.get_function_symmetric_gradients(solution, eps_u);
             pressure.get_function_values(solution, p);
