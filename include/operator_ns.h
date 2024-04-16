@@ -55,7 +55,7 @@ public:
   set_previous_solution(const SolutionHistory &history) override;
 
   void
-  set_previous_solution(const VectorType &vec) override;
+  compute_penalty_parameters(const VectorType &vec);
 
   void
   set_linearization_point(const VectorType &vec) override;
@@ -100,6 +100,7 @@ private:
   const bool                    consider_time_deriverative;
   const bool                    increment_form;
   const bool                    cell_wise_stabilization;
+  const bool compute_penalty_parameters_for_previous_solution;
 
   mutable bool valid_system;
 
@@ -180,9 +181,6 @@ public:
 
   void
   set_previous_solution(const SolutionHistory &vec) override;
-
-  void
-  set_previous_solution(const VectorType &vec) override;
 
   void
   set_linearization_point(const VectorType &src) override;

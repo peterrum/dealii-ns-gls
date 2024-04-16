@@ -130,7 +130,7 @@ private:
     prm.add_parameter("time intration",
                       time_intration,
                       "",
-                      Patterns::Selection("bdf|theta"));
+                      Patterns::Selection("bdf|theta|none"));
 
     // NSE-GLS parameters
     prm.add_parameter("nu", nu);
@@ -287,6 +287,8 @@ public:
     else if (params.time_intration == "theta")
       time_integrator_data =
         std::make_shared<TimeIntegratorDataTheta>(params.theta);
+    else if (params.time_intration == "none")
+      time_integrator_data = std::make_shared<TimeIntegratorDataNone>();
     else
       AssertThrow(false, ExcNotImplemented());
 
@@ -884,8 +886,17 @@ public:
         t += dt;
 
         // postprocessing
-        output(t, mapping, dof_handler, current_solution);
-        simulation->postprocess(t, mapping, dof_handler, current_solution);
+        if (time_integrator_data->get_order() > 0)
+          {
+            output(t, mapping, dof_handler, current_solution);
+            simulation->postprocess(t, mapping, dof_handler, current_solution);
+          }
+        else
+          {
+            output(t, mapping, dof_handler, current_solution, true);
+            simulation->postprocess(t, mapping, dof_handler, current_solution);
+            break;
+          }
 
         pcout << "\x1B[2J\x1B[H";
       }

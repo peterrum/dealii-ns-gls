@@ -36,9 +36,11 @@ NavierStokesOperator<dim>::NavierStokesOperator(
   , c_1(c_1)
   , c_2(c_2)
   , time_integrator_data(time_integrator_data)
-  , consider_time_deriverative(consider_time_deriverative)
+  , consider_time_deriverative(consider_time_deriverative &&
+                               (time_integrator_data.get_order() > 0))
   , increment_form(increment_form)
   , cell_wise_stabilization(cell_wise_stabilization)
+  , compute_penalty_parameters_for_previous_solution(false)
   , valid_system(false)
 {
   const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
@@ -161,6 +163,9 @@ NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
 
   this->valid_system = false;
 
+  if (this->time_integrator_data.get_order() == 0)
+    return;
+
   const unsigned n_cells             = matrix_free.n_cell_batches();
   const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
 
@@ -188,31 +193,67 @@ NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
         u_time_derivative_old[cell][q] = integrator.get_value(q);
     }
 
-  this->set_previous_solution(history.get_vectors()[1]);
+  if (theta[0] != 1.0)
+    {
+      const auto &vec = history.get_vectors()[1];
+
+      u_old_gradient.reinit(n_cells, n_quadrature_points);
+      p_old_gradient.reinit(n_cells, n_quadrature_points);
+
+      FEEvaluation<dim, -1, 0, 1, Number> integrator_scalar(matrix_free,
+                                                            0,
+                                                            0,
+                                                            dim);
+
+      const bool has_ghost_elements = vec.has_ghost_elements();
+
+      AssertThrow(has_ghost_elements == false, ExcInternalError());
+
+      if (has_ghost_elements == false)
+        vec.update_ghost_values();
+
+      for (unsigned int cell = 0; cell < n_cells; ++cell)
+        {
+          integrator.reinit(cell);
+
+          integrator.read_dof_values_plain(vec);
+          integrator.evaluate(EvaluationFlags::EvaluationFlags::gradients);
+
+          integrator_scalar.reinit(cell);
+          integrator_scalar.read_dof_values_plain(vec);
+          integrator_scalar.evaluate(
+            EvaluationFlags::EvaluationFlags::gradients);
+
+          // precompute value/gradient of linearization point at quadrature
+          // points
+          for (const auto q : integrator.quadrature_point_indices())
+            {
+              u_old_gradient[cell][q] = integrator.get_gradient(q);
+
+              p_old_gradient[cell][q] = integrator_scalar.get_gradient(q);
+            }
+        }
+
+      if (has_ghost_elements == false)
+        vec.zero_out_ghost_values();
+    }
+
+  if (compute_penalty_parameters_for_previous_solution == true)
+    this->compute_penalty_parameters(history.get_vectors()[1]);
 }
 
 template <int dim>
 void
-NavierStokesOperator<dim>::set_previous_solution(const VectorType &vec)
+NavierStokesOperator<dim>::compute_penalty_parameters(const VectorType &vec)
 {
   this->valid_system = false;
 
-  const unsigned fe_degree =
-    matrix_free.get_dof_handler().get_fe().tensor_degree();
   const unsigned n_cells             = matrix_free.n_cell_batches();
   const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
-
-  u_old_gradient.reinit(n_cells, n_quadrature_points);
-  p_old_gradient.reinit(n_cells, n_quadrature_points);
-
-  delta_1.resize(n_cells);
-  delta_2.resize(n_cells);
-
-  delta_1_q.reinit(n_cells, n_quadrature_points);
-  delta_2_q.reinit(n_cells, n_quadrature_points);
+  const unsigned fe_degree =
+    matrix_free.get_dof_handler().get_fe().tensor_degree();
 
   FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
-  FEEvaluation<dim, -1, 0, 1, Number> integrator_scalar(matrix_free, 0, 0, dim);
 
   const bool has_ghost_elements = vec.has_ghost_elements();
 
@@ -221,27 +262,21 @@ NavierStokesOperator<dim>::set_previous_solution(const VectorType &vec)
   if (has_ghost_elements == false)
     vec.update_ghost_values();
 
-  const auto tau = this->time_integrator_data.get_current_dt();
+  const auto tau  = this->time_integrator_data.get_current_dt();
+  const auto stau = (tau == 0.0) ? 0.0 : (1.0 / tau);
+
+  delta_1.resize(n_cells);
+  delta_2.resize(n_cells);
+
+  delta_1_q.reinit(n_cells, n_quadrature_points);
+  delta_2_q.reinit(n_cells, n_quadrature_points);
 
   for (unsigned int cell = 0; cell < n_cells; ++cell)
     {
       integrator.reinit(cell);
 
       integrator.read_dof_values_plain(vec);
-      integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
-                          EvaluationFlags::EvaluationFlags::gradients);
-
-      integrator_scalar.reinit(cell);
-      integrator_scalar.read_dof_values_plain(vec);
-      integrator_scalar.evaluate(EvaluationFlags::EvaluationFlags::gradients);
-
-      // precompute value/gradient of linearization point at quadrature points
-      for (const auto q : integrator.quadrature_point_indices())
-        {
-          u_old_gradient[cell][q] = integrator.get_gradient(q);
-
-          p_old_gradient[cell][q] = integrator_scalar.get_gradient(q);
-        }
+      integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
 
       // compute stabilization parameters (cell-wise)
       VectorizedArray<Number> u_max = 0.0;
@@ -257,8 +292,9 @@ NavierStokesOperator<dim>::set_previous_solution(const VectorType &vec)
 
           if (nu[0] < h)
             {
-              delta_1[cell][v] = c_1 / std::sqrt(1. / (tau * tau) +
-                                                 u_max[v] * u_max[v] / (h * h));
+              delta_1[cell][v] =
+                c_1 / std::sqrt(Utilities::fixed_power<2>(stau) +
+                                u_max[v] * u_max[v] / (h * h));
               delta_2[cell][v] = c_2 * h;
             }
           else
@@ -293,7 +329,7 @@ NavierStokesOperator<dim>::set_previous_solution(const VectorType &vec)
               Utilities::fixed_power<2>(integrator.get_value(q)[k]);
 
           delta_1_q[cell][q] =
-            1. / std::sqrt(Utilities::fixed_power<2>(1.0 / tau) +
+            1. / std::sqrt(Utilities::fixed_power<2>(stau) +
                            4. * u_mag_squared / h / h +
                            9. * Utilities::fixed_power<2>(4. * nu / (h * h)));
 
@@ -392,6 +428,9 @@ NavierStokesOperator<dim>::set_linearization_point(const VectorType &vec)
 
   if (has_ghost_elements == false)
     vec.zero_out_ghost_values();
+
+  if (compute_penalty_parameters_for_previous_solution == false)
+    this->compute_penalty_parameters(vec);
 }
 
 template <int dim>
@@ -562,6 +601,44 @@ NavierStokesOperator<dim>::do_vmult_range(
     }
 }
 
+namespace
+{
+  /**
+   * compute: ε(v) : ε(u) <-> ∑_i∑_j v_{i,j}u_{i,j}
+   *
+   * example:
+   *   ε(u) =
+   *    |         u_{1,1}           (u_{1,2} + u_{1,2}) / 2 |
+   *    | (u_{1,2} + u_{1,2}) / 2           u_{2,2}         |
+   *
+   *   ε(v) =
+   *    |         v_{1,1}           (v_{1,2} + v_{1,2}) / 2 |
+   *    | (v_{1,2} + v_{1,2}) / 2           v_{2,2}         |
+   *
+   *   ε(v) : ε(u) =
+   *     v_{1,1} u_{1,1} + v_{2,2} u_{2,2} +
+   *     (v_{1,2} + v_{2,1}) * (u_{1,2} + u_{2,1}) / 2
+   */
+  template <int dim, int dim_, typename Number>
+  inline DEAL_II_ALWAYS_INLINE void
+  symm_scalar_product_add(Tensor<1, dim_, Tensor<1, dim, Number>> &v_gradient,
+                          const Tensor<2, dim, Number>            &u_gradient,
+                          const Number                            &factor)
+  {
+    for (unsigned int d = 0; d < dim; ++d)
+      v_gradient[d][d] += u_gradient[d][d] * factor;
+
+    for (unsigned int e = 0; e < dim; ++e)
+      for (unsigned int d = e + 1; d < dim; ++d)
+        {
+          const auto tmp =
+            (u_gradient[d][e] + u_gradient[e][d]) * (factor * 0.5);
+          v_gradient[d][e] += tmp;
+          v_gradient[e][d] += tmp;
+        }
+  }
+} // namespace
+
 /**
  * Fixed-point system:
  *
@@ -639,7 +716,7 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
               u_bar_gradient[d]    = theta * gradient[d];
             }
 
-          if (evaluate_residual)
+          if (evaluate_residual && (this->u_time_derivative_old.size(0) > 0))
             u_time_derivative += this->u_time_derivative_old[cell][q];
 
           if (evaluate_residual && (theta[0] != 1.0))
@@ -672,17 +749,7 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
             gradient_result[d][d] -= p_value;
 
           //  d)  (ε(v), νε(B))
-          for (unsigned int d = 0; d < dim; ++d)
-            gradient_result[d][d] += u_bar_gradient[d][d] * nu;
-
-          for (unsigned int e = 0, counter = dim; e < dim; ++e)
-            for (unsigned int d = e + 1; d < dim; ++d, ++counter)
-              {
-                const auto tmp =
-                  (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
-                gradient_result[d][e] += tmp;
-                gradient_result[e][d] += tmp;
-              }
+          symm_scalar_product_add(gradient_result, u_bar_gradient, nu);
 
           //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
           const auto residual_0 =
@@ -789,16 +856,7 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
             gradient_result[d][d] -= p_value;
 
           //  c)  (ε(v), νε(u))
-          for (unsigned int d = 0; d < dim; ++d)
-            gradient_result[d][d] += u_gradient[d][d] * nu;
-          for (unsigned int e = 0, counter = dim; e < dim; ++e)
-            for (unsigned int d = e + 1; d < dim; ++d, ++counter)
-              {
-                const auto tmp =
-                  (u_gradient[d][e] + u_gradient[e][d]) * (nu * 0.5);
-                gradient_result[d][e] += tmp;
-                gradient_result[e][d] += tmp;
-              }
+          symm_scalar_product_add(gradient_result, u_gradient, nu);
 
           //  d)  δ_1 (U⋅∇v, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) +
           //      δ_1 (u⋅∇v, ∂t'(U) + ∇P + U⋅∇U) -> SUPG stabilization
@@ -993,16 +1051,10 @@ NavierStokesOperatorMatrixBased<dim>::invalidate_system()
 template <int dim>
 void
 NavierStokesOperatorMatrixBased<dim>::set_previous_solution(
-  const SolutionHistory &vec)
+  const SolutionHistory &vectors)
 {
-  this->set_previous_solution(vec.get_vectors()[1]);
-}
+  const auto &vec = vectors.get_vectors()[1];
 
-template <int dim>
-void
-NavierStokesOperatorMatrixBased<dim>::set_previous_solution(
-  const VectorType &vec)
-{
   this->previous_solution = vec;
   this->previous_solution.update_ghost_values();
 

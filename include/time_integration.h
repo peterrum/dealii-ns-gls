@@ -108,6 +108,38 @@ private:
 
 
 /**
+ * Stationary simulation.
+ */
+class TimeIntegratorDataNone : public TimeIntegratorData
+{
+public:
+  TimeIntegratorDataNone();
+
+  void
+  update_dt(const Number dt_new) override;
+
+  Number
+  get_primary_weight() const override;
+
+  const std::vector<Number> &
+  get_weights() const override;
+
+  unsigned int
+  get_order() const override;
+
+  Number
+  get_current_dt() const override;
+
+  Number
+  get_theta() const override;
+
+private:
+  std::vector<Number> weights;
+};
+
+
+
+/**
  * A container storing solution vectors of multiple time steps.
  */
 class SolutionHistory
