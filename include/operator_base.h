@@ -32,9 +32,6 @@ public:
   set_previous_solution(const SolutionHistory &vec) = 0;
 
   virtual void
-  set_previous_solution(const VectorType &vec) = 0;
-
-  virtual void
   set_linearization_point(const VectorType &src) = 0;
 
   virtual void

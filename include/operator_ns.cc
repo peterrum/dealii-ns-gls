@@ -163,6 +163,8 @@ NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
 
   const unsigned n_cells             = matrix_free.n_cell_batches();
   const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
+  const unsigned fe_degree =
+    matrix_free.get_dof_handler().get_fe().tensor_degree();
 
   u_time_derivative_old.reinit(n_cells, n_quadrature_points);
 
@@ -188,30 +190,11 @@ NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
         u_time_derivative_old[cell][q] = integrator.get_value(q);
     }
 
-  this->set_previous_solution(history.get_vectors()[1]);
-}
-
-template <int dim>
-void
-NavierStokesOperator<dim>::set_previous_solution(const VectorType &vec)
-{
-  this->valid_system = false;
-
-  const unsigned fe_degree =
-    matrix_free.get_dof_handler().get_fe().tensor_degree();
-  const unsigned n_cells             = matrix_free.n_cell_batches();
-  const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
+  const auto &vec = history.get_vectors()[1];
 
   u_old_gradient.reinit(n_cells, n_quadrature_points);
   p_old_gradient.reinit(n_cells, n_quadrature_points);
 
-  delta_1.resize(n_cells);
-  delta_2.resize(n_cells);
-
-  delta_1_q.reinit(n_cells, n_quadrature_points);
-  delta_2_q.reinit(n_cells, n_quadrature_points);
-
-  FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
   FEEvaluation<dim, -1, 0, 1, Number> integrator_scalar(matrix_free, 0, 0, dim);
 
   const bool has_ghost_elements = vec.has_ghost_elements();
@@ -228,8 +211,7 @@ NavierStokesOperator<dim>::set_previous_solution(const VectorType &vec)
       integrator.reinit(cell);
 
       integrator.read_dof_values_plain(vec);
-      integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
-                          EvaluationFlags::EvaluationFlags::gradients);
+      integrator.evaluate(EvaluationFlags::EvaluationFlags::gradients);
 
       integrator_scalar.reinit(cell);
       integrator_scalar.read_dof_values_plain(vec);
@@ -242,6 +224,20 @@ NavierStokesOperator<dim>::set_previous_solution(const VectorType &vec)
 
           p_old_gradient[cell][q] = integrator_scalar.get_gradient(q);
         }
+    }
+
+  delta_1.resize(n_cells);
+  delta_2.resize(n_cells);
+
+  delta_1_q.reinit(n_cells, n_quadrature_points);
+  delta_2_q.reinit(n_cells, n_quadrature_points);
+
+  for (unsigned int cell = 0; cell < n_cells; ++cell)
+    {
+      integrator.reinit(cell);
+
+      integrator.read_dof_values_plain(vec);
+      integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
 
       // compute stabilization parameters (cell-wise)
       VectorizedArray<Number> u_max = 0.0;
@@ -677,7 +673,7 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
               u_bar_gradient[d]    = theta * gradient[d];
             }
 
-          if (evaluate_residual)
+          if (evaluate_residual && (this->u_time_derivative_old.size(0) > 0))
             u_time_derivative += this->u_time_derivative_old[cell][q];
 
           if (evaluate_residual && (theta[0] != 1.0))
@@ -1012,16 +1008,10 @@ NavierStokesOperatorMatrixBased<dim>::invalidate_system()
 template <int dim>
 void
 NavierStokesOperatorMatrixBased<dim>::set_previous_solution(
-  const SolutionHistory &vec)
+  const SolutionHistory &vectors)
 {
-  this->set_previous_solution(vec.get_vectors()[1]);
-}
+  const auto &vec = vectors.get_vectors()[1];
 
-template <int dim>
-void
-NavierStokesOperatorMatrixBased<dim>::set_previous_solution(
-  const VectorType &vec)
-{
   this->previous_solution = vec;
   this->previous_solution.update_ghost_values();
 

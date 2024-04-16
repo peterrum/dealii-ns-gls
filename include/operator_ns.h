@@ -55,9 +55,6 @@ public:
   set_previous_solution(const SolutionHistory &history) override;
 
   void
-  set_previous_solution(const VectorType &vec) override;
-
-  void
   set_linearization_point(const VectorType &vec) override;
 
   void
@@ -180,9 +177,6 @@ public:
 
   void
   set_previous_solution(const SolutionHistory &vec) override;
-
-  void
-  set_previous_solution(const VectorType &vec) override;
 
   void
   set_linearization_point(const VectorType &src) override;
