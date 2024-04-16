@@ -562,6 +562,45 @@ NavierStokesOperator<dim>::do_vmult_range(
     }
 }
 
+namespace
+{
+  /**
+   * compute: ε(v) : ε(u) <-> ∑_i∑_j v_{i,j}u_{i,j}
+   *
+   * example:
+   *   ε(u) =
+   *    |         u_{1,1}           (u_{1,2} + u_{1,2}) / 2 |
+   *    | (u_{1,2} + u_{1,2}) / 2           u_{2,2}         |
+   *
+   *   ε(v) =
+   *    |         v_{1,1}           (v_{1,2} + v_{1,2}) / 2 |
+   *    | (v_{1,2} + v_{1,2}) / 2           v_{2,2}         |
+   *
+   *   ε(v) : ε(u) =
+   *     v_{1,1} u_{1,1} + v_{2,2} u_{2,2} +
+   *     (v_{1,2} + v_{2,1}) * (u_{1,2} + u_{2,1}) / 2
+   */
+  template <int dim, int dim_, typename Number>
+  inline DEAL_II_ALWAYS_INLINE void
+  symm_scalar_product_add(
+    Tensor<1, dim_, Tensor<1, dim, Number>> &gradient_result,
+    const Tensor<2, dim, Number>            &u_bar_gradient,
+    const Number                            &nu)
+  {
+    for (unsigned int d = 0; d < dim; ++d)
+      gradient_result[d][d] += u_bar_gradient[d][d] * nu;
+
+    for (unsigned int e = 0; e < dim; ++e)
+      for (unsigned int d = e + 1; d < dim; ++d)
+        {
+          const auto tmp =
+            (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
+          gradient_result[d][e] += tmp;
+          gradient_result[e][d] += tmp;
+        }
+  }
+} // namespace
+
 /**
  * Fixed-point system:
  *
@@ -672,17 +711,7 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
             gradient_result[d][d] -= p_value;
 
           //  d)  (ε(v), νε(B))
-          for (unsigned int d = 0; d < dim; ++d)
-            gradient_result[d][d] += u_bar_gradient[d][d] * nu;
-
-          for (unsigned int e = 0; e < dim; ++e)
-            for (unsigned int d = e + 1; d < dim; ++d)
-              {
-                const auto tmp =
-                  (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
-                gradient_result[d][e] += tmp;
-                gradient_result[e][d] += tmp;
-              }
+          symm_scalar_product_add(gradient_result, u_bar_gradient, nu);
 
           //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
           const auto residual_0 =
@@ -789,16 +818,7 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
             gradient_result[d][d] -= p_value;
 
           //  c)  (ε(v), νε(u))
-          for (unsigned int d = 0; d < dim; ++d)
-            gradient_result[d][d] += u_gradient[d][d] * nu;
-          for (unsigned int e = 0; e < dim; ++e)
-            for (unsigned int d = e + 1; d < dim; ++d)
-              {
-                const auto tmp =
-                  (u_gradient[d][e] + u_gradient[e][d]) * (nu * 0.5);
-                gradient_result[d][e] += tmp;
-                gradient_result[e][d] += tmp;
-              }
+          symm_scalar_product_add(gradient_result, u_gradient, nu);
 
           //  d)  δ_1 (U⋅∇v, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) +
           //      δ_1 (u⋅∇v, ∂t'(U) + ∇P + U⋅∇U) -> SUPG stabilization
