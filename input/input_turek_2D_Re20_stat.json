@@ -2,7 +2,7 @@
   "dim"                  : 2,
   "fe degree"            : 1,
   "mapping degree"       : 0,
-  "n global refinements" : 3,
+  "n global refinements" : 4,
 
   "simulation name" : "cylinder",
 
@@ -21,6 +21,7 @@
   "use matrix free ns operator" : true,
 
   "lin relative tolerance" : 1e-2,
+  "lin n max iterations" : 100,
 
   "preconditioner" : "AMG",
 
@@ -28,7 +29,7 @@
   "gmg coarse grid iterate"      : false,
 
   "nonlinear solver" : "Newton",
-  "newton inexact"   : true,
+  "newton inexact"   : false,
 
   "paraview prefix"    : "results_turek_2D_Re20",
   "output granularity" : 0.1,
