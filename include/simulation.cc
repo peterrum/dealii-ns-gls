@@ -396,13 +396,15 @@ SimulationCylinder<dim>::postprocess(const double           t,
                   fluid_stress * normal_vector * fe_face_values.JxW(q);
 
                 drag_local += forces[0];
-                lift_local += forces[1];
+                lift_local -= forces[1];
               }
           }
     }
 
-  drag = Utilities::MPI::sum(drag_local, comm);
-  lift = Utilities::MPI::sum(lift_local, comm);
+  const unsigned int scaling = 2 / diameter / std::pow(u_max * 2. / 3., 2);
+
+  drag = Utilities::MPI::sum(drag_local, comm) * scaling;
+  lift = Utilities::MPI::sum(lift_local, comm) * scaling;
 
   // calculate pressure drop
 
