@@ -675,8 +675,8 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
           for (unsigned int d = 0; d < dim; ++d)
             gradient_result[d][d] += u_bar_gradient[d][d] * nu;
 
-          for (unsigned int e = 0, counter = dim; e < dim; ++e)
-            for (unsigned int d = e + 1; d < dim; ++d, ++counter)
+          for (unsigned int e = 0; e < dim; ++e)
+            for (unsigned int d = e + 1; d < dim; ++d)
               {
                 const auto tmp =
                   (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
@@ -791,8 +791,8 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
           //  c)  (ε(v), νε(u))
           for (unsigned int d = 0; d < dim; ++d)
             gradient_result[d][d] += u_gradient[d][d] * nu;
-          for (unsigned int e = 0, counter = dim; e < dim; ++e)
-            for (unsigned int d = e + 1; d < dim; ++d, ++counter)
+          for (unsigned int e = 0; e < dim; ++e)
+            for (unsigned int d = e + 1; d < dim; ++d)
               {
                 const auto tmp =
                   (u_gradient[d][e] + u_gradient[e][d]) * (nu * 0.5);
