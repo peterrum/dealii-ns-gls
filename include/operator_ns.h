@@ -100,6 +100,7 @@ private:
   const bool                    consider_time_deriverative;
   const bool                    increment_form;
   const bool                    cell_wise_stabilization;
+  const bool compute_penalty_parameters_for_previous_solution;
 
   mutable bool valid_system;
 

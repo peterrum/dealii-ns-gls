@@ -39,6 +39,7 @@ NavierStokesOperator<dim>::NavierStokesOperator(
   , consider_time_deriverative(consider_time_deriverative)
   , increment_form(increment_form)
   , cell_wise_stabilization(cell_wise_stabilization)
+  , compute_penalty_parameters_for_previous_solution(false)
   , valid_system(false)
 {
   const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
@@ -233,7 +234,8 @@ NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
         vec.zero_out_ghost_values();
     }
 
-  this->compute_penalty_parameters(history.get_vectors()[1]);
+  if (compute_penalty_parameters_for_previous_solution == true)
+    this->compute_penalty_parameters(history.get_vectors()[1]);
 }
 
 template <int dim>
@@ -420,6 +422,9 @@ NavierStokesOperator<dim>::set_linearization_point(const VectorType &vec)
 
   if (has_ghost_elements == false)
     vec.zero_out_ghost_values();
+
+  if (compute_penalty_parameters_for_previous_solution == false)
+    this->compute_penalty_parameters(vec);
 }
 
 template <int dim>
