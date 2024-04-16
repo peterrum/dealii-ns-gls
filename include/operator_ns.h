@@ -55,6 +55,9 @@ public:
   set_previous_solution(const SolutionHistory &history) override;
 
   void
+  compute_penalty_parameters(const VectorType &vec);
+
+  void
   set_linearization_point(const VectorType &vec) override;
 
   void

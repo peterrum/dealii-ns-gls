@@ -163,8 +163,6 @@ NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
 
   const unsigned n_cells             = matrix_free.n_cell_batches();
   const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
-  const unsigned fe_degree =
-    matrix_free.get_dof_handler().get_fe().tensor_degree();
 
   u_time_derivative_old.reinit(n_cells, n_quadrature_points);
 
@@ -235,96 +233,104 @@ NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
         vec.zero_out_ghost_values();
     }
 
-  if (true)
+  this->compute_penalty_parameters(history.get_vectors()[1]);
+}
+
+template <int dim>
+void
+NavierStokesOperator<dim>::compute_penalty_parameters(const VectorType &vec)
+{
+  this->valid_system = false;
+
+  const unsigned n_cells             = matrix_free.n_cell_batches();
+  const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
+  const unsigned fe_degree =
+    matrix_free.get_dof_handler().get_fe().tensor_degree();
+
+  FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+
+  const bool has_ghost_elements = vec.has_ghost_elements();
+
+  AssertThrow(has_ghost_elements == false, ExcInternalError());
+
+  if (has_ghost_elements == false)
+    vec.update_ghost_values();
+
+  const auto tau = this->time_integrator_data.get_current_dt();
+
+  delta_1.resize(n_cells);
+  delta_2.resize(n_cells);
+
+  delta_1_q.reinit(n_cells, n_quadrature_points);
+  delta_2_q.reinit(n_cells, n_quadrature_points);
+
+  for (unsigned int cell = 0; cell < n_cells; ++cell)
     {
-      const auto &vec = history.get_vectors()[1];
+      integrator.reinit(cell);
 
-      const bool has_ghost_elements = vec.has_ghost_elements();
+      integrator.read_dof_values_plain(vec);
+      integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
 
-      AssertThrow(has_ghost_elements == false, ExcInternalError());
+      // compute stabilization parameters (cell-wise)
+      VectorizedArray<Number> u_max = 0.0;
+      for (const auto q : integrator.quadrature_point_indices())
+        u_max = std::max(integrator.get_value(q).norm(), u_max);
 
-      if (has_ghost_elements == false)
-        vec.update_ghost_values();
-
-      const auto tau = this->time_integrator_data.get_current_dt();
-
-      delta_1.resize(n_cells);
-      delta_2.resize(n_cells);
-
-      delta_1_q.reinit(n_cells, n_quadrature_points);
-      delta_2_q.reinit(n_cells, n_quadrature_points);
-
-      for (unsigned int cell = 0; cell < n_cells; ++cell)
+      for (unsigned int v = 0;
+           v < matrix_free.n_active_entries_per_cell_batch(cell);
+           ++v)
         {
-          integrator.reinit(cell);
+          const auto cell_it = matrix_free.get_cell_iterator(cell, v);
+          const auto h       = cell_it->minimum_vertex_distance();
 
-          integrator.read_dof_values_plain(vec);
-          integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
-
-          // compute stabilization parameters (cell-wise)
-          VectorizedArray<Number> u_max = 0.0;
-          for (const auto q : integrator.quadrature_point_indices())
-            u_max = std::max(integrator.get_value(q).norm(), u_max);
-
-          for (unsigned int v = 0;
-               v < matrix_free.n_active_entries_per_cell_batch(cell);
-               ++v)
+          if (nu[0] < h)
             {
-              const auto cell_it = matrix_free.get_cell_iterator(cell, v);
-              const auto h       = cell_it->minimum_vertex_distance();
-
-              if (nu[0] < h)
-                {
-                  delta_1[cell][v] =
-                    c_1 /
-                    std::sqrt(1. / (tau * tau) + u_max[v] * u_max[v] / (h * h));
-                  delta_2[cell][v] = c_2 * h;
-                }
-              else
-                {
-                  delta_1[cell][v] = c_1 * h * h;
-                  delta_2[cell][v] = c_2 * h * h;
-                }
+              delta_1[cell][v] = c_1 / std::sqrt(1. / (tau * tau) +
+                                                 u_max[v] * u_max[v] / (h * h));
+              delta_2[cell][v] = c_2 * h;
             }
-
-          // compute stabilization parameters (q-point-wise)
-          // adopted from:
-          // https://github.com/lethe-cfd/lethe/blob/d8e115f175e34628e96243fce6eec00d7fcaf3c1/source/solvers/mf_navier_stokes_operators.cc#L222-L246
-          // https://github.com/lethe-cfd/lethe/blob/d8e115f175e34628e96243fce6eec00d7fcaf3c1/source/solvers/mf_navier_stokes_operators.cc#L657-L668
-          VectorizedArray<Number> h;
-          for (unsigned int v = 0;
-               v < matrix_free.n_active_entries_per_cell_batch(cell);
-               ++v)
+          else
             {
-              const double h_k =
-                matrix_free.get_cell_iterator(cell, v)->measure();
-
-              if (dim == 2)
-                h[v] = std::sqrt(4. * h_k / M_PI) / fe_degree;
-              else if (dim == 3)
-                h[v] = std::pow(6 * h_k / M_PI, 1. / 3.) / fe_degree;
-            }
-
-          for (const auto q : integrator.quadrature_point_indices())
-            {
-              VectorizedArray<Number> u_mag_squared = 1e-12;
-              for (unsigned int k = 0; k < dim; ++k)
-                u_mag_squared +=
-                  Utilities::fixed_power<2>(integrator.get_value(q)[k]);
-
-              delta_1_q[cell][q] =
-                1. /
-                std::sqrt(Utilities::fixed_power<2>(1.0 / tau) +
-                          4. * u_mag_squared / h / h +
-                          9. * Utilities::fixed_power<2>(4. * nu / (h * h)));
-
-              delta_2_q[cell][q] = std::sqrt(u_mag_squared) * h * 0.5;
+              delta_1[cell][v] = c_1 * h * h;
+              delta_2[cell][v] = c_2 * h * h;
             }
         }
 
-      if (has_ghost_elements == false)
-        vec.zero_out_ghost_values();
+      // compute stabilization parameters (q-point-wise)
+      // adopted from:
+      // https://github.com/lethe-cfd/lethe/blob/d8e115f175e34628e96243fce6eec00d7fcaf3c1/source/solvers/mf_navier_stokes_operators.cc#L222-L246
+      // https://github.com/lethe-cfd/lethe/blob/d8e115f175e34628e96243fce6eec00d7fcaf3c1/source/solvers/mf_navier_stokes_operators.cc#L657-L668
+      VectorizedArray<Number> h;
+      for (unsigned int v = 0;
+           v < matrix_free.n_active_entries_per_cell_batch(cell);
+           ++v)
+        {
+          const double h_k = matrix_free.get_cell_iterator(cell, v)->measure();
+
+          if (dim == 2)
+            h[v] = std::sqrt(4. * h_k / M_PI) / fe_degree;
+          else if (dim == 3)
+            h[v] = std::pow(6 * h_k / M_PI, 1. / 3.) / fe_degree;
+        }
+
+      for (const auto q : integrator.quadrature_point_indices())
+        {
+          VectorizedArray<Number> u_mag_squared = 1e-12;
+          for (unsigned int k = 0; k < dim; ++k)
+            u_mag_squared +=
+              Utilities::fixed_power<2>(integrator.get_value(q)[k]);
+
+          delta_1_q[cell][q] =
+            1. / std::sqrt(Utilities::fixed_power<2>(1.0 / tau) +
+                           4. * u_mag_squared / h / h +
+                           9. * Utilities::fixed_power<2>(4. * nu / (h * h)));
+
+          delta_2_q[cell][q] = std::sqrt(u_mag_squared) * h * 0.5;
+        }
     }
+
+  if (has_ghost_elements == false)
+    vec.zero_out_ghost_values();
 }
 
 
