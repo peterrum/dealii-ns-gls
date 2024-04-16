@@ -582,21 +582,20 @@ namespace
    */
   template <int dim, int dim_, typename Number>
   inline DEAL_II_ALWAYS_INLINE void
-  symm_scalar_product_add(
-    Tensor<1, dim_, Tensor<1, dim, Number>> &gradient_result,
-    const Tensor<2, dim, Number>            &u_bar_gradient,
-    const Number                            &nu)
+  symm_scalar_product_add(Tensor<1, dim_, Tensor<1, dim, Number>> &v_gradient,
+                          const Tensor<2, dim, Number>            &u_gradient,
+                          const Number                            &factor)
   {
     for (unsigned int d = 0; d < dim; ++d)
-      gradient_result[d][d] += u_bar_gradient[d][d] * nu;
+      v_gradient[d][d] += u_gradient[d][d] * factor;
 
     for (unsigned int e = 0; e < dim; ++e)
       for (unsigned int d = e + 1; d < dim; ++d)
         {
           const auto tmp =
-            (u_bar_gradient[d][e] + u_bar_gradient[e][d]) * (nu * 0.5);
-          gradient_result[d][e] += tmp;
-          gradient_result[e][d] += tmp;
+            (u_gradient[d][e] + u_gradient[e][d]) * (factor * 0.5);
+          v_gradient[d][e] += tmp;
+          v_gradient[e][d] += tmp;
         }
   }
 } // namespace
