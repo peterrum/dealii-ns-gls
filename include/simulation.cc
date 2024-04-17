@@ -366,6 +366,10 @@ SimulationCylinder<dim>::postprocess(const double           t,
   double drag_local = 0;
   double lift_local = 0;
 
+  Tensor<2, dim> I;
+  I[0][0] = 1.0;
+  I[1][1] = 1.0;
+
   for (const auto &cell : dof_handler.active_cell_iterators())
     {
       if (!cell->is_locally_owned())
@@ -382,13 +386,9 @@ SimulationCylinder<dim>::postprocess(const double           t,
 
             for (int q = 0; q < n_q_points; ++q)
               {
-                Tensor<2, dim> fluid_pressure;
-                fluid_pressure[0][0] = p[q];
-                fluid_pressure[1][1] = p[q];
-
                 const Tensor<1, dim> forces =
-                  (fluid_pressure - 2 * nu * eps_u[q]) *
-                  fe_face_values.normal_vector(q) * fe_face_values.JxW(q);
+                  (-p[q] * I + 2 * nu * eps_u[q]) *
+                  (-fe_face_values.normal_vector(q)) * fe_face_values.JxW(q);
 
                 drag_local += forces[0];
                 lift_local += forces[1];
