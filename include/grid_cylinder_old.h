@@ -1,31 +1,16 @@
 #pragma once
 
-
-template <int dim, int spacedim, template <int, int> class Triangulation>
 void
-cylinder(Triangulation<dim, spacedim> &,
-         const double /*length*/,
-         const double /*height*/,
-         const double /*cylinder_position*/,
-         const double /*cylinder_height*/,
-         const bool /*symm*/)
-{
-  AssertThrow(false, dealii::ExcNotImplemented());
-}
-
-
-template <template <int, int> class Triangulation>
-void
-cylinder(Triangulation<2, 2> &triangulation,
-         const double         length,
-         const double         height,
-         const double         cylinder_position,
-         const double         cylinder_diameter,
-         const bool           symm)
+cylinder(Triangulation<2, 2> &triangulation, const bool symm = false)
 {
   constexpr int dim = 2;
 
   using namespace dealii;
+
+  const double length            = 2.2;
+  const double height            = 0.41;
+  const double cylinder_position = 0.2;
+  const double cylinder_diameter = 0.1;
 
   const double shift = symm ? 0.00 : 0.005;
 
@@ -148,21 +133,16 @@ cylinder(Triangulation<2, 2> &triangulation,
     }
 }
 
-
-template <template <int, int> class Triangulation>
 void
-cylinder(Triangulation<3, 3> &triangulation,
-         const double         length,
-         const double         height,
-         const double         cylinder_position,
-         const double         cylinder_diameter,
-         const bool           symm)
+cylinder(Triangulation<3, 3> &triangulation, const bool symm = false)
 {
-  using namespace dealii;
+  const double length            = 2.2;
+  const double height            = 0.41;
+  const double cylinder_position = 0.2;
 
   dealii::Triangulation<2, 2> tria1;
 
-  cylinder(tria1, length, height, cylinder_position, cylinder_diameter, symm);
+  cylinder(tria1, symm);
 
   dealii::Triangulation<3, 3> tria2;
   tria2.set_mesh_smoothing(triangulation.get_mesh_smoothing());
