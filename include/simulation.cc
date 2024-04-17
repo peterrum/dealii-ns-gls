@@ -382,21 +382,16 @@ SimulationCylinder<dim>::postprocess(const double           t,
 
             for (int q = 0; q < n_q_points; ++q)
               {
-                const Tensor<1, dim> normal_vector =
-                  -fe_face_values.normal_vector(q);
-
                 Tensor<2, dim> fluid_pressure;
                 fluid_pressure[0][0] = p[q];
                 fluid_pressure[1][1] = p[q];
 
-                const Tensor<2, dim> fluid_stress =
-                  nu * eps_u[q] - fluid_pressure;
-
                 const Tensor<1, dim> forces =
-                  fluid_stress * normal_vector * fe_face_values.JxW(q);
+                  (fluid_pressure - 2 * nu * eps_u[q]) *
+                  fe_face_values.normal_vector(q) * fe_face_values.JxW(q);
 
                 drag_local += forces[0];
-                lift_local -= forces[1];
+                lift_local += forces[1];
               }
           }
     }
