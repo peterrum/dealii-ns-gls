@@ -642,7 +642,7 @@ namespace
 /**
  * Fixed-point system:
  *
- * (v, ∂t(u)) + (v, S⋅∇B) - (div(v), p) + (ε(v), νε(B))
+ * (v, ∂t(u)) + (v, S⋅∇B) - (div(v), p) + (ε(v), 2νε(B))
  *            + δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) + δ_2 (div(v), div(B)) = 0
  *              +----------- SUPG ----------+   +------- GD -------+
  *
@@ -659,7 +659,7 @@ namespace
  *
  * Linearized system (only BDF):
  *
- * (v, ∂t'(u) + U⋅∇u + u⋅∇U) - (div(v), p) + (ε(v), νε(u))
+ * (v, ∂t'(u) + U⋅∇u + u⋅∇U) - (div(v), p) + (ε(v), 2νε(u))
  *            + δ_1 (U⋅∇v, ∂t'(u) + U⋅∇u + u⋅∇U + ∇p) -> SUPG (1)
  *            + δ_1 (u⋅∇v, ∂t'(U) + U⋅∇U + ∇P)        -> SUPG (2)
  *            + δ_2 (div(v), div(u))                  -> GD
@@ -748,8 +748,8 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
           for (unsigned int d = 0; d < dim; ++d)
             gradient_result[d][d] -= p_value;
 
-          //  d)  (ε(v), νε(B))
-          symm_scalar_product_add(gradient_result, u_bar_gradient, nu);
+          //  d)  (ε(v), 2νε(B))
+          symm_scalar_product_add(gradient_result, u_bar_gradient, nu * 2.0);
 
           //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
           const auto residual_0 =
@@ -855,8 +855,8 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
           for (unsigned int d = 0; d < dim; ++d)
             gradient_result[d][d] -= p_value;
 
-          //  c)  (ε(v), νε(u))
-          symm_scalar_product_add(gradient_result, u_gradient, nu);
+          //  c)  (ε(v), 2νε(u))
+          symm_scalar_product_add(gradient_result, u_gradient, nu * 2.0);
 
           //  d)  δ_1 (U⋅∇v, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) +
           //      δ_1 (u⋅∇v, ∂t'(U) + ∇P + U⋅∇U) -> SUPG stabilization
@@ -1225,7 +1225,7 @@ NavierStokesOperatorMatrixBased<dim>::compute_system_matrix_and_vector() const
                     cell_lhs += u_j * v_i;                                                                          // a
                     cell_lhs += theta * tau * (grad_u_j * u_star[q]) * v_i;                                         // b
                     cell_lhs -= tau * p_j * div_v_i;                                                                // c
-                    cell_lhs += theta * tau * nu * scalar_product(eps_u_j, eps_v_i);                                // d
+                    cell_lhs += theta * tau * 2.0 * nu * scalar_product(eps_u_j, eps_v_i);                                // d
                     cell_lhs += theta * tau * delta_1 * (grad_u_j * u_star[q] + grad_p_j) * (grad_v_i * u_star[q]); // e
                     cell_lhs += theta * tau * delta_2 * div_u_j * div_v_i;                                          // f
 
@@ -1244,7 +1244,7 @@ NavierStokesOperatorMatrixBased<dim>::compute_system_matrix_and_vector() const
                 // velocity
                 cell_rhs += u_0[q] * v_i;                                                                                     // a
                 cell_rhs -= (1.0 - theta) * tau * (grad_u_0[q] * u_star[q]) * v_i;                                            // b
-                cell_rhs -= (1.0 - theta) * tau * nu * scalar_product(symmetrize(grad_u_0[q]), eps_v_i);                      // d
+                cell_rhs -= (1.0 - theta) * tau * 2.0 * nu * scalar_product(symmetrize(grad_u_0[q]), eps_v_i);                      // d
                 cell_rhs -= (1.0 - theta) * tau * delta_1 * (grad_u_0[q] * u_star[q] + grad_p_0[q]) * (grad_v_i * u_star[q]); // e
                 cell_rhs -= (1.0 - theta) * tau * delta_2 * div_u_0[q] * div_v_i;                                             // f
                 
