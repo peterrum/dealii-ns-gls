@@ -2,6 +2,8 @@
 
 #include <deal.II/base/conditional_ostream.h>
 
+#include <deal.II/lac/trilinos_solver.h>
+
 #include "config.h"
 #include "operator_base.h"
 #include "preconditioner.h"
@@ -27,7 +29,32 @@ public:
 
 
 /**
- * Wrapper class around dealii::GMRES.
+ * Wrapper class around dealii::TrilinosWrappers::SolverDirect.
+ */
+class LinearSolverDirect : public LinearSolverBase
+{
+public:
+  LinearSolverDirect(const OperatorBase &op);
+
+  void
+  initialize() override;
+
+  void
+  solve(VectorType &dst, const VectorType &src) const override;
+
+private:
+  const OperatorBase                    &op;
+  mutable TrilinosWrappers::SolverDirect solver;
+
+  const ConditionalOStream pcout;
+
+  mutable MyTimerOutput timer;
+};
+
+
+
+/**
+ * Wrapper class around dealii::SolverGMRES.
  */
 class LinearSolverGMRES : public LinearSolverBase
 {

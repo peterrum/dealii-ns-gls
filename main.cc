@@ -78,6 +78,7 @@ struct Parameters
   bool use_matrix_free_ns_operator = true;
 
   // linear solver
+  std::string  linear_solver          = "GMRES";
   unsigned int lin_n_max_iterations   = 10000;
   double       lin_absolute_tolerance = 1e-12;
   double       lin_relative_tolerance = 1e-8;
@@ -144,6 +145,10 @@ private:
                       use_matrix_free_ns_operator);
 
     // linear solver
+    prm.add_parameter("linear solver",
+                      linear_solver,
+                      "",
+                      Patterns::Selection("GMRES|direct"));
     prm.add_parameter("lin n max iterations", lin_n_max_iterations);
     prm.add_parameter("lin absolute tolerance", lin_absolute_tolerance);
     prm.add_parameter("lin relative tolerance", lin_relative_tolerance);
@@ -669,13 +674,15 @@ public:
     // set up linear solver
     std::shared_ptr<LinearSolverBase> linear_solver;
 
-    if (true)
+    if (params.linear_solver == "GMRES")
       linear_solver =
         std::make_shared<LinearSolverGMRES>(*ns_operator,
                                             *preconditioner,
                                             params.lin_n_max_iterations,
                                             params.lin_absolute_tolerance,
                                             params.lin_relative_tolerance);
+    else if (params.linear_solver == "direct")
+      linear_solver = std::make_shared<LinearSolverDirect>(*ns_operator);
     else
       AssertThrow(false, ExcNotImplemented());
 

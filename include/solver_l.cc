@@ -2,6 +2,25 @@
 
 #include <deal.II/lac/solver_gmres.h>
 
+LinearSolverDirect::LinearSolverDirect(const OperatorBase &op)
+  : op(op)
+  , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+{}
+
+void
+LinearSolverDirect::initialize()
+{
+  MyScope scope(timer, "direct::initialize");
+  solver.initialize(op.get_system_matrix());
+}
+
+void
+LinearSolverDirect::solve(VectorType &dst, const VectorType &src) const
+{
+  MyScope scope(timer, "direct::solve");
+  solver.solve(dst, src);
+}
+
 LinearSolverGMRES::LinearSolverGMRES(const OperatorBase &op,
                                      PreconditionerBase &preconditioner,
                                      const unsigned int  n_max_iterations,
