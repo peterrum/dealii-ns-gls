@@ -1,0 +1,353 @@
+%\documentclass[review,leqno]{siamart1116}
+\documentclass[review,onefignum,onetabnum]{siamart190516} 
+\usepackage{amssymb}
+\usepackage{graphicx} 
+\usepackage{xspace}
+\usepackage{multirow		}
+\usepackage{bbm}
+\usepackage{Macros/mydef}
+\usepackage{Macros/remarks}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[numbers]{natbib}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{bm}
+%\usepackage{float}
+\newsiamthm{example}{Example}
+\usepackage{multirow}
+\usepackage{adjustbox}
+
+\let\cite=\citet
+%====================To be removed============================
+\usepackage[notref,notcite]{showkeys} % To see crossreferences.
+\newcommand{\murtazo}[1]{\textcolor{blue}{#1}}
+\newcommand{\mn}[1]{{\leavevmode\color{red}#1}}
+\usepackage[colorinlistoftodos]{todonotes}
+%====================To be removed============================
+
+\title{Equal-order finite element approximation of the Navier-Stokes equations using least-squares stabilization}
+
+%\author{Authors}
+
+
+\begin{document}
+
+\maketitle
+
+
+\renewcommand{\thefootnote}{\fnsymbol{footnote}} 
+\renewcommand{\thefootnote}{\arabic{footnote}}
+
+\tableofcontents
+
+%\begin{abstract}
+%\end{abstract}
+%
+%\begin{keywords}
+%  NSE, G2, Least-Squares
+%\end{keywords}
+%
+%\begin{AMS}
+%65M60
+%\end{AMS}
+
+\pagestyle{myheadings}
+\thispagestyle{plain}
+\markboth{AUTHORS}{XXXX}
+
+\section{Navier--Stokes equations: strong form}
+
+
+\begin{equation}
+  \begin{aligned}
+    \partial_t \bu  + \bu \SCAL \GRAD \bu 
+    - \nabla \cdot \sigma &=0, \\
+    \hspace{2.2em} 
+    \DIV \bu&= 0 
+  \end{aligned}
+\end{equation}
+with $\sigma = -p \bm I + 2 \nu \varepsilon(\bu)$ and
+$\varepsilon(\bu)=\frac{1}{2}(\nabla \bu + (\nabla \bu)^\top)$.
+
+\begin{align*} 
+\rightarrow \boxed{f_{\text{NS}}(p,\bu)= 0}
+\end{align*}
+
+\section{Navier--Stokes equations: weak form}
+
+
+\begin{equation}
+  \begin{aligned}
+    \left( \partial_t \bu ,\  \bv \right) 
+    + \big( \bu \SCAL \GRAD \bu,\ \bv \big)
+    - \big( p,\ \DIV \bv \big) + 
+    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big)&=0, \\
+    \big( \DIV \bu,\ q)&  = 0 
+  \end{aligned}
+\end{equation}
+\begin{align*} 
+\rightarrow \boxed{F_{\text{NS}}(p,\bu)= 0}
+\end{align*}
+
+%\newpage
+
+\section{GLS NS: extra terms}
+\begin{align*}
+\boxed{F_{\text{NS}}(p,\bu) + F_{\text{STAB}}(p,\bu) = 0}
+\end{align*}
+with
+\begin{equation}
+\begin{aligned}
+F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
+\\&=\int_\Omega
+\left(
+\begin{array}{c}
+    \partial_t \bu  + \bu \SCAL \GRAD \bu 
+    + \nabla p - \nu \Delta \bm u \\
+    \DIV \bu 
+\end{array}
+\right)
+\cdot
+\left(
+\begin{array}{c}
+    \partial_t \bv  + \bu \SCAL \GRAD \bv 
+    + \nabla q - \nu \Delta \bv \\
+    \DIV \bv
+\end{array}
+\right)
+\\&=
+\left(
+\begin{array}{ccc}
+    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
+    + \nabla p - \nu \Delta \bm u ,\,\partial_t \bv  + \bu \SCAL \GRAD \bv 
+    - \nu \Delta \bv) &+& (\nabla \cdot \bu,\, \nabla \cdot \bv) \\
+    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
+    + \nabla p - \nu \Delta \bm u,\, \nabla q)
+\end{array}
+\right)
+  \end{aligned}
+\end{equation}
+(1) Ignoring time dependency of test function:
+\begin{equation}
+  \begin{aligned}
+\left(
+\begin{array}{ccc}
+    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
+    + \nabla p - \nu \Delta \bm u ,\,\bu \SCAL \GRAD \bv 
+    - \nu \Delta \bv) &+ & (\nabla \cdot \bu,\, \nabla \cdot \bv) \\
+    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
+    + \nabla p - \nu \Delta \bm u,\, \nabla q)
+\end{array}
+\right)
+  \end{aligned}
+\end{equation}
+(2) Ignoring second derivatives of test function:
+\begin{equation}
+  \begin{aligned}
+\left(
+\begin{array}{ccc}
+    \overbrace{(\partial_t \bu  + \bu \SCAL \GRAD \bu 
+    + \nabla p  - \nu \Delta \bm u ,\,\bu \SCAL \GRAD \bv)}^{\text{SUPG}} &+ & 
+    \overbrace{(\nabla \cdot \bu,\, \nabla \cdot \bv)}^{\text{GD}} \\
+    \underbrace{(\partial_t \bu  + \bu \SCAL \GRAD \bu 
+    + \nabla p - \nu \Delta \bm u,\, \nabla q)}_{\text{PSPG}} &&
+\end{array}
+\right)
+  \end{aligned}
+\end{equation}
+%(3a) Ignoring GD:
+%\begin{equation}
+%  \begin{aligned}
+%\left(
+%\begin{array}{c}
+%    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
+%    + \nabla p - \nu \Delta \bm u,\,\bu \SCAL \GRAD \bv) \\
+%    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
+%    + \nabla p,\, \nabla q)
+%\end{array}
+%\right)
+%  \end{aligned}
+%\end{equation}
+%(3b) Ignoring second derivatives of ansatz function:
+%\begin{equation}
+%  \begin{aligned}
+%\left(
+%\begin{array}{ccc}
+%    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
+%    + \nabla p,\,\bu \SCAL \GRAD \bv) &+ & 
+%    (\nabla \cdot \bu,\, \nabla \cdot \bv) \\
+%    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
+%    + \nabla p,\, \nabla q) &&
+%\end{array}
+%\right)
+%  \end{aligned}
+%\end{equation}
+%Q: How to choose $\delta_{\text{SUPG}}$, $\delta_{\text{PSPG}}$, $\delta_{\text{GD}}$?
+
+
+%\newpage
+
+
+\section{GLS NS: residual formulation}
+
+\begin{equation}
+  \begin{aligned}
+    \left( \partial_t \bu ,\  \bv \right) 
+    &+ \big( \bu \SCAL \GRAD \bu,\ \bv \big)
+    - \big( p,\ \DIV \bv \big) + 
+    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
+    & 
+    +  
+    \underbrace{\delta_1 \big( \partial_t \bu + \bu \SCAL \GRAD \bu + \GRAD p - \nu \Delta \bu,\ \bu \cdot \GRAD \bv \big)}_{\text{SUPG}}  +
+    {\underbrace{\delta_2 \big(\DIV \bu, \, \DIV \bv \big)}_{\text{GD}}}
+    =0, \\
+    \hspace{2.2em} 
+    \big( \DIV \bu,\ q)&
+    + \underbrace{\delta_1 \big( \partial_t \bu + \bu \SCAL \GRAD \bu + \GRAD p - \nu \Delta \bu,\ \GRAD q \big)}_{\text{PSPG}} = 0 
+  \end{aligned}
+\end{equation}
+
+\section{Fixed-point system}
+
+\begin{equation}
+  \begin{aligned}
+    \left( \partial_t \bu ,\  \bv \right) 
+    &+ \big( {\color{black}\bu^*} \SCAL \GRAD \bu,\ \bv \big)
+    - \big( {\color{black}p^{n+1}},\ \DIV \bv \big) + 
+    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
+    & 
+    +  
+    \underbrace{\delta_1 \big( \partial_t \bu + {\color{black}\bu^*} \SCAL \GRAD \bu + \GRAD p - \nu \Delta \bu,\ {\color{black}\bu^*} \cdot \GRAD \bv \big)}_{\text{SUPG}}  +
+    {\underbrace{\delta_2 \big(\DIV \bu, \, \DIV \bv \big)}_{\text{GD}}}
+    =0, \\
+    \hspace{2.2em} 
+    \big( \DIV \bu,\ q)&
+    + \underbrace{\delta_1 \big( \partial_t \bu + {\color{black}\bu^*} \SCAL \GRAD \bu + {\color{black}\GRAD p^{n+1}} - \nu \Delta \bu,\ \GRAD q \big)}_{\text{PSPG}} = 0 
+  \end{aligned}
+\end{equation}
+
+\section{Linearized system}
+
+\begin{equation}
+  \begin{aligned}
+    \left( {\color{black}\partial_t'} \bu ,\  \bv \right) 
+    &+ \big( \bu^* \SCAL \GRAD \bu,\ \bv \big)
+    + {\color{black}\big( \bu \SCAL \GRAD \bu^*,\ \bv \big)}
+    - \big( p,\ \DIV \bv \big) + 
+    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
+    & 
+    +  
+    \underbrace{\delta_1 \big( {\color{black}\partial_t'} \bu + {\color{black}\bu^*} \SCAL \GRAD \bu +  {\color{black}\bu \SCAL \GRAD \bu^*} + \GRAD p - \nu \Delta \bu,\ {\color{black}\bu^*} \cdot \GRAD \bv \big)}_{\text{SUPG}} 
+    \\
+    & 
+    +  
+    \underbrace{{\color{black}\delta_1 \big(\partial_t' \bu^* + \bu^* \SCAL \GRAD \bu^* + \GRAD p^* - \nu \Delta \bu^*,\ \bu \cdot \GRAD \bv \big)}}_{\text{SUPG}}  +
+    {\underbrace{\delta_2 \big(\DIV \bu, \, \DIV \bv \big)}_{\text{GD}}}
+    =0, \\
+    \hspace{2.2em} 
+    \big( \DIV \bu,\ q)&
+    + \underbrace{\delta_1 \big( {\color{black}\partial_t'} \bu + {\color{black}\bu^*} \SCAL \GRAD \bu + {\color{black}\bu \SCAL \GRAD \bu^*} + \GRAD p - \nu \Delta \bu,\ \GRAD q \big)}_{\text{PSPG}} = 0 
+  \end{aligned}
+\end{equation}
+
+\section{Time discretization}
+
+\begin{align*}
+\partial_t u &=  \alpha_{n+1} u^{n+1} + \alpha_{n} u^{n} + \alpha_{n-1} u^{n-1} + ... \\
+\partial_t' u &=  \alpha_{n+1} u^{n+1} 
+\end{align*}
+
+%\section{TODO}
+%
+%\begin{itemize}
+%\item shift time-discretization scaling
+%\item add time derivative to SUPG/PSPG
+%\item add Hessian $\rightarrow$ $\nu \Delta \bu$
+%\item definition of $\delta_1$ and  $\delta_2$
+%\item BB: why is GD missing?
+%\end{itemize}
+
+%\newpage
+
+\section{One-step-$\theta$ time discretization}
+
+\begin{equation}
+  \begin{aligned}
+    \left( \tilde{\bu} ,\  \bv \right) 
+    &+ \tau \big( \bu^* \SCAL \GRAD \overline{\bu},\ \bv \big)
+    - \tau \big( p^{n+1},\ \DIV \bv \big) + 
+    \tau \big( \nu \varepsilon(\overline{\bu}),\ \varepsilon(\bv) \big) \\
+    & 
+    +  
+    \underbrace{\delta_1 \tau \big(\tilde{\bu}/\tau +  \bu^* \SCAL \GRAD \overline{\bu} + \GRAD \overline{p} - \nu \Delta \overline{\bu}, \
+    \bu^* \SCAL \GRAD \bv\big)}_{\text{SUPG}}  +
+    \underbrace{\delta_2 \tau \big(\DIV \overline{\bu}, \, \DIV \bv \big)}_{\text{GD}}
+    =0, \\
+    \hspace{2.2em} 
+    \big( \DIV \overline{\bu},\ q)&
+    + \underbrace{\delta_1 \big( \tilde{\bu}/\tau +  \bu^* \SCAL \GRAD \overline{\bu} + \GRAD p^{n+1}  - \nu \Delta \overline{\bu},\ \GRAD q \big)}_{\text{PSPG}} = 0 
+  \end{aligned}
+\end{equation}
+
+\subsection{Fixed-point iteration}
+
+Introduce fixed-point iteration around $\bu^*$ and
+discretize with Crank-Nicolson:
+\begin{equation}
+  \begin{aligned}
+    \left( \tilde{\bu} ,\  \bv \right) 
+    &+ \tau \big( \bu^* \SCAL \GRAD \overline{\bu},\ \bv \big)
+    - \tau \big( p^{n+1},\ \DIV \bv \big) + 
+    \tau \big( \nu \varepsilon(\overline{\bu}),\ \varepsilon(\bv) \big) \\
+    & 
+    +  
+    \underbrace{\delta_1 \tau \big( \bu^* \SCAL \GRAD \overline{\bu} + \GRAD \overline{p}, \
+    \bu^* \SCAL \GRAD \bv\big)}_{\text{SUPG}}  +
+    \underbrace{\delta_2 \tau \big(\DIV \overline{\bu}, \, \DIV \bv \big)}_{\text{GD}}
+    =0, \\
+    \hspace{2.2em} 
+    \big( \DIV \overline{\bu},\ q)&
+    + \underbrace{\delta_1 \big( \bu^* \SCAL \GRAD \overline{\bu} + \GRAD p^{n+1} ,\ \GRAD q \big)}_{\text{PSPG}} = 0 
+  \end{aligned}
+\end{equation}
+with
+$\overline{p} := \theta p^{n+1} + (1-\theta) p^{n}$,
+$\tilde{\bu} := \bu^{n+1} - \bu^{n}$,
+$\overline{\bu} := \theta \bu^{n+1} + (1-\theta) \bu^{n}$, 
+and $\bu^*_i:=\bu^n$.
+
+%\vspace{3cm}
+%
+%\section{Lethe}
+%
+%\begin{equation}
+%  \begin{aligned}
+%    \left( \partial_t \bu ,\  \bv \right) 
+%    &+ \big( \bu \SCAL \GRAD \bu,\ \bv \big)
+%    - \big( p,\ \DIV \bv \big) + 
+%    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
+%    & 
+%    +  
+%    \underbrace{\delta_1 \big( {\color{black}\partial_t \bu} +  \bu \SCAL \GRAD \bu + \GRAD p - {\color{black}\nu \Delta \bu}, \
+%    \bu \SCAL \GRAD \bv\big)}_{\text{SUPG}}
+%    =0, \\
+%    \hspace{2.2em} 
+%    \big( \DIV \bu,\ q)&
+%    + \underbrace{\delta_1 \big( {\color{black}\partial_t \bu} + \bu \SCAL \GRAD \bu + \GRAD p - {\color{black}\nu \Delta \bu},\ \GRAD q \big)}_{\text{PSPG}} = 0 
+%  \end{aligned}
+%\end{equation}
+
+
+
+%\newpage
+%\bibliographystyle{siam}
+%\bibliographystyle{abbrvnat} 
+%\bibliographystyle{elsarticle-num}
+%\bibliography{ref}
+\end{document}
+
+\bibliographystyle{siam}
+\bibliography{ref}
+\end{document}

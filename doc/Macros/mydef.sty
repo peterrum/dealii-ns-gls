@@ -1,0 +1,471 @@
+\theoremstyle{plain} 
+\theoremheaderfont{\normalfont\itshape}
+\theorembodyfont{\normalfont} 
+\theoremseparator{.}
+\theoremsymbol{\hfill\ensuremath{\square}}
+\newtheorem{remark}[theorem]{Remark}
+
+\numberwithin{theorem}{section}
+\numberwithin{equation}{section}
+
+
+%\newremark{remark}{Remark}[section]
+%\newremark{example}{Example}[section]
+
+\makeatletter
+\newcommand{\manuallabel}[2]{{\textup{(#2)}\def\@currentlabel{#2}\label{#1}}}
+\makeatother
+
+\newcommand{\jlgcode}{Code~1\@\xspace}
+\newcommand{\mncode}{Code~2\@\xspace}
+\newcommand{\itcode}{Code~3\@\xspace}
+
+\newcommand{\ie}{i.e.,\@\xspace}
+\newcommand{\eg}{e.g.,\@\xspace}
+\newcommand{\cf}{cf.\@\xspace}
+\newcommand{\etal}{et al.\@\xspace}
+\newcommand{\etc}{etc.\@\xspace}
+\renewcommand{\ae}{a.e.\@\xspace}
+\newcommand{\Question}[1]{\marginpar{\color{blue}#1}}
+\newcommand{\bal}[1]{{\color{blue}#1}}
+\newcommand{\red}[1]{{\color{red}#1}}
+\newcommand{\aatop}[2]{\genfrac{}{}{0pt}{}{#1}{#2}}
+\newcommand\opCoord{{\mathsf C}}
+\newcommand\bopCoord{\textsf{\textbf{C}}}
+\newcommand{\mes}[1]{|#1|}
+\newcommand{\du}{_{\mathrm{u}}}
+\newcommand{\dd}{_{\mathrm{d}}}
+\newcommand{\jj}{\mathsf{j}}
+\newcommand{\jjgeo}{\mathsf{j}^{\mathrm{geo}}}
+\newcommand{\upgeo}{^{\mathrm{geo}}}
+\newcommand{\upgeon}{^{\mathrm{geo},n}}
+\newcommand{\upgeonpone}{^{\mathrm{geo},n+1}}
+\newcommand{\nfgeo}{n_\mathrm{sh}^{\mathrm{geo}}}
+\newcommand{\nf}{{n_\mathrm{sh}}}
+\newcommand{\cfl}{{CFL}}
+\newcommand{\dlag}{_\mathrm{Lg}}
+\newcommand{\idlag}{_{i,\mathrm{Lg}}}
+\newcommand{\dsmooth}{_\mathrm{Sm}}
+\newcommand{\idsmooth}{_{i,\mathrm{Sm}}}
+\def\lb{[\![}
+\def\rb{]\!]}
+\def\jump#1{\lb{#1}\rb}
+\def\diff{\,{\mathrm{d}}}
+\def\dif{\,{\mathrm{d}}}
+\def\Real{{\mathbb R}}
+\newcommand{\calIb}{\calI^{\partial}}
+\newcommand{\calIbz}{\calI^{\partial}_0}
+\newcommand{\calFh}{\calF_h}
+\newcommand{\calFhb}{\calF_h^{\partial}}
+\newcommand{\calFhzb}{\calF_{h0}^{\partial}}
+% \newcommand{\trans}{{\bT}}
+\newcommand{\trans}{\top }
+\newcommand{\dt}{{\tau}}
+\newcommand{\st}{{\;|\;}}
+\newcommand{\tr}{^{\mathsf T}}
+\newcommand{\setfont}[2]{\text{\fontfamily{#1}\selectfont #2}}
+\newcommand{\hmin}{\underline{h}}
+\newcommand{\hmax}{h}
+\newcommand{\half}{\frac12} 
+\def\famTh{(\calT_h)_{h>0}}
+\newcommand{\intset}[2]{\{#1\hskip.05em\relax{:}\hskip.1em\relax#2\}}
+\newcommand{\Dom}{D}
+\newcommand{\front}{{\partial\Dom}}
+\newcommand{\Nglob}{I}
+\newcommand{\Nglobgeo}{I^{\text{geo}}}
+\newcommand{\bvale}{\bv_{\mathrm{A}}}
+%Operators
+\DeclareMathOperator*{\esssup}{ess\,sup}
+\DeclareMathOperator*{\essinf}{ess\,inf}
+\DeclareMathOperator{\argmax}{arg\,max}
+\DeclareMathOperator{\argsup}{arg\,sup}
+\def\DIV{\nabla{\cdot}}      
+\def\ROT{\nabla{\times}} 
+\def\GRAD{\nabla}   
+\def\LAP{\Delta} 
+\def\CROSS{{\times}}
+\def\ADV{{\cdot}\GRAD} 
+\def\SCAL{{\cdot}}
+\newcommand{\floor}[1]{\lfloor#1\rfloor}
+
+\def\fm{\frak{m}}
+\def\fM{\frak{M}}
+
+\def\tm{{\widetilde m}}
+\def\tu{{\widetilde u}}
+\def\tT{{\widetilde T}}
+\def\tN{{\widetilde N}}
+
+\def\tbu{{\widetilde \bu}}
+\def\tba{{\widetilde \ba}}
+\def\tcalT{{\widetilde \calT}}
+%=======================LETTRES AVEC CHAPEAU===================================
+\def\wa{{\widehat a}}
+\def\wb{{\widehat b}}
+\def\wc{{\widehat c}}
+%\def\wd{{\widehat d}} %Already define somewhere
+\def\we{{\widehat e}}
+\def\wf{{\widehat f}}
+\def\wg{{\widehat g}}
+\def\wh{{\widehat h}}
+\def\wi{{\widehat i}}
+\def\wj{{\widehat j}}
+\def\wk{{\widehat k}}
+\def\wl{{\widehat l}}
+\def\wm{{\widehat m}}
+\def\wn{{\widehat n}}
+\def\wo{{\widehat o}}
+\def\wp{{\widehat p}}
+\def\wq{{\widehat q}}
+\def\wr{{\widehat r}}
+\def\ws{{\widehat s}}
+\def\wt{{\widehat t}}
+\def\wu{{\widehat u}}
+\def\wv{{\widehat v}}
+\def\ww{{\widehat w}}
+\def\wx{{\widehat x}}
+\def\wy{{\widehat y}}
+\def\wz{{\widehat z}}
+
+\def\wba{{\widehat \ba}}
+\def\wbx{{\widehat \bx}}
+
+\def\wA{{\widehat A}}
+\def\wB{{\widehat B}}
+\def\wC{{\widehat C}}
+\def\wD{{\widehat D}}
+\def\wE{{\widehat E}}
+\def\wF{{\widehat F}}
+\def\wG{{\widehat G}}
+\def\wH{{\widehat H}}
+\def\wI{{\widehat I}}
+\def\wJ{{\widehat J}}
+\def\wK{{\widehat K}}
+\def\wL{{\widehat L}}
+\def\wM{{\widehat M}}
+\def\wN{{\widehat N}}
+\def\wO{{\widehat O}}
+\def\wP{{\widehat P}}
+\def\wQ{{\widehat Q}}
+\def\wR{{\widehat R}}
+\def\wS{{\widehat S}}
+\def\wT{{\widehat T}}
+\def\wU{{\widehat U}}
+\def\wV{{\widehat V}}
+\def\wW{{\widehat W}}
+\def\wX{{\widehat X}}
+\def\wY{{\widehat Y}}
+\def\wZ{{\widehat Z}}
+%=======================LETTRES AVEC CHAPEAU===================================
+
+%=======================SYMBOLS AVEC CHAPEAU===================================
+\def\wlambda{{\widehat \lambda}}
+\def\wphi{{\widehat \phi}}
+\def\wvarphi{{\widehat \varphi}}
+\def\wtheta{{\widehat \theta}}
+\def\wpsi{{\widehat \psi}}
+\def\wxi{{\widehat \xi}}
+\def\womega{{\widehat \omega}}
+\def\wSigma{{\widehat \Sigma}}
+\def\wsigma{{\widehat \sigma}}
+\def\wrho{{\widehat \rho}}
+\def\wPi{{\widehat \Pi}}
+
+\def\wcalE{{\widehat{\mathcal E}}}
+\def\wcalL{{\widehat{\mathcal L}}}
+%=======================SYMBOLS AVEC CHAPEAU===================================
+
+
+%=======================BOLD SYMBOLS===========================================
+\newcommand{\bfjlg}{\boldsymbol}         % Put the right def to get back bold symbols
+\newcommand{\boldsymboljlg}{\boldsymbol } % Put the right def to get back bold symbols
+
+\newcommand{\ba}{{\bfjlg a}}
+\newcommand{\bb}{{\bfjlg b}}
+\newcommand{\bc}{{\bfjlg c}}
+\newcommand{\bd}{{\bfjlg d}}
+\newcommand{\be}{{\bfjlg e}}
+\newcommand{\bef}{{\bfjlg f}}
+\newcommand{\bbf}{{\bfjlg f}}
+\newcommand{\bg}{{\bfjlg g}}
+\newcommand{\bh}{{\bfjlg h}}
+%\newcommand{\bi}{{\bfjlg i}} %Begin itemize
+\newcommand{\bj}{{\bfjlg j}}
+\newcommand{\bk}{{\bfjlg k}}
+\newcommand{\bl}{{\bfjlg l}}
+\newcommand{\bbm}{{\bfjlg m}}
+\newcommand{\bn}{{\bfjlg n}}
+\newcommand{\bo}{{\bfjlg o}}
+\newcommand{\bp}{{\bfjlg p}}
+\newcommand{\bq}{{\bfjlg q}}
+\newcommand{\br}{{\bfjlg r}}
+\newcommand{\bs}{{\bfjlg s}}
+\newcommand{\bt}{{\bfjlg t}}
+\newcommand{\bu}{{\bfjlg u}}
+\newcommand{\bv}{{\bfjlg v}}
+\newcommand{\bw}{{\bfjlg w}}
+\newcommand{\bx}{{\bfjlg x}}
+\newcommand{\by}{{\bfjlg y}}
+\newcommand{\bz}{{\bfjlg z}}
+\newcommand{\bzero}{{\bfjlg 0}}
+
+\newcommand{\bA}{{\bfjlg A}}
+\newcommand{\bB}{{\bfjlg B}}
+\newcommand{\bC}{{\bfjlg C}}
+\newcommand{\bD}{{\bfjlg D}}
+\newcommand{\bE}{{\bfjlg E}}
+\newcommand{\bF}{{\bfjlg F}}
+\newcommand{\bG}{{\bfjlg G}}
+\newcommand{\bH}{{\bfjlg H}}
+\newcommand{\bI}{{\bfjlg I}}
+\newcommand{\bJ}{{\bfjlg J}}
+\newcommand{\bK}{{\bfjlg K}}
+\newcommand{\bL}{{\bfjlg L}}
+\newcommand{\bM}{{\bfjlg M}}
+\newcommand{\bN}{{\bfjlg N}}
+\newcommand{\bO}{{\bfjlg O}}
+\newcommand{\bP}{{\bfjlg P}}
+\newcommand{\bQ}{{\bfjlg Q}}
+\newcommand{\bR}{{\bfjlg R}}
+\newcommand{\bS}{{\bfjlg S}}
+\newcommand{\bT}{{\bfjlg T}}
+\newcommand{\bU}{{\bfjlg U}}
+\newcommand{\bV}{{\bfjlg V}}
+\newcommand{\bW}{{\bfjlg W}}
+\newcommand{\bX}{{\bfjlg X}}
+\newcommand{\bY}{{\bfjlg Y}}
+\newcommand{\bZ}{{\bfjlg Z}}
+
+\newcommand{\bell}{{\boldsymbol \ell}}
+
+\newcommand{\balpha}{{\boldsymboljlg \alpha}}
+\newcommand{\bbetaa}{{\boldsymboljlg \beta}}
+\newcommand{\bdelta}{{\boldsymboljlg \delat}}
+\newcommand{\bepsilon}{{\boldsymboljlg \epsilon}}
+\newcommand{\beeta}{{\boldsymboljlg \eta}}
+\newcommand{\bgamma}{{\boldsymboljlg \gamma}}
+\newcommand{\bkappa}{{\boldsymboljlg \kappa}}
+\newcommand{\blambda}{{\boldsymboljlg \lambda}}
+\newcommand{\bmu}{{\boldsymboljlg \mu}}
+\newcommand{\bnu}{{\boldsymboljlg \nu}}
+\newcommand{\bomega}{{\boldsymboljlg \omega}}
+\newcommand{\bpi}{{\boldsymboljlg \pi}}
+\newcommand{\bphi}{{\boldsymboljlg \phi}}
+\newcommand{\bvarphi}{{\boldsymboljlg \varphi}}
+\newcommand{\bsigma}{{\boldsymboljlg \sigma}}
+\newcommand{\btau}{{\boldsymboljlg \tau}}
+\newcommand{\btheta}{{\boldsymboljlg \theta}}
+\newcommand{\bTheta}{{\boldsymboljlg \Theta}}
+\newcommand{\bupsilon}{{\boldsymboljlg \upsilon}}
+\newcommand{\bxi}{{\boldsymboljlg \xi}}
+\newcommand{\bzeta}{{\boldsymboljlg \zeta}}
+\newcommand{\bchi}{{\boldsymboljlg \chi}}
+\newcommand{\bPhi}{{\boldsymboljlg \Phi}}
+\newcommand{\blphi}{{\color{blue}\phi}}
+\newcommand{\bOmega}{{\boldsymboljlg \Omega}}
+%=======================BOLD SYMBOLS===========================================
+
+%=======================VECTOR SYMBOLS====================================
+\newcommand{\vA}{{\mathbf A}}
+\newcommand{\vB}{{\mathbf B}}
+\newcommand{\vC}{{\mathbf C}}
+\newcommand{\vD}{{\mathbf D}}
+\newcommand{\vE}{{\mathbf E}}
+\newcommand{\vF}{{\mathbf F}}
+\newcommand{\vG}{{\mathbf G}}
+\newcommand{\vH}{{\mathbf H}}
+\newcommand{\vI}{{\mathbf I}}
+\newcommand{\vJ}{{\mathbf J}}
+\newcommand{\vK}{{\mathbf K}}
+\newcommand{\vL}{{\mathbf L}}
+\newcommand{\vM}{{\mathbf M}}
+\newcommand{\vN}{{\mathbf N}}
+\newcommand{\vO}{{\mathbf O}}
+\newcommand{\vP}{{\mathbf P}}
+\newcommand{\vQ}{{\mathbf Q}}
+\newcommand{\vR}{{\mathbf R}}
+\newcommand{\vS}{{\mathbf S}}
+\newcommand{\vT}{{\mathbf T}}
+\newcommand{\vU}{{\mathbf U}}
+\newcommand{\vV}{{\mathbf V}}
+\newcommand{\vW}{{\mathbf W}}
+\newcommand{\vX}{{\mathbf X}}
+\newcommand{\vY}{{\mathbf Y}}
+\newcommand{\vZ}{{\mathbf Z}}
+%=======================VECTOR SYMBOLS====================================
+
+%=======================CALIGRAPHIC SYMBOLS====================================
+\newcommand{\calA}{{\mathcal A}}
+\newcommand{\calB}{{\mathcal B}}
+\newcommand{\calC}{{\mathcal C}}
+\newcommand{\calD}{{\mathcal D}}
+\newcommand{\calE}{{\mathcal E}}
+\newcommand{\calF}{{\mathcal F}}
+\newcommand{\calG}{{\mathcal G}}
+\newcommand{\calH}{{\mathcal H}}
+\newcommand{\calI}{{\mathcal I}}
+\newcommand{\calJ}{{\mathcal J}}
+\newcommand{\calK}{{\mathcal K}}
+\newcommand{\calL}{{\mathcal L}}
+\newcommand{\calM}{{\mathcal M}}
+\newcommand{\calN}{{\mathcal N}}
+\newcommand{\calO}{{\mathcal O}}
+\newcommand{\calP}{{\mathcal P}}
+\newcommand{\calQ}{{\mathcal Q}}
+\newcommand{\calR}{{\mathcal R}}
+\newcommand{\calS}{{\mathcal S}}
+\newcommand{\calT}{{\mathcal T}}
+\newcommand{\calU}{{\mathcal U}}
+\newcommand{\calV}{{\mathcal V}}
+\newcommand{\calW}{{\mathcal W}}
+\newcommand{\calX}{{\mathcal X}}
+\newcommand{\calY}{{\mathcal Y}}
+\newcommand{\calZ}{{\mathcal Z}}
+
+% bold mathcal
+\DeclareMathAlphabet\mathbfcal{OMS}{cmsy}{b}{n}
+\newcommand{\bcalX}{{\mathbfcal X}}
+\newcommand{\bcalW}{{\mathbfcal W}}
+%=======================CALIGRAPHIC SYMBOLS====================================
+
+%=======================BLACKBOARD SYMBOLS====================================
+\newcommand{\polf}{{\mathbbm f}}
+\newcommand{\polg}{{\mathbbm g}}
+\newcommand{\polh}{{\mathbbm h}}
+
+\newcommand{\polA}{{\mathbb A}}
+\newcommand{\polB}{{\mathbb B}}
+\newcommand{\polC}{{\mathbb C}}
+\newcommand{\polD}{{\mathbb D}}
+\newcommand{\polE}{{\mathbb E}}
+\newcommand{\polF}{{\mathbb F}}
+\newcommand{\polG}{{\mathbb G}}
+\newcommand{\polH}{{\mathbb H}}
+\newcommand{\polI}{{\mathbb I}}
+\newcommand{\polJ}{{\mathbb J}}
+\newcommand{\polK}{{\mathbb K}}
+\newcommand{\polL}{{\mathbb L}}
+\newcommand{\polM}{{\mathbb M}}
+\newcommand{\polN}{{\mathbb N}}
+\newcommand{\polO}{{\mathbb O}}
+\newcommand{\polP}{{\mathbb P}}
+\newcommand{\polQ}{{\mathbb Q}}
+\newcommand{\polR}{{\mathbb R}}
+\newcommand{\polS}{{\mathbb S}}
+\newcommand{\polT}{{\mathbb T}}
+\newcommand{\polU}{{\mathbb U}}
+\newcommand{\polV}{{\mathbb V}}
+\newcommand{\polW}{{\mathbb W}}
+\newcommand{\polX}{{\mathbb X}}
+\newcommand{\polY}{{\mathbb Y}}
+\newcommand{\polZ}{{\mathbb Z}}
+%=======================BLACKBOARD SYMBOLS====================================
+\newcommand\sfs{{\mathsf s}}
+\newcommand\sfu{{\mathsf u}}
+\newcommand\sfv{{\mathsf v}}
+\newcommand\sfw{{\mathsf w}}
+\newcommand\sfS{{\mathsf S}}
+\newcommand\sfE{{\mathsf E}}
+\newcommand\sfF{{\mathsf F}}
+\newcommand\sfG{{\mathsf G}}
+\newcommand\sfK{{\mathsf K}}
+\newcommand\sfM{{\mathsf M}}
+\newcommand\sfP{{\mathsf P}}
+\newcommand\sfR{{\mathsf R}}
+\newcommand\sfU{{\mathsf U}}
+\newcommand\sfV{{\mathsf V}}
+\newcommand\sfW{{\mathsf W}}
+\newcommand\bsfA{\textsf{\textbf A}}
+\newcommand\bsfF{\textsf{\textbf F}}
+\newcommand\bsfG{\textsf{\textbf G}}
+\newcommand\bsfK{\textsf{\textbf K}}
+\newcommand\bsfM{\textsf{\textbf M}}
+\newcommand\bsfU{\textsf{\textbf U}}
+\newcommand\bsfV{\textsf{\textbf V}}
+\newcommand\bsfW{\textsf{\textbf W}}
+\newcommand\bsfP{\textsf{\textbf P}}
+\newcommand\bsfR{\textsf{\textbf R}}
+
+%=======================BLACKBOARD SYMBOLS====================================
+\newcommand{\bpolA}{\pmb{\mathbb A}}
+\newcommand{\bpolB}{\pmb{\mathbb B}}
+\newcommand{\bpolC}{\pmb{\mathbb C}}
+\newcommand{\bpolD}{\pmb{\mathbb D}}
+\newcommand{\bpolE}{\pmb{\mathbb E}}
+\newcommand{\bpolF}{\pmb{\mathbb F}}
+\newcommand{\bpolG}{\pmb{\mathbb G}}
+\newcommand{\bpolH}{\pmb{\mathbb H}}
+\newcommand{\bpolI}{\pmb{\mathbb I}}
+\newcommand{\bpolJ}{\pmb{\mathbb J}}
+\newcommand{\bpolK}{\pmb{\mathbb K}}
+\newcommand{\bpolL}{\pmb{\mathbb L}}
+\newcommand{\bpolM}{\pmb{\mathbb M}}
+\newcommand{\bpolN}{\pmb{\mathbb N}}
+\newcommand{\bpolO}{\pmb{\mathbb O}}
+\newcommand{\bpolP}{\pmb{\mathbb P}}
+\newcommand{\bpolQ}{\pmb{\mathbb Q}}
+\newcommand{\bpolR}{\pmb{\mathbb R}}
+\newcommand{\bpolS}{\pmb{\mathbb S}}
+\newcommand{\bpolT}{\pmb{\mathbb T}}
+\newcommand{\bpolU}{\pmb{\mathbb U}}
+\newcommand{\bpolV}{\pmb{\mathbb V}}
+\newcommand{\bpolW}{\pmb{\mathbb W}}
+\newcommand{\bpolX}{\pmb{\mathbb X}}
+\newcommand{\bpolY}{\pmb{\mathbb Y}}
+\newcommand{\bpolZ}{\pmb{\mathbb Z}}
+%=======================SOME COLORS====================================
+
+\newcommand{\NCH}[1]{{\textcolor{Cyan}{#1}}}
+\newcommand{\ORANGE}[1]{{\textcolor{Orange}{#1}}}
+\newcommand{\RED}[1]{{\textcolor{red}{#1}}}
+\newcommand{\BLUE}[1]{{\textcolor{Blue}{#1}}}
+\newcommand{\GREEN}[1]{{\textcolor{OliveGreen}{#1}}}
+\newcommand{\PLUM}[1]{{\textcolor{Plum}{#1}}}
+
+%=======================SOME COLORS====================================
+
+\newcommand{\limiter}{\ell}
+\newcommand{\itemizebullet}{$\diamond$}
+
+%======================================================================
+\def\mR{{\mathbb R}} 
+\def\mb{\mathbb}
+\def\p{{\partial}} 
+
+%=======================LATIN WORDS===========================================
+%=======================LATIN WORDS===========================================
+
+
+%=======================SOME SHORTCUTS===========================================
+\def\e{{\varepsilon}} 
+\def\mR{{\mathbb R}} 
+\def\ud{\,\mathrm{d}}
+\def\l{\left}
+\def\r{\right}
+\def\mb{\mathbb}
+\def\M{\cal{M}} 
+\def\RR{\cal{R}}
+\def\calTh{{\calT_h}}
+\def\lb{[\![}
+\def\rb{]\!]}
+\def\jump#1{\lb{#1}\rb}
+%=======================SOME SHORTCUTS===========================================
+
+
+%=======================DERIVATIVE SYMBOLS===========================================
+\def\p{{\partial}} 
+\def\DIV{\nabla{\cdot\,}}      
+\def\ROT{\nabla{\times}} 
+\def\GRAD{\nabla}   
+\def\LAP{\Delta} 
+\def\KER{\mathop{\text{\rm Ker}}\nolimits}
+\def\IM{\mathop{\text{\rm Im}}\nolimits}
+\def\ADJ{\mathop{\text{\rm Adj}}\nolimits}       
+\def\ADV{{\cdot}\GRAD}       
+\def\SCAL{{\cdot}}
+\def\SCALM{{:}}
+\def\bDIV{\DIV}              
+\def\bLAP{\LAP} 
+\def\Tadj{\tilde T}
+\def\Aadj{\tilde A}
+%=======================DERIVATIVE SYMBOLS===========================================
