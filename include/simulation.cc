@@ -235,7 +235,7 @@ SimulationCylinder<dim>::create_triangulation(
 {
   const double diameter = 0.1;
 
-  cylinder(tria, 2.2, 0.41, 0.2, diameter, symm);
+  cylinder(tria, symm);
 
   if (reset_manifold_level == 0)
     {
