@@ -1,8 +1,8 @@
 {
   "dim"                  : 2,
-  "fe degree"            : 2,
+  "fe degree"            : 1,
   "mapping degree"       : 0,
-  "n global refinements" : 4,
+  "n global refinements" : 5,
 
   "simulation name" : "cylinder",
 
