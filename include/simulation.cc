@@ -362,7 +362,8 @@ SimulationCylinder<dim>::postprocess(const double           t,
   QGauss<dim - 1> face_quadrature_formula(3);
   const int       n_q_points = face_quadrature_formula.size();
 
-  FEFaceValues<dim> fe_face_values(dof_handler.get_fe(),
+  FEFaceValues<dim> fe_face_values(mapping,
+                                   dof_handler.get_fe(),
                                    face_quadrature_formula,
                                    update_values | update_gradients |
                                      update_JxW_values | update_normal_vectors);
@@ -377,8 +378,8 @@ SimulationCylinder<dim>::postprocess(const double           t,
   double lift_local = 0;
 
   Tensor<2, dim> I;
-  I[0][0] = 1.0;
-  I[1][1] = 1.0;
+  for (unsigned int i = 0; i < dim; ++i)
+    I[i][i] = 1.0;
 
   for (const auto &cell : dof_handler.active_cell_iterators())
     {
@@ -396,16 +397,12 @@ SimulationCylinder<dim>::postprocess(const double           t,
 
             for (int q = 0; q < n_q_points; ++q)
               {
-                auto normal = fe_face_values.normal_vector(q);
+                const Tensor<1, dim> normal = -fe_face_values.normal_vector(q);
+                const Tensor<2, dim> stress = -p[q] * I + 2 * nu * eps_u[q];
+                const Tensor<1, dim> forces = stress * normal;
 
-                if (dim == 3)
-                  normal[dim - 1] = 0.0; // needed?
-
-                const Tensor<1, dim> forces = (-p[q] * I + 2 * nu * eps_u[q]) *
-                                              (-normal) * fe_face_values.JxW(q);
-
-                drag_local += forces[0];
-                lift_local += forces[1];
+                drag_local += forces[0] * fe_face_values.JxW(q);
+                lift_local += forces[1] * fe_face_values.JxW(q);
               }
           }
     }
