@@ -958,7 +958,7 @@ private:
       DataComponentInterpretation::component_is_scalar;
 
     data_out.add_data_vector(vector,
-                             {"u", "u", "p"},
+                             labels,
                              DataOut<dim>::type_dof_data,
                              data_component_interpretation);
 

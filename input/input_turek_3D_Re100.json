@@ -1,8 +1,8 @@
 {
-  "dim"                  : 2,
+  "dim"                  : 3,
   "fe degree"            : 2,
   "mapping degree"       : 0,
-  "n global refinements" : 4,
+  "n global refinements" : 3,
 
   "simulation name" : "cylinder",
 
@@ -10,9 +10,9 @@
   "t final"        : 20.0,
   "theta"          : 1.0,
   "bdf order"      : 2,
-  "time intration" : "none",
+  "time intration" : "bdf",
 
-  "c1"                         : 1.0,
+  "c1"                         : 2.00,
   "c2"                         : 1.0,
   "nu"                         : 0.001,
   "consider time deriverative" : true,
@@ -20,26 +20,24 @@
 
   "use matrix free ns operator" : true,
 
-  "linear solver" : "direct",
   "lin relative tolerance" : 1e-2,
-  "lin n max iterations" : 100000,
 
-  "preconditioner" : "ILU",
+  "preconditioner" : "GMG",
 
   "gmg coarse grid solver"       : "direct",
   "gmg coarse grid iterate"      : false,
 
   "nonlinear solver" : "Newton",
-  "newton inexact"   : false,
+  "newton inexact"   : true,
 
-  "paraview prefix"    : "results_turek_2D_Re20",
+  "paraview prefix"    : "results_turek_3D_Re100",
   "output granularity" : 0.1,
   
   "simulation no slip cylinder"     : true,
   "simulation no slip wall"         : true,
   "simulation symmetric"            : false,
   "simulation rotate"               : false,
-  "simulation t init"               : 0.00,
+  "simulation t init"               : 0.01,
   "simulation reset manifold level" : -1,
-  "simulation u max"                : 0.3
+  "simulation u max"                : 2.25
 }

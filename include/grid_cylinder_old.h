@@ -1,15 +1,16 @@
 #pragma once
 
 void
-cylinder(Triangulation<2, 2> &triangulation, const bool symm = false)
+cylinder(Triangulation<2, 2> &triangulation,
+         const bool           symm              = false,
+         const double         length            = 2.2,
+         const double         cylinder_position = 0.2)
 {
   constexpr int dim = 2;
 
   using namespace dealii;
 
-  const double length            = 2.2;
   const double height            = 0.41;
-  const double cylinder_position = 0.2;
   const double cylinder_diameter = 0.1;
 
   const double shift = symm ? 0.00 : 0.005;
@@ -136,13 +137,13 @@ cylinder(Triangulation<2, 2> &triangulation, const bool symm = false)
 void
 cylinder(Triangulation<3, 3> &triangulation, const bool symm = false)
 {
-  const double length            = 2.2;
+  const double length            = 2.5;
   const double height            = 0.41;
-  const double cylinder_position = 0.2;
+  const double cylinder_position = 0.5;
 
   dealii::Triangulation<2, 2> tria1;
 
-  cylinder(tria1, symm);
+  cylinder(tria1, symm, length, cylinder_position);
 
   dealii::Triangulation<3, 3> tria2;
   tria2.set_mesh_smoothing(triangulation.get_mesh_smoothing());
@@ -168,9 +169,11 @@ cylinder(Triangulation<3, 3> &triangulation, const bool symm = false)
    * Set boundary ids:
    */
 
+  const double shift = symm ? 0.00 : 0.005;
+
   for (auto cell : triangulation.active_cell_iterators())
     {
-      for (auto f : GeometryInfo<3>::face_indices())
+      for (const auto f : cell->face_indices())
         {
           const auto face = cell->face(f);
 
@@ -192,11 +195,17 @@ cylinder(Triangulation<3, 3> &triangulation, const bool symm = false)
           else if (center[0] < -cylinder_position + 1.e-6)
             // inflow
             face->set_boundary_id(0);
-          else if (std::abs(center[1]) > height / 2. - 1.e-6)
-            // y-wall
+          else if (std::abs(center[1] - (+height / 2. + shift)) < 1.e-6)
+            // wall (top)
             face->set_boundary_id(2);
-          else if (std::abs(center[2]) > height / 2. - 1.e-6)
-            // z-wall
+          else if (std::abs(center[1] - (-height / 2. + shift)) < 1.e-6)
+            // wall (bottom)
+            face->set_boundary_id(2);
+          else if (std::abs(center[2] - (+height / 2.)) < 1.e-6)
+            // wall (top)
+            face->set_boundary_id(2);
+          else if (std::abs(center[2] - (-height / 2.)) < 1.e-6)
+            // wall (bottom)
             face->set_boundary_id(2);
           else
             face->set_boundary_id(3);

@@ -33,18 +33,27 @@ namespace InflowBoundaryValues
     double
     value(const Point<dim> &p, const unsigned int component) const override
     {
-      AssertDimension(dim, 2);
+      double factor = 1.0;
 
-      const double alpha =
-        (t_init == 0) ? 1.0 : std::min(this->get_time() / t_init, 1.0);
+      if (t_init != 0) // ramp up
+        {
+          factor *= std::min(this->get_time() / t_init, 1.0);
+        }
 
-      const double y = p[1] - shift;
+      if (no_slip_bc) // parabolic profile
+        {
+          const double y = p[1] - shift;
+          factor *= 4 * y * (H - y) / H / H;
 
-      const double u_val =
-        u_max * (no_slip_bc ? (4 * y * (H - y) / H / H) : 1.0);
+          if (dim == 3)
+            {
+              const double z = p[2] + H / 2.0;
+              factor *= 4 * z * (H - z) / H / H;
+            }
+        }
 
       if (component == 0)
-        return u_val * alpha;
+        return u_max * factor;
       else
         return 0;
     }
@@ -344,6 +353,7 @@ SimulationCylinder<dim>::postprocess(const double           t,
     solution.update_ghost_values();
 
   const double diameter = 0.1;
+  const double height   = 0.41;
 
   double drag = 0, lift = 0, p_diff = 0;
 
@@ -352,7 +362,8 @@ SimulationCylinder<dim>::postprocess(const double           t,
   QGauss<dim - 1> face_quadrature_formula(3);
   const int       n_q_points = face_quadrature_formula.size();
 
-  FEFaceValues<dim> fe_face_values(dof_handler.get_fe(),
+  FEFaceValues<dim> fe_face_values(mapping,
+                                   dof_handler.get_fe(),
                                    face_quadrature_formula,
                                    update_values | update_gradients |
                                      update_JxW_values | update_normal_vectors);
@@ -367,8 +378,8 @@ SimulationCylinder<dim>::postprocess(const double           t,
   double lift_local = 0;
 
   Tensor<2, dim> I;
-  I[0][0] = 1.0;
-  I[1][1] = 1.0;
+  for (unsigned int i = 0; i < dim; ++i)
+    I[i][i] = 1.0;
 
   for (const auto &cell : dof_handler.active_cell_iterators())
     {
@@ -386,17 +397,21 @@ SimulationCylinder<dim>::postprocess(const double           t,
 
             for (int q = 0; q < n_q_points; ++q)
               {
-                const Tensor<1, dim> forces =
-                  (-p[q] * I + 2 * nu * eps_u[q]) *
-                  (-fe_face_values.normal_vector(q)) * fe_face_values.JxW(q);
+                const Tensor<1, dim> normal = -fe_face_values.normal_vector(q);
+                const Tensor<2, dim> stress = -p[q] * I + 2 * nu * eps_u[q];
+                const Tensor<1, dim> forces = stress * normal;
 
-                drag_local += forces[0];
-                lift_local += forces[1];
+                drag_local += forces[0] * fe_face_values.JxW(q);
+                lift_local += forces[1] * fe_face_values.JxW(q);
               }
           }
     }
 
-  const unsigned int scaling = 2 / diameter / std::pow(u_max * 2. / 3., 2);
+  const double u_bar   = u_max * (dim == 2 ? (2. / 3.) : (4. / 9.));
+  double       scaling = 2 / diameter / std::pow(u_bar, 2);
+
+  if (dim == 3)
+    scaling /= height;
 
   drag = Utilities::MPI::sum(drag_local, comm) * scaling;
   lift = Utilities::MPI::sum(lift_local, comm) * scaling;
