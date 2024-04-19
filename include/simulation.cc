@@ -2,7 +2,11 @@
 
 #include <deal.II/base/parameter_handler.h>
 
+#include <deal.II/distributed/tria.h>
+
 #include <deal.II/grid/grid_in.h>
+
+#include <deal.II/numerics/data_out_resample.h>
 
 #include <deal.II/physics/transformations.h>
 
@@ -186,6 +190,8 @@ SimulationCylinder<dim>::SimulationCylinder()
   , t_init(0.0)
   , reset_manifold_level(-1)
   , u_max(1.0)
+  , paraview_prefix("")
+  , output_granularity(0.0)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -213,9 +219,8 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("simulation t init", t_init);
   prm.add_parameter("simulation reset manifold level", reset_manifold_level);
   prm.add_parameter("simulation u max", u_max);
-
-  std::string paraview_prefix;
   prm.add_parameter("paraview prefix", paraview_prefix);
+  prm.add_parameter("output granularity", output_granularity);
 
   prm.parse_input(file_name, "", true);
 
@@ -458,6 +463,72 @@ SimulationCylinder<dim>::postprocess(const double           t,
   // clean up
   if (has_ghost_elements == false)
     solution.zero_out_ghost_values();
+
+  if constexpr (dim == 3)
+    {
+      static unsigned int counter = 0;
+
+      if ((t + std::numeric_limits<double>::epsilon()) <
+          counter * output_granularity)
+        return;
+
+      for (unsigned int c = 0; c < 2; ++c)
+        {
+          parallel::distributed::Triangulation<2, 3> patch_tria(comm);
+
+          const double length            = 2.5;
+          const double height            = 0.41;
+          const double cylinder_position = 0.5;
+          const double shift             = symm ? 0.00 : 0.005;
+
+          std::vector<unsigned int> repetitions = {6, 1};
+          Point<2> p1(-cylinder_position, -height / 2.0 + shift);
+          Point<2> p2(length - cylinder_position, +height / 2.0 + shift);
+
+          GridGenerator::subdivided_hyper_rectangle(patch_tria,
+                                                    repetitions,
+                                                    p1,
+                                                    p2);
+
+          if (c == 0)
+            {
+              Tensor<1, dim, double> normal;
+              normal[0] = 1.0;
+
+              GridTools::rotate(normal, numbers::PI / 2., patch_tria);
+            }
+
+          patch_tria.refine_global(
+            dof_handler.get_triangulation().n_global_levels());
+
+          const auto bb = BoundingBox<dim>({Point<dim>(0., 0., 0.),
+                                            Point<dim>(9 * diameter, 0., 0.)})
+                            .create_extended(1.5 * diameter);
+
+          for (unsigned int i = 0; i < 3; ++i)
+            {
+              for (const auto &cell : patch_tria.active_cell_iterators())
+                if (cell->is_active() && cell->is_locally_owned())
+                  if (bb.point_inside(cell->center()))
+                    cell->set_refine_flag();
+              patch_tria.execute_coarsening_and_refinement();
+            }
+
+          MappingQ<2, 3> patch_mapping(2);
+          MappingQ<3, 3> mapping(2);
+
+          DataOutResample<3, 2, 3> data_out(patch_tria, patch_mapping);
+
+          data_out.add_data_vector(dof_handler, solution, "solution");
+          data_out.build_patches(mapping);
+          data_out.write_vtu_in_parallel(paraview_prefix + "_slice_" +
+                                           std::to_string(c) + "_" +
+                                           std::to_string(counter) + ".vtu",
+                                         comm);
+        }
+
+      counter++;
+    }
 }
 
 
