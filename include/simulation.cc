@@ -412,8 +412,12 @@ SimulationCylinder<dim>::postprocess(const double           t,
           }
     }
 
-  const double u_bar   = u_max * (dim == 2 ? (2. / 3.) : (4. / 9.));
-  double       scaling = 2 / diameter / std::pow(u_bar, 2);
+
+  double u_bar = u_max;
+  if (use_no_slip_wall_bc)
+    u_bar *= (dim == 2 ? (2. / 3.) : (4. / 9.));
+
+  double scaling = 2 / diameter / std::pow(u_bar, 2);
 
   if (dim == 3)
     scaling /= height;
