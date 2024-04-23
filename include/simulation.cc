@@ -156,7 +156,7 @@ SimulationChannel<dim>::create_triangulation(
 }
 
 template <int dim>
-SimulationChannel<dim>::BoundaryDescriptor
+typename SimulationChannel<dim>::BoundaryDescriptor
 SimulationChannel<dim>::get_boundary_descriptor() const
 {
   BoundaryDescriptor bcs;
@@ -314,7 +314,7 @@ SimulationCylinder<dim>::create_triangulation(
 }
 
 template <int dim>
-SimulationCylinder<dim>::BoundaryDescriptor
+typename SimulationCylinder<dim>::BoundaryDescriptor
 SimulationCylinder<dim>::get_boundary_descriptor() const
 {
   BoundaryDescriptor bcs;
@@ -569,7 +569,7 @@ SimulationRotation<dim>::create_triangulation(
 }
 
 template <int dim>
-SimulationRotation<dim>::BoundaryDescriptor
+typename SimulationRotation<dim>::BoundaryDescriptor
 SimulationRotation<dim>::get_boundary_descriptor() const
 {
   BoundaryDescriptor bcs;
