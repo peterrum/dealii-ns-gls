@@ -226,6 +226,7 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("output granularity", output_granularity);
 
   prm.add_parameter("simulation geometry length", length);
+  prm.add_parameter("simulation geometry extra length", extra_length);
   prm.add_parameter("simulation geometry height", height);
   prm.add_parameter("simulation geometry cylinder position", cylinder_position);
   prm.add_parameter("simulation geometry cylinder diameter", diameter);
@@ -256,15 +257,17 @@ SimulationCylinder<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
-  cylinder(tria, length, height, cylinder_position, diameter, shift);
+  cylinder(
+    tria, length + extra_length, height, cylinder_position, diameter, shift);
 
-  const auto refine_mesh = [](Triangulation<dim> &tria,
-                              const unsigned int  n_refinements) {
+  const auto refine_mesh = [&](Triangulation<dim> &tria,
+                               const unsigned int  n_refinements) {
     for (unsigned int i = 0; i < n_refinements; ++i)
       {
         for (const auto &cell : tria.active_cell_iterators())
           if (cell->is_locally_owned())
-            cell->set_refine_flag();
+            if (cell->center()[0] < (length - cylinder_position))
+              cell->set_refine_flag();
 
         tria.execute_coarsening_and_refinement();
       }

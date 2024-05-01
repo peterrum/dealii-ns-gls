@@ -121,6 +121,7 @@ private:
   double      output_granularity;
 
   double length;
+  double extra_length;
   double height;
   double cylinder_position;
   double diameter;
