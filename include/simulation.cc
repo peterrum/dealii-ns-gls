@@ -258,21 +258,33 @@ SimulationCylinder<dim>::create_triangulation(
 {
   cylinder(tria, length, height, cylinder_position, diameter, shift);
 
+  const auto refine_mesh = [](Triangulation<dim> &tria,
+                              const unsigned int  n_refinements) {
+    for (unsigned int i = 0; i < n_refinements; ++i)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          if (cell->is_locally_owned())
+            cell->set_refine_flag();
+
+        tria.execute_coarsening_and_refinement();
+      }
+  };
+
   if (reset_manifold_level == 0)
     {
       tria.reset_all_manifolds();
-      tria.refine_global(n_global_refinements);
+      refine_mesh(tria, n_global_refinements);
     }
   else if (static_cast<unsigned int>(reset_manifold_level) >
            n_global_refinements)
     {
-      tria.refine_global(n_global_refinements);
+      refine_mesh(tria, n_global_refinements);
     }
   else
     {
-      tria.refine_global(reset_manifold_level);
+      refine_mesh(tria, reset_manifold_level);
       tria.reset_all_manifolds();
-      tria.refine_global(n_global_refinements - reset_manifold_level);
+      refine_mesh(tria, n_global_refinements - reset_manifold_level);
     }
 
   if (rotate)
