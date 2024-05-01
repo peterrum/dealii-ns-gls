@@ -36,7 +36,7 @@
   
   "simulation no slip cylinder"     : false,
   "simulation no slip wall"         : false,
-  "simulation symmetric"            : false,
+  "simulation geometry cylinder shift" : 0.005,
   "simulation rotate"               : false,
   "simulation t init"               : 0.01,
   "simulation reset manifold level" : -1,

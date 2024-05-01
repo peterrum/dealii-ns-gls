@@ -2,18 +2,15 @@
 
 void
 cylinder(Triangulation<2, 2> &triangulation,
-         const bool           symm              = false,
-         const double         length            = 2.2,
-         const double         cylinder_position = 0.2)
+         const double         length,
+         const double         height,
+         const double         cylinder_position,
+         const double         cylinder_diameter,
+         const double         shift)
 {
   constexpr int dim = 2;
 
   using namespace dealii;
-
-  const double height            = 0.41;
-  const double cylinder_diameter = 0.1;
-
-  const double shift = symm ? 0.00 : 0.005;
 
   dealii::Triangulation<dim, dim> tria1, tria2, tria3, tria4, tria5, tria6,
     tria7, tria8, tria9, tria_tmp;
@@ -135,15 +132,16 @@ cylinder(Triangulation<2, 2> &triangulation,
 }
 
 void
-cylinder(Triangulation<3, 3> &triangulation, const bool symm = false)
+cylinder(Triangulation<3, 3> &triangulation,
+         const double         length,
+         const double         height,
+         const double         cylinder_position,
+         const double         cylinder_diameter,
+         const double         shift)
 {
-  const double length            = 2.5;
-  const double height            = 0.41;
-  const double cylinder_position = 0.5;
-
   dealii::Triangulation<2, 2> tria1;
 
-  cylinder(tria1, symm, length, cylinder_position);
+  cylinder(tria1, length, height, cylinder_position, cylinder_diameter, shift);
 
   dealii::Triangulation<3, 3> tria2;
   tria2.set_mesh_smoothing(triangulation.get_mesh_smoothing());
@@ -168,8 +166,6 @@ cylinder(Triangulation<3, 3> &triangulation, const bool symm = false)
   /*
    * Set boundary ids:
    */
-
-  const double shift = symm ? 0.00 : 0.005;
 
   for (auto cell : triangulation.active_cell_iterators())
     {
