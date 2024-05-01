@@ -113,13 +113,19 @@ private:
   bool        use_no_slip_cylinder_bc;
   bool        use_no_slip_wall_bc;
   double      nu;
-  bool        symm;
   bool        rotate;
   double      t_init;
   int         reset_manifold_level;
   double      u_max;
   std::string paraview_prefix;
   double      output_granularity;
+
+  double length;
+  double extra_length;
+  double height;
+  double cylinder_position;
+  double diameter;
+  double shift;
 
   mutable std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 

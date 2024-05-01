@@ -185,13 +185,17 @@ SimulationCylinder<dim>::SimulationCylinder()
   : use_no_slip_cylinder_bc(true)
   , use_no_slip_wall_bc(true)
   , nu(0.0)
-  , symm(true)
   , rotate(false)
   , t_init(0.0)
   , reset_manifold_level(-1)
   , u_max(1.0)
   , paraview_prefix("")
   , output_granularity(0.0)
+  , length((dim == 2) ? 2.2 : 2.5)
+  , height(0.41)
+  , cylinder_position((dim == 2) ? 0.2 : 0.5)
+  , diameter(0.1)
+  , shift(0.005)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -214,13 +218,19 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("nu", nu);
   prm.add_parameter("simulation no slip cylinder", use_no_slip_cylinder_bc);
   prm.add_parameter("simulation no slip wall", use_no_slip_wall_bc);
-  prm.add_parameter("simulation symmetric", symm);
   prm.add_parameter("simulation rotate", rotate);
   prm.add_parameter("simulation t init", t_init);
   prm.add_parameter("simulation reset manifold level", reset_manifold_level);
   prm.add_parameter("simulation u max", u_max);
   prm.add_parameter("paraview prefix", paraview_prefix);
   prm.add_parameter("output granularity", output_granularity);
+
+  prm.add_parameter("simulation geometry length", length);
+  prm.add_parameter("simulation geometry extra length", extra_length);
+  prm.add_parameter("simulation geometry height", height);
+  prm.add_parameter("simulation geometry cylinder position", cylinder_position);
+  prm.add_parameter("simulation geometry cylinder diameter", diameter);
+  prm.add_parameter("simulation geometry cylinder shift", shift);
 
   prm.parse_input(file_name, "", true);
 
@@ -247,25 +257,37 @@ SimulationCylinder<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
-  const double diameter = 0.1;
+  cylinder(
+    tria, length + extra_length, height, cylinder_position, diameter, shift);
 
-  cylinder(tria, symm);
+  const auto refine_mesh = [&](Triangulation<dim> &tria,
+                               const unsigned int  n_refinements) {
+    for (unsigned int i = 0; i < n_refinements; ++i)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          if (cell->is_locally_owned())
+            if (cell->center()[0] < (length - cylinder_position))
+              cell->set_refine_flag();
+
+        tria.execute_coarsening_and_refinement();
+      }
+  };
 
   if (reset_manifold_level == 0)
     {
       tria.reset_all_manifolds();
-      tria.refine_global(n_global_refinements);
+      refine_mesh(tria, n_global_refinements);
     }
   else if (static_cast<unsigned int>(reset_manifold_level) >
            n_global_refinements)
     {
-      tria.refine_global(n_global_refinements);
+      refine_mesh(tria, n_global_refinements);
     }
   else
     {
-      tria.refine_global(reset_manifold_level);
+      refine_mesh(tria, reset_manifold_level);
       tria.reset_all_manifolds();
-      tria.refine_global(n_global_refinements - reset_manifold_level);
+      refine_mesh(tria, n_global_refinements - reset_manifold_level);
     }
 
   if (rotate)
@@ -323,7 +345,7 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
   bcs.all_inhomogeneous_dbcs.emplace_back(
     0,
     std::make_shared<InflowBoundaryValues::Channel<dim>>(
-      t_init, u_max, use_no_slip_wall_bc, 0.41, symm ? -0.205 : -0.200));
+      t_init, u_max, use_no_slip_wall_bc, height, -height / 2.0 + shift));
 
   // outflow
   bcs.all_homogeneous_nbcs.push_back(1);
@@ -356,9 +378,6 @@ SimulationCylinder<dim>::postprocess(const double           t,
 
   if (has_ghost_elements == false)
     solution.update_ghost_values();
-
-  const double diameter = 0.1;
-  const double height   = 0.41;
 
   double drag = 0, lift = 0, p_diff = 0;
 
@@ -479,11 +498,6 @@ SimulationCylinder<dim>::postprocess(const double           t,
       for (unsigned int c = 0; c < 2; ++c)
         {
           parallel::distributed::Triangulation<2, 3> patch_tria(comm);
-
-          const double length            = 2.5;
-          const double height            = 0.41;
-          const double cylinder_position = 0.5;
-          const double shift             = symm ? 0.00 : 0.005;
 
           std::vector<unsigned int> repetitions = {6, 1};
           Point<2> p1(-cylinder_position, -height / 2.0 + shift);
