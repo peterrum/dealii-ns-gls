@@ -634,6 +634,66 @@ SimulationRotation<dim>::postprocess(const double           t,
 }
 
 
+
+template <int dim>
+SimulationSphere<dim>::SimulationSphere()
+{
+  AssertThrow(dim == 3, ExcNotImplemented());
+}
+
+template <int dim>
+void
+SimulationSphere<dim>::create_triangulation(
+  Triangulation<dim> &tria,
+  const unsigned int  n_global_refinements) const
+{
+  GridIn<dim> grid_in;
+  grid_in.attach_triangulation(tria);
+  std::ifstream input_file("../mesh/sphere.msh");
+  grid_in.read_msh(input_file);
+
+  tria.set_manifold(0, SphericalManifold<dim>(Point<dim>()));
+
+  tria.refine_global(n_global_refinements);
+}
+
+template <int dim>
+typename SimulationSphere<dim>::BoundaryDescriptor
+SimulationSphere<dim>::get_boundary_descriptor() const
+{
+  BoundaryDescriptor bcs;
+
+  // inflow
+  bcs.all_inhomogeneous_dbcs.emplace_back(
+    1, std::make_shared<InflowBoundaryValues::Channel<dim>>(0.0, 1.0));
+
+  // outflow
+  bcs.all_homogeneous_nbcs.push_back(3);
+
+  // walls
+  bcs.all_slip_bcs.push_back(2);
+
+  // cylinder
+  bcs.all_homogeneous_dbcs.push_back(0);
+
+  return bcs;
+}
+
+template <int dim>
+void
+SimulationSphere<dim>::postprocess(const double           t,
+                                   const Mapping<dim>    &mapping,
+                                   const DoFHandler<dim> &dof_handler,
+                                   const VectorType      &solution) const
+{
+  // nothing to do
+  (void)t;
+  (void)mapping;
+  (void)dof_handler;
+  (void)solution;
+}
+
+
 template class SimulationBase<2>;
 template class SimulationBase<3>;
 template class SimulationChannel<2>;
@@ -642,3 +702,5 @@ template class SimulationCylinder<2>;
 template class SimulationCylinder<3>;
 template class SimulationRotation<2>;
 template class SimulationRotation<3>;
+template class SimulationSphere<2>;
+template class SimulationSphere<3>;
