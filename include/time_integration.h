@@ -142,6 +142,7 @@ private:
 /**
  * A container storing solution vectors of multiple time steps.
  */
+template <typename Number>
 class SolutionHistory
 {
 public:

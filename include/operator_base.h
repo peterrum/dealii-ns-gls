@@ -30,7 +30,7 @@ public:
   invalidate_system() = 0;
 
   virtual void
-  set_previous_solution(const SolutionHistory &vec) = 0;
+  set_previous_solution(const SolutionHistory<Number> &vec) = 0;
 
   virtual void
   set_linearization_point(const VectorType<Number> &src) = 0;

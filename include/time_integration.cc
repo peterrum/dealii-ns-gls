@@ -179,31 +179,39 @@ TimeIntegratorDataNone::get_theta() const
 
 
 
-SolutionHistory::SolutionHistory(const unsigned int size)
+template <typename Number>
+SolutionHistory<Number>::SolutionHistory(const unsigned int size)
   : solutions(size)
 {}
 
+template <typename Number>
 VectorType<Number> &
-SolutionHistory::get_current_solution()
+SolutionHistory<Number>::get_current_solution()
 {
   return solutions[0];
 }
 
+template <typename Number>
 std::vector<VectorType<Number>> &
-SolutionHistory::get_vectors()
+SolutionHistory<Number>::get_vectors()
 {
   return solutions;
 }
 
+template <typename Number>
 const std::vector<VectorType<Number>> &
-SolutionHistory::get_vectors() const
+SolutionHistory<Number>::get_vectors() const
 {
   return solutions;
 }
 
+template <typename Number>
 void
-SolutionHistory::commit_solution()
+SolutionHistory<Number>::commit_solution()
 {
   for (int i = solutions.size() - 2; i >= 0; --i)
     solutions[i + 1].copy_locally_owned_data_from(solutions[i]);
 }
+
+template class SolutionHistory<double>;
+template class SolutionHistory<float>;

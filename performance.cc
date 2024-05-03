@@ -45,23 +45,23 @@ run(const unsigned int n_global_refinements, const unsigned int fe_degree)
 
   time_integrator_data.update_dt(0.1);
 
-  NavierStokesOperator<dim> ns_operator(mapping,
-                                        dof_handler,
-                                        constraints,
-                                        constraints,
-                                        constraints,
-                                        quadrature,
-                                        nu,
-                                        c_1,
-                                        c_2,
-                                        time_integrator_data,
-                                        consider_time_deriverative,
-                                        increment_form,
-                                        cell_wise_stabilization);
+  NavierStokesOperator<dim, Number> ns_operator(mapping,
+                                                dof_handler,
+                                                constraints,
+                                                constraints,
+                                                constraints,
+                                                quadrature,
+                                                nu,
+                                                c_1,
+                                                c_2,
+                                                time_integrator_data,
+                                                consider_time_deriverative,
+                                                increment_form,
+                                                cell_wise_stabilization);
 
 
   // Set solution history
-  SolutionHistory prev_solution(time_integrator_data.get_order() + 1);
+  SolutionHistory<Number> prev_solution(time_integrator_data.get_order() + 1);
   for (auto &vec : prev_solution.get_vectors())
     ns_operator.initialize_dof_vector(vec);
   ns_operator.set_previous_solution(prev_solution);

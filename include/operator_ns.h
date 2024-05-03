@@ -14,7 +14,7 @@ using namespace dealii;
 /**
  * Matrix-free Navier-Stokes operator.
  */
-template <int dim>
+template <int dim, typename Number>
 class NavierStokesOperator : public OperatorBase<Number>
 {
 public:
@@ -52,7 +52,7 @@ public:
   invalidate_system() override;
 
   void
-  set_previous_solution(const SolutionHistory &history) override;
+  set_previous_solution(const SolutionHistory<Number> &history) override;
 
   void
   compute_penalty_parameters(const VectorType<Number> &vec);
@@ -156,7 +156,7 @@ private:
 /**
  * Matrix-based Navier-Stokes operator.
  */
-template <int dim>
+template <int dim, typename Number>
 class NavierStokesOperatorMatrixBased : public OperatorBase<Number>
 {
 public:
@@ -183,7 +183,7 @@ public:
   invalidate_system() override;
 
   void
-  set_previous_solution(const SolutionHistory &vec) override;
+  set_previous_solution(const SolutionHistory<Number> &vec) override;
 
   void
   set_linearization_point(const VectorType<Number> &src) override;

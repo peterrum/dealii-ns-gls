@@ -16,8 +16,8 @@ using namespace dealii;
 /**
  * Matrix-free Navier-Stokes operator.
  */
-template <int dim>
-NavierStokesOperator<dim>::NavierStokesOperator(
+template <int dim, typename Number>
+NavierStokesOperator<dim, Number>::NavierStokesOperator(
   const Mapping<dim>              &mapping,
   const DoFHandler<dim>           &dof_handler,
   const AffineConstraints<Number> &constraints_homogeneous,
@@ -90,16 +90,16 @@ NavierStokesOperator<dim>::NavierStokesOperator(
     }
 }
 
-template <int dim>
+template <int dim, typename Number>
 const AffineConstraints<Number> &
-NavierStokesOperator<dim>::get_constraints() const
+NavierStokesOperator<dim, Number>::get_constraints() const
 {
   return matrix_free.get_affine_constraints();
 }
 
-template <int dim>
+template <int dim, typename Number>
 types::global_dof_index
-NavierStokesOperator<dim>::m() const
+NavierStokesOperator<dim, Number>::m() const
 {
   if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
     return this->matrix_free.get_dof_handler().n_dofs(
@@ -108,9 +108,9 @@ NavierStokesOperator<dim>::m() const
     return this->matrix_free.get_dof_handler().n_dofs();
 }
 
-template <int dim>
+template <int dim, typename Number>
 std::vector<std::vector<bool>>
-NavierStokesOperator<dim>::extract_constant_modes() const
+NavierStokesOperator<dim, Number>::extract_constant_modes() const
 {
   std::vector<std::vector<bool>> constant_modes;
 
@@ -130,9 +130,9 @@ NavierStokesOperator<dim>::extract_constant_modes() const
   return constant_modes;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::compute_inverse_diagonal(
+NavierStokesOperator<dim, Number>::compute_inverse_diagonal(
   VectorType<Number> &diagonal) const
 {
   MyScope scope(timer, "ns::compute_inverse_diagonal");
@@ -141,7 +141,7 @@ NavierStokesOperator<dim>::compute_inverse_diagonal(
   MatrixFreeTools::compute_diagonal(
     matrix_free,
     diagonal,
-    &NavierStokesOperator<dim>::do_vmult_cell<false>,
+    &NavierStokesOperator<dim, Number>::do_vmult_cell<false>,
     this);
 
   for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
@@ -151,16 +151,17 @@ NavierStokesOperator<dim>::compute_inverse_diagonal(
     i = (std::abs(i) > 1.0e-10) ? (1.0 / i) : 1.0;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::invalidate_system()
+NavierStokesOperator<dim, Number>::invalidate_system()
 {
   this->valid_system = false;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
+NavierStokesOperator<dim, Number>::set_previous_solution(
+  const SolutionHistory<Number> &history)
 {
   MyScope scope(timer, "ns::set_previous_solution");
 
@@ -245,9 +246,9 @@ NavierStokesOperator<dim>::set_previous_solution(const SolutionHistory &history)
     this->compute_penalty_parameters(history.get_vectors()[1]);
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::compute_penalty_parameters(
+NavierStokesOperator<dim, Number>::compute_penalty_parameters(
   const VectorType<Number> &vec)
 {
   this->valid_system = false;
@@ -347,9 +348,10 @@ NavierStokesOperator<dim>::compute_penalty_parameters(
 
 
 
-template <int dim>
+template <int dim, typename Number>
 double
-NavierStokesOperator<dim>::get_max_u(const VectorType<Number> &vec) const
+NavierStokesOperator<dim, Number>::get_max_u(
+  const VectorType<Number> &vec) const
 {
   FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
   FEEvaluation<dim, -1, 0, 1, Number> integrator_scalar(matrix_free, 0, 0, dim);
@@ -386,9 +388,9 @@ NavierStokesOperator<dim>::get_max_u(const VectorType<Number> &vec) const
   return Utilities::MPI::max(u_max_scalar, MPI_COMM_WORLD);
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::set_linearization_point(
+NavierStokesOperator<dim, Number>::set_linearization_point(
   const VectorType<Number> &vec)
 {
   MyScope scope(timer, "ns::set_linearization_point");
@@ -438,9 +440,9 @@ NavierStokesOperator<dim>::set_linearization_point(
     this->compute_penalty_parameters(vec);
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::evaluate_rhs(VectorType<Number> &dst) const
+NavierStokesOperator<dim, Number>::evaluate_rhs(VectorType<Number> &dst) const
 {
   MyScope scope(timer, "ns::evaluate_rhs");
 
@@ -451,7 +453,11 @@ NavierStokesOperator<dim>::evaluate_rhs(VectorType<Number> &dst) const
 
   // perform vmult
   this->matrix_free.cell_loop(
-    &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, src, true);
+    &NavierStokesOperator<dim, Number>::do_vmult_range<true>,
+    this,
+    dst,
+    src,
+    true);
 
   // apply constraints
   matrix_free.get_affine_constraints(0).set_zero(dst);
@@ -460,9 +466,9 @@ NavierStokesOperator<dim>::evaluate_rhs(VectorType<Number> &dst) const
   dst *= -1.0;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::evaluate_residual(
+NavierStokesOperator<dim, Number>::evaluate_residual(
   VectorType<Number>       &dst,
   const VectorType<Number> &src) const
 {
@@ -473,7 +479,11 @@ NavierStokesOperator<dim>::evaluate_residual(
   constraints_inhomogeneous.distribute(tmp); //
 
   this->matrix_free.cell_loop(
-    &NavierStokesOperator<dim>::do_vmult_range<true>, this, dst, tmp, true);
+    &NavierStokesOperator<dim, Number>::do_vmult_range<true>,
+    this,
+    dst,
+    tmp,
+    true);
 
   // apply constraints
   matrix_free.get_affine_constraints(0).set_zero(dst);
@@ -482,10 +492,10 @@ NavierStokesOperator<dim>::evaluate_residual(
   dst *= -1.0;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::vmult(VectorType<Number>       &dst,
-                                 const VectorType<Number> &src) const
+NavierStokesOperator<dim, Number>::vmult(VectorType<Number>       &dst,
+                                         const VectorType<Number> &src) const
 {
   MyScope scope(timer, "ns::vmult");
 
@@ -501,7 +511,11 @@ NavierStokesOperator<dim>::vmult(VectorType<Number>       &dst,
     }
 
   this->matrix_free.cell_loop(
-    &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
+    &NavierStokesOperator<dim, Number>::do_vmult_range<false>,
+    this,
+    dst,
+    src,
+    true);
 
   for (unsigned int i = 0; i < constrained_indices.size(); ++i)
     dst.local_element(constrained_indices[i]) =
@@ -518,16 +532,20 @@ NavierStokesOperator<dim>::vmult(VectorType<Number>       &dst,
     }
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::vmult_interface_down(
+NavierStokesOperator<dim, Number>::vmult_interface_down(
   VectorType<Number>       &dst,
   const VectorType<Number> &src) const
 {
   MyScope scope(timer, "ns::vmult_interface_down");
 
   this->matrix_free.cell_loop(
-    &NavierStokesOperator<dim>::do_vmult_range<false>, this, dst, src, true);
+    &NavierStokesOperator<dim, Number>::do_vmult_range<false>,
+    this,
+    dst,
+    src,
+    true);
 
   // set constrained dofs as the sum of current dst value and src value
   for (unsigned int i = 0; i < constrained_indices.size(); ++i)
@@ -535,9 +553,9 @@ NavierStokesOperator<dim>::vmult_interface_down(
       src.local_element(constrained_indices[i]);
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::vmult_interface_up(
+NavierStokesOperator<dim, Number>::vmult_interface_up(
   VectorType<Number>       &dst,
   const VectorType<Number> &src) const
 {
@@ -561,33 +579,35 @@ NavierStokesOperator<dim>::vmult_interface_up(
       src.local_element(edge_constrained_indices[i]);
 
   // do loop with copy of src
-  this->matrix_free.cell_loop(&NavierStokesOperator<dim>::do_vmult_range<false>,
-                              this,
-                              dst,
-                              src_cpy,
-                              false);
+  this->matrix_free.cell_loop(
+    &NavierStokesOperator<dim, Number>::do_vmult_range<false>,
+    this,
+    dst,
+    src_cpy,
+    false);
 }
 
-template <int dim>
+template <int dim, typename Number>
 const SparseMatrixType &
-NavierStokesOperator<dim>::get_system_matrix() const
+NavierStokesOperator<dim, Number>::get_system_matrix() const
 {
   initialize_system_matrix();
 
   return system_matrix;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::initialize_dof_vector(VectorType<Number> &vec) const
+NavierStokesOperator<dim, Number>::initialize_dof_vector(
+  VectorType<Number> &vec) const
 {
   matrix_free.initialize_dof_vector(vec);
 }
 
-template <int dim>
+template <int dim, typename Number>
 template <bool evaluate_residual>
 void
-NavierStokesOperator<dim>::do_vmult_range(
+NavierStokesOperator<dim, Number>::do_vmult_range(
   const MatrixFree<dim, Number>               &matrix_free,
   VectorType<Number>                          &dst,
   const VectorType<Number>                    &src,
@@ -678,10 +698,11 @@ namespace
  *
  *                       ... with U/P being the linearization point
  */
-template <int dim>
+template <int dim, typename Number>
 template <bool evaluate_residual>
 void
-NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
+NavierStokesOperator<dim, Number>::do_vmult_cell(
+  FECellIntegrator &integrator) const
 {
   if (evaluate_residual || !this->increment_form)
     {
@@ -912,9 +933,9 @@ NavierStokesOperator<dim>::do_vmult_cell(FECellIntegrator &integrator) const
     }
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperator<dim>::initialize_system_matrix() const
+NavierStokesOperator<dim, Number>::initialize_system_matrix() const
 {
   MyScope scope(timer, "ns::initialize_system_matrix");
 
@@ -957,16 +978,16 @@ NavierStokesOperator<dim>::initialize_system_matrix() const
         matrix_free,
         constraints,
         system_matrix,
-        &NavierStokesOperator<dim>::do_vmult_cell<false>,
+        &NavierStokesOperator<dim, Number>::do_vmult_cell<false>,
         this);
 
       this->valid_system = true;
     }
 }
 
-template <int dim>
+template <int dim, typename Number>
 IndexSet
-NavierStokesOperator<dim>::get_refinement_edges(
+NavierStokesOperator<dim, Number>::get_refinement_edges(
   const MatrixFree<dim, Number> &matrix_free)
 {
   const unsigned int level = matrix_free.get_mg_level();
@@ -990,8 +1011,8 @@ NavierStokesOperator<dim>::get_refinement_edges(
 /**
  * Matrix-based Navier-Stokes operator.
  */
-template <int dim>
-NavierStokesOperatorMatrixBased<dim>::NavierStokesOperatorMatrixBased(
+template <int dim, typename Number>
+NavierStokesOperatorMatrixBased<dim, Number>::NavierStokesOperatorMatrixBased(
   const Mapping<dim>              &mapping,
   const DoFHandler<dim>           &dof_handler,
   const AffineConstraints<Number> &constraints,
@@ -1029,41 +1050,41 @@ NavierStokesOperatorMatrixBased<dim>::NavierStokesOperatorMatrixBased(
   system_matrix.reinit(dsp);
 }
 
-template <int dim>
+template <int dim, typename Number>
 const AffineConstraints<Number> &
-NavierStokesOperatorMatrixBased<dim>::get_constraints() const
+NavierStokesOperatorMatrixBased<dim, Number>::get_constraints() const
 {
   return constraints;
 }
 
-template <int dim>
+template <int dim, typename Number>
 types::global_dof_index
-NavierStokesOperatorMatrixBased<dim>::m() const
+NavierStokesOperatorMatrixBased<dim, Number>::m() const
 {
   AssertThrow(false, ExcNotImplemented());
 
   return 0;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperatorMatrixBased<dim>::compute_inverse_diagonal(
+NavierStokesOperatorMatrixBased<dim, Number>::compute_inverse_diagonal(
   VectorType<Number> &) const
 {
   AssertThrow(false, ExcNotImplemented());
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperatorMatrixBased<dim>::invalidate_system()
+NavierStokesOperatorMatrixBased<dim, Number>::invalidate_system()
 {
   this->valid_system = false;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperatorMatrixBased<dim>::set_previous_solution(
-  const SolutionHistory &vectors)
+NavierStokesOperatorMatrixBased<dim, Number>::set_previous_solution(
+  const SolutionHistory<Number> &vectors)
 {
   const auto &vec = vectors.get_vectors()[1];
 
@@ -1073,9 +1094,9 @@ NavierStokesOperatorMatrixBased<dim>::set_previous_solution(
   this->valid_system = false;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperatorMatrixBased<dim>::set_linearization_point(
+NavierStokesOperatorMatrixBased<dim, Number>::set_linearization_point(
   const VectorType<Number> &src)
 {
   this->linearization_point = src;
@@ -1084,18 +1105,18 @@ NavierStokesOperatorMatrixBased<dim>::set_linearization_point(
   this->valid_system = false;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperatorMatrixBased<dim>::evaluate_rhs(
+NavierStokesOperatorMatrixBased<dim, Number>::evaluate_rhs(
   VectorType<Number> &dst) const
 {
   compute_system_matrix_and_vector();
   dst = system_rhs;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperatorMatrixBased<dim>::evaluate_residual(
+NavierStokesOperatorMatrixBased<dim, Number>::evaluate_residual(
   VectorType<Number>       &dst,
   const VectorType<Number> &src) const
 {
@@ -1103,33 +1124,35 @@ NavierStokesOperatorMatrixBased<dim>::evaluate_residual(
   (void)src;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperatorMatrixBased<dim>::vmult(VectorType<Number>       &dst,
-                                            const VectorType<Number> &src) const
+NavierStokesOperatorMatrixBased<dim, Number>::vmult(
+  VectorType<Number>       &dst,
+  const VectorType<Number> &src) const
 {
   get_system_matrix().vmult(dst, src);
 }
 
-template <int dim>
+template <int dim, typename Number>
 const SparseMatrixType &
-NavierStokesOperatorMatrixBased<dim>::get_system_matrix() const
+NavierStokesOperatorMatrixBased<dim, Number>::get_system_matrix() const
 {
   compute_system_matrix_and_vector();
   return system_matrix;
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperatorMatrixBased<dim>::initialize_dof_vector(
+NavierStokesOperatorMatrixBased<dim, Number>::initialize_dof_vector(
   VectorType<Number> &src) const
 {
   src.reinit(partitioner);
 }
 
-template <int dim>
+template <int dim, typename Number>
 void
-NavierStokesOperatorMatrixBased<dim>::compute_system_matrix_and_vector() const
+NavierStokesOperatorMatrixBased<dim, Number>::compute_system_matrix_and_vector()
+  const
 {
   if (valid_system)
     return;
@@ -1285,7 +1308,9 @@ NavierStokesOperatorMatrixBased<dim>::compute_system_matrix_and_vector() const
 }
 
 
-template class NavierStokesOperator<2>;
-template class NavierStokesOperator<3>;
-template class NavierStokesOperatorMatrixBased<2>;
-template class NavierStokesOperatorMatrixBased<3>;
+template class NavierStokesOperator<2, double>;
+template class NavierStokesOperator<3, double>;
+template class NavierStokesOperator<2, float>;
+template class NavierStokesOperator<3, float>;
+template class NavierStokesOperatorMatrixBased<2, double>;
+template class NavierStokesOperatorMatrixBased<3, double>;

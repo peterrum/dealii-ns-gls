@@ -216,7 +216,7 @@ namespace dealii
 
                   for (unsigned int i = 0; i < matrices[v].m(); ++i)
                     for (unsigned int j = 0; j < matrices[v].n(); ++j)
-                      max = std::max(max, std::abs(matrices[v][i][j]));
+                      max = std::max<Number>(max, std::abs(matrices[v][i][j]));
 
                   for (unsigned int i = 0; i < matrices[v].m(); ++i)
                     for (unsigned int j = 0; j < matrices[v].n(); ++j)

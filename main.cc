@@ -308,7 +308,7 @@ public:
       {
         const bool increment_form = params.nonlinear_solver == "Newton";
 
-        ns_operator = std::make_shared<NavierStokesOperator<dim>>(
+        ns_operator = std::make_shared<NavierStokesOperator<dim, Number>>(
           mapping,
           dof_handler,
           constraints_homogeneous,
@@ -327,15 +327,16 @@ public:
       {
         AssertThrow(params.nonlinear_solver != "Newton", ExcInternalError());
 
-        ns_operator = std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
-          mapping,
-          dof_handler,
-          constraints_inhomogeneous,
-          quadrature,
-          params.nu,
-          params.c_1,
-          params.c_2,
-          *time_integrator_data);
+        ns_operator =
+          std::make_shared<NavierStokesOperatorMatrixBased<dim, Number>>(
+            mapping,
+            dof_handler,
+            constraints_inhomogeneous,
+            quadrature,
+            params.nu,
+            params.c_1,
+            params.c_2,
+            *time_integrator_data);
       }
 
     // set up preconditioner
@@ -477,7 +478,7 @@ public:
                 const bool increment_form = params.nonlinear_solver == "Newton";
 
                 mg_ns_operators[level] =
-                  std::make_shared<NavierStokesOperator<dim>>(
+                  std::make_shared<NavierStokesOperator<dim, Number>>(
                     mapping,
                     dof_handler,
                     constraints,
@@ -494,19 +495,7 @@ public:
               }
             else
               {
-                AssertThrow(params.nonlinear_solver != "Newton",
-                            ExcInternalError());
-
-                mg_ns_operators[level] =
-                  std::make_shared<NavierStokesOperatorMatrixBased<dim>>(
-                    mapping,
-                    dof_handler,
-                    constraints,
-                    quadrature_mg,
-                    params.nu,
-                    params.c_1,
-                    params.c_2,
-                    *time_integrator_data);
+                AssertThrow(false, ExcNotImplemented());
               }
           }
 
@@ -638,7 +627,7 @@ public:
               {
                 const bool increment_form = params.nonlinear_solver == "Newton";
                 mg_ns_operators[level] =
-                  std::make_shared<NavierStokesOperator<dim>>(
+                  std::make_shared<NavierStokesOperator<dim, Number>>(
                     mapping,
                     dof_handler,
                     constraints,
@@ -715,36 +704,38 @@ public:
     else
       AssertThrow(false, ExcNotImplemented());
 
-    const auto set_previous_solution = [&](const SolutionHistory &solution) {
-      ns_operator->set_previous_solution(solution);
+    const auto set_previous_solution =
+      [&](const SolutionHistory<Number> &solution) {
+        ns_operator->set_previous_solution(solution);
 
-      if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
-        {
-          MGLevelObject<SolutionHistory> all_mg_solution(
-            mg_ns_operators.min_level(),
-            mg_ns_operators.max_level(),
-            time_integrator_data->get_order() + 1);
+        if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
+          {
+            MGLevelObject<SolutionHistory<Number>> all_mg_solution(
+              mg_ns_operators.min_level(),
+              mg_ns_operators.max_level(),
+              time_integrator_data->get_order() + 1);
 
-          for (unsigned int i = 1; i <= time_integrator_data->get_order(); ++i)
-            {
-              MGLevelObject<VectorType<Number>> mg_solution(
-                mg_ns_operators.min_level(), mg_ns_operators.max_level());
+            for (unsigned int i = 1; i <= time_integrator_data->get_order();
+                 ++i)
+              {
+                MGLevelObject<VectorType<Number>> mg_solution(
+                  mg_ns_operators.min_level(), mg_ns_operators.max_level());
 
-              mg_transfer_no_constraints->interpolate_to_mg(
-                dof_handler, mg_solution, solution.get_vectors()[i]);
+                mg_transfer_no_constraints->interpolate_to_mg(
+                  dof_handler, mg_solution, solution.get_vectors()[i]);
 
-              for (unsigned int l = mg_ns_operators.min_level();
-                   l <= mg_ns_operators.max_level();
-                   ++l)
-                all_mg_solution[l].get_vectors()[i] = mg_solution[l];
-            }
+                for (unsigned int l = mg_ns_operators.min_level();
+                     l <= mg_ns_operators.max_level();
+                     ++l)
+                  all_mg_solution[l].get_vectors()[i] = mg_solution[l];
+              }
 
-          for (unsigned int l = mg_ns_operators.min_level();
-               l <= mg_ns_operators.max_level();
-               ++l)
-            mg_ns_operators[l]->set_previous_solution(all_mg_solution[l]);
-        }
-    };
+            for (unsigned int l = mg_ns_operators.min_level();
+                 l <= mg_ns_operators.max_level();
+                 ++l)
+              mg_ns_operators[l]->set_previous_solution(all_mg_solution[l]);
+          }
+      };
 
     nonlinear_solver->setup_jacobian = [&](const VectorType<Number> &src) {
       ScopedName sc("setup_jacobian");
@@ -813,7 +804,7 @@ public:
       };
 
     // initialize solution
-    SolutionHistory solution(time_integrator_data->get_order() + 1);
+    SolutionHistory<Number> solution(time_integrator_data->get_order() + 1);
 
     for (auto &vec : solution.get_vectors())
       ns_operator->initialize_dof_vector(vec);
