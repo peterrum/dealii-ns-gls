@@ -2,7 +2,7 @@
 
 #include <deal.II/lac/solver_gmres.h>
 
-LinearSolverDirect::LinearSolverDirect(const OperatorBase &op)
+LinearSolverDirect::LinearSolverDirect(const OperatorBase<Number> &op)
   : op(op)
   , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
 {}
@@ -15,17 +15,18 @@ LinearSolverDirect::initialize()
 }
 
 void
-LinearSolverDirect::solve(VectorType &dst, const VectorType &src) const
+LinearSolverDirect::solve(VectorType<Number>       &dst,
+                          const VectorType<Number> &src) const
 {
   MyScope scope(timer, "direct::solve");
   solver.solve(dst, src);
 }
 
-LinearSolverGMRES::LinearSolverGMRES(const OperatorBase &op,
-                                     PreconditionerBase &preconditioner,
-                                     const unsigned int  n_max_iterations,
-                                     const double        absolute_tolerance,
-                                     const double        relative_tolerance)
+LinearSolverGMRES::LinearSolverGMRES(const OperatorBase<Number> &op,
+                                     PreconditionerBase         &preconditioner,
+                                     const unsigned int n_max_iterations,
+                                     const double       absolute_tolerance,
+                                     const double       relative_tolerance)
   : op(op)
   , preconditioner(preconditioner)
   , n_max_iterations(n_max_iterations)
@@ -41,7 +42,8 @@ LinearSolverGMRES::initialize()
 }
 
 void
-LinearSolverGMRES::solve(VectorType &dst, const VectorType &src) const
+LinearSolverGMRES::solve(VectorType<Number>       &dst,
+                         const VectorType<Number> &src) const
 {
   MyScope scope(timer, "gmres::solve");
 
@@ -53,12 +55,12 @@ LinearSolverGMRES::solve(VectorType &dst, const VectorType &src) const
                                true,
                                true);
 
-  typename SolverGMRES<VectorType>::AdditionalData solver_parameters;
+  typename SolverGMRES<VectorType<Number>>::AdditionalData solver_parameters;
 
   solver_parameters.max_n_tmp_vectors     = 30; // TODO
   solver_parameters.right_preconditioning = true;
 
-  SolverGMRES<VectorType> solver(solver_control, solver_parameters);
+  SolverGMRES<VectorType<Number>> solver(solver_control, solver_parameters);
 
   dst = 0.0;
 

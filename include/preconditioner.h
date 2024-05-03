@@ -19,7 +19,7 @@ public:
   initialize() = 0;
 
   virtual void
-  vmult(VectorType &dst, const VectorType &src) const = 0;
+  vmult(VectorType<Number> &dst, const VectorType<Number> &src) const = 0;
 
   virtual void
   print_stats() const = 0;
@@ -30,19 +30,19 @@ public:
 class PreconditionerILU : public PreconditionerBase
 {
 public:
-  PreconditionerILU(const OperatorBase &op);
+  PreconditionerILU(const OperatorBase<Number> &op);
 
   void
   initialize() override;
 
   void
-  vmult(VectorType &dst, const VectorType &src) const override;
+  vmult(VectorType<Number> &dst, const VectorType<Number> &src) const override;
 
   void
   print_stats() const override;
 
 private:
-  const OperatorBase &op;
+  const OperatorBase<Number> &op;
 
   TrilinosWrappers::PreconditionILU precon;
 };
@@ -52,20 +52,20 @@ private:
 class PreconditionerAMG : public PreconditionerBase
 {
 public:
-  PreconditionerAMG(const OperatorBase                   &op,
+  PreconditionerAMG(const OperatorBase<Number>           &op,
                     const std::vector<std::vector<bool>> &constant_modes);
 
   void
   initialize() override;
 
   void
-  vmult(VectorType &dst, const VectorType &src) const override;
+  vmult(VectorType<Number> &dst, const VectorType<Number> &src) const override;
 
   void
   print_stats() const override;
 
 private:
-  const OperatorBase &op;
+  const OperatorBase<Number> &op;
 
   const std::vector<std::vector<bool>> constant_modes;
 

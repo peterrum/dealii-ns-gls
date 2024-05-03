@@ -8,13 +8,13 @@ NonLinearSolverLinearized::NonLinearSolverLinearized()
 {}
 
 void
-NonLinearSolverLinearized::solve(VectorType &solution) const
+NonLinearSolverLinearized::solve(VectorType<Number> &solution) const
 {
   // set linearization point
   this->setup_jacobian(solution);
 
   // compute right-hans-side vector
-  VectorType rhs;
+  VectorType<Number> rhs;
   rhs.reinit(solution);
   this->evaluate_rhs(rhs);
 
@@ -33,11 +33,11 @@ NonLinearSolverNewton::NonLinearSolverNewton(const bool inexact_newton)
 {}
 
 void
-NonLinearSolverNewton::solve(VectorType &solution) const
+NonLinearSolverNewton::solve(VectorType<Number> &solution) const
 {
   MyScope scope(timer, "newton::solve");
 
-  VectorType rhs, inc;
+  VectorType<Number> rhs, inc;
   rhs.reinit(solution);
   inc.reinit(solution);
 
@@ -97,12 +97,12 @@ NonLinearSolverPicard::NonLinearSolverPicard()
 {}
 
 void
-NonLinearSolverPicard::solve(VectorType &solution) const
+NonLinearSolverPicard::solve(VectorType<Number> &solution) const
 {
   double       l2_norm       = 1e10;
   unsigned int num_iteration = 0;
 
-  VectorType rhs, tmp;
+  VectorType<Number> rhs, tmp;
   rhs.reinit(solution);
   tmp.reinit(solution);
 

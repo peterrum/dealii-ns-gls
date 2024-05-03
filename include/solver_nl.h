@@ -17,20 +17,21 @@ public:
   virtual ~NonLinearSolverBase() = default;
 
   virtual void
-  solve(VectorType &solution) const = 0;
+  solve(VectorType<Number> &solution) const = 0;
 
-  std::function<void(const VectorType &src)> setup_jacobian;
+  std::function<void(const VectorType<Number> &src)> setup_jacobian;
 
-  std::function<void(const VectorType &src)> setup_preconditioner;
+  std::function<void(const VectorType<Number> &src)> setup_preconditioner;
 
-  std::function<void(VectorType &dst, const VectorType &src)> evaluate_residual;
+  std::function<void(VectorType<Number> &dst, const VectorType<Number> &src)>
+    evaluate_residual;
 
-  std::function<void(VectorType &dst)> evaluate_rhs;
+  std::function<void(VectorType<Number> &dst)> evaluate_rhs;
 
-  std::function<void(VectorType &dst, const VectorType &src)>
+  std::function<void(VectorType<Number> &dst, const VectorType<Number> &src)>
     solve_with_jacobian;
 
-  std::function<void(const VectorType &dst)> postprocess;
+  std::function<void(const VectorType<Number> &dst)> postprocess;
 };
 
 
@@ -44,7 +45,7 @@ public:
   NonLinearSolverLinearized();
 
   void
-  solve(VectorType &solution) const override;
+  solve(VectorType<Number> &solution) const override;
 
 private:
 };
@@ -60,7 +61,7 @@ public:
   NonLinearSolverNewton(const bool inexact_newton);
 
   void
-  solve(VectorType &solution) const override;
+  solve(VectorType<Number> &solution) const override;
 
 private:
   const ConditionalOStream pcout;
@@ -83,7 +84,7 @@ public:
   NonLinearSolverPicard();
 
   void
-  solve(VectorType &solution) const override;
+  solve(VectorType<Number> &solution) const override;
 
 private:
   const ConditionalOStream pcout;

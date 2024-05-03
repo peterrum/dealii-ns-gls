@@ -183,19 +183,19 @@ SolutionHistory::SolutionHistory(const unsigned int size)
   : solutions(size)
 {}
 
-VectorType &
+VectorType<Number> &
 SolutionHistory::get_current_solution()
 {
   return solutions[0];
 }
 
-std::vector<VectorType> &
+std::vector<VectorType<Number>> &
 SolutionHistory::get_vectors()
 {
   return solutions;
 }
 
-const std::vector<VectorType> &
+const std::vector<VectorType<Number>> &
 SolutionHistory::get_vectors() const
 {
   return solutions;

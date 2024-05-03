@@ -67,12 +67,12 @@ run(const unsigned int n_global_refinements, const unsigned int fe_degree)
   ns_operator.set_previous_solution(prev_solution);
 
   // set linearization point
-  VectorType solution;
+  VectorType<Number> solution;
   ns_operator.initialize_dof_vector(solution);
   ns_operator.set_linearization_point(solution);
 
   // perform vmult
-  VectorType src, dst;
+  VectorType<Number> src, dst;
   ns_operator.initialize_dof_vector(src);
   ns_operator.initialize_dof_vector(dst);
 

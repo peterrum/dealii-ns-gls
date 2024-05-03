@@ -1,6 +1,5 @@
-default: all
-.PHONY: default
+default:
+  all.PHONY : default
 
 %:
-	@cd .. && make $@
-.PHONY: %
+              @cd..&&make $ @.PHONY : %
