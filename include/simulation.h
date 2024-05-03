@@ -120,12 +120,12 @@ private:
   std::string paraview_prefix;
   double      output_granularity;
 
-  double length;
-  double extra_length;
-  double height;
-  double cylinder_position;
-  double diameter;
-  double shift;
+  double geometry_channel_length;
+  double geometry_channel_extra_length;
+  double geometry_channel_height;
+  double geometry_cylinder_position;
+  double geometry_cylinder_diameter;
+  double geometry_cylinder_shift;
 
   mutable std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
