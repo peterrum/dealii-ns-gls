@@ -61,18 +61,18 @@ template <int dim>
 class PreconditionerGMG : public PreconditionerBase
 {
 public:
-  using LevelMatrixType = OperatorBase<Number>;
+  using LevelMatrixType = OperatorBase<MGNumber>;
 
-  using SmootherPreconditionerType = DiagonalMatrix<VectorType<Number>>;
+  using SmootherPreconditionerType = DiagonalMatrix<VectorType<MGNumber>>;
   using SmootherType =
     PreconditionRelaxation<LevelMatrixType, SmootherPreconditionerType>;
 
-  using MGTransferType = MGTransferGlobalCoarsening<dim, VectorType<Number>>;
+  using MGTransferType = MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>;
 
   PreconditionerGMG(
-    const DoFHandler<dim>                                      &dof_handler,
-    const MGLevelObject<std::shared_ptr<OperatorBase<Number>>> &op,
-    const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<Number>>>
+    const DoFHandler<dim>                                        &dof_handler,
+    const MGLevelObject<std::shared_ptr<OperatorBase<MGNumber>>> &op,
+    const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>>
                                           &transfer,
     const bool                             consider_edge_constraints,
     const PreconditionerGMGAdditionalData &additional_data);
@@ -90,9 +90,9 @@ private:
   const ConditionalOStream pcout;
   const ConditionalOStream pcout_cond;
 
-  const DoFHandler<dim>                                      &dof_handler;
-  const MGLevelObject<std::shared_ptr<OperatorBase<Number>>> &op;
-  const std::shared_ptr<MGTransferType>                       transfer;
+  const DoFHandler<dim>                                        &dof_handler;
+  const MGLevelObject<std::shared_ptr<OperatorBase<MGNumber>>> &op;
+  const std::shared_ptr<MGTransferType>                         transfer;
 
   const bool consider_edge_constraints;
 
@@ -102,16 +102,16 @@ private:
     MatrixFreeOperators::MGInterfaceOperator<LevelMatrixType>>
     op_ls;
 
-  mutable std::unique_ptr<mg::Matrix<VectorType<Number>>> mg_matrix;
+  mutable std::unique_ptr<mg::Matrix<VectorType<MGNumber>>> mg_matrix;
 
   mutable MGLevelObject<
     MatrixFreeOperators::MGInterfaceOperator<LevelMatrixType>>
     mg_interface_matrices;
 
-  mutable std::unique_ptr<mg::Matrix<VectorType<Number>>> mg_interface;
+  mutable std::unique_ptr<mg::Matrix<VectorType<MGNumber>>> mg_interface;
 
   mutable std::unique_ptr<
-    MGSmootherPrecondition<LevelMatrixType, SmootherType, VectorType<Number>>>
+    MGSmootherPrecondition<LevelMatrixType, SmootherType, VectorType<MGNumber>>>
     mg_smoother;
 
   mutable std::unique_ptr<TrilinosWrappers::PreconditionAMG> precondition_amg;
@@ -124,12 +124,12 @@ private:
 
   mutable std::unique_ptr<SolverGMRES<VectorType<Number>>> coarse_grid_solver;
 
-  mutable std::unique_ptr<MGCoarseGridBase<VectorType<Number>>> mg_coarse;
+  mutable std::unique_ptr<MGCoarseGridBase<VectorType<MGNumber>>> mg_coarse;
 
-  mutable std::unique_ptr<Multigrid<VectorType<Number>>> mg;
+  mutable std::unique_ptr<Multigrid<VectorType<MGNumber>>> mg;
 
   mutable std::unique_ptr<
-    PreconditionMG<dim, VectorType<Number>, MGTransferType>>
+    PreconditionMG<dim, VectorType<MGNumber>, MGTransferType>>
     preconditioner;
 
   mutable std::vector<unsigned int> n_coarse_iterations;

@@ -342,15 +342,15 @@ public:
     // set up preconditioner
     std::vector<std::shared_ptr<const Triangulation<dim>>> mg_trias;
 
-    MGLevelObject<DoFHandler<dim>>           mg_dof_handlers;
-    MGLevelObject<AffineConstraints<Number>> mg_constraints;
+    MGLevelObject<DoFHandler<dim>>             mg_dof_handlers;
+    MGLevelObject<AffineConstraints<MGNumber>> mg_constraints;
 
-    MGLevelObject<std::shared_ptr<OperatorBase<Number>>>       mg_ns_operators;
-    MGLevelObject<MGTwoLevelTransfer<dim, VectorType<Number>>> mg_transfers;
-    MGLevelObject<MGTwoLevelTransfer<dim, VectorType<Number>>>
+    MGLevelObject<std::shared_ptr<OperatorBase<MGNumber>>> mg_ns_operators;
+    MGLevelObject<MGTwoLevelTransfer<dim, VectorType<MGNumber>>> mg_transfers;
+    MGLevelObject<MGTwoLevelTransfer<dim, VectorType<MGNumber>>>
       mg_transfers_no_constraints;
 
-    std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<Number>>>
+    std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>>
       mg_transfer_no_constraints;
 
     std::shared_ptr<PreconditionerBase> preconditioner;
@@ -478,7 +478,7 @@ public:
                 const bool increment_form = params.nonlinear_solver == "Newton";
 
                 mg_ns_operators[level] =
-                  std::make_shared<NavierStokesOperator<dim, Number>>(
+                  std::make_shared<NavierStokesOperator<dim, MGNumber>>(
                     mapping,
                     dof_handler,
                     constraints,
@@ -506,11 +506,11 @@ public:
           mg_transfers_no_constraints[level + 1].reinit(
             mg_dof_handlers[level + 1], mg_dof_handlers[level]);
 
-        mg_transfer_no_constraints =
-          std::make_shared<MGTransferGlobalCoarsening<dim, VectorType<Number>>>(
-            mg_transfers_no_constraints, [&](const auto l, auto &vec) {
-              mg_ns_operators[l]->initialize_dof_vector(vec);
-            });
+        mg_transfer_no_constraints = std::make_shared<
+          MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>>(
+          mg_transfers_no_constraints, [&](const auto l, auto &vec) {
+            mg_ns_operators[l]->initialize_dof_vector(vec);
+          });
 
 
         // create transfer operator for preconditioner (with constraints)
@@ -520,9 +520,9 @@ public:
                                          mg_constraints[level + 1],
                                          mg_constraints[level]);
 
-        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<Number>>>
+        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>>
           transfer = std::make_shared<
-            MGTransferGlobalCoarsening<dim, VectorType<Number>>>(
+            MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>>(
             mg_transfers, [&](const auto l, auto &vec) {
               mg_ns_operators[l]->initialize_dof_vector(vec);
             });
@@ -627,7 +627,7 @@ public:
               {
                 const bool increment_form = params.nonlinear_solver == "Newton";
                 mg_ns_operators[level] =
-                  std::make_shared<NavierStokesOperator<dim, Number>>(
+                  std::make_shared<NavierStokesOperator<dim, MGNumber>>(
                     mapping,
                     dof_handler,
                     constraints,
@@ -653,16 +653,16 @@ public:
         // create transfer operator for interpolation to the levels (without
         // constraints)
         mg_transfer_no_constraints = std::make_shared<
-          MGTransferGlobalCoarsening<dim, VectorType<Number>>>();
+          MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>>();
         mg_transfer_no_constraints->build(
           dof_handler, [&](const auto l, auto &vec) {
             mg_ns_operators[l]->initialize_dof_vector(vec);
           });
 
         // create transfer operator for preconditioner (with constraints)
-        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<Number>>>
+        std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>>
           transfer = std::make_shared<
-            MGTransferGlobalCoarsening<dim, VectorType<Number>>>(
+            MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>>(
             mg_constrained_dofs);
         transfer->build(dof_handler, [&](const auto l, auto &vec) {
           mg_ns_operators[l]->initialize_dof_vector(vec);
@@ -710,7 +710,7 @@ public:
 
         if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
           {
-            MGLevelObject<SolutionHistory<Number>> all_mg_solution(
+            MGLevelObject<SolutionHistory<MGNumber>> all_mg_solution(
               mg_ns_operators.min_level(),
               mg_ns_operators.max_level(),
               time_integrator_data->get_order() + 1);
@@ -718,7 +718,7 @@ public:
             for (unsigned int i = 1; i <= time_integrator_data->get_order();
                  ++i)
               {
-                MGLevelObject<VectorType<Number>> mg_solution(
+                MGLevelObject<VectorType<MGNumber>> mg_solution(
                   mg_ns_operators.min_level(), mg_ns_operators.max_level());
 
                 mg_transfer_no_constraints->interpolate_to_mg(
@@ -754,7 +754,7 @@ public:
 
         if (params.preconditioner == "GMG" || params.preconditioner == "GMG-LS")
           {
-            MGLevelObject<VectorType<Number>> mg_solution(
+            MGLevelObject<VectorType<MGNumber>> mg_solution(
               mg_ns_operators.min_level(), mg_ns_operators.max_level());
 
             mg_transfer_no_constraints->interpolate_to_mg(dof_handler,

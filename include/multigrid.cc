@@ -178,9 +178,9 @@ PreconditionerGMGAdditionalData::add_parameters(ParameterHandler &prm)
 
 template <int dim>
 PreconditionerGMG<dim>::PreconditionerGMG(
-  const DoFHandler<dim>                                      &dof_handler,
-  const MGLevelObject<std::shared_ptr<OperatorBase<Number>>> &op,
-  const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<Number>>>
+  const DoFHandler<dim>                                        &dof_handler,
+  const MGLevelObject<std::shared_ptr<OperatorBase<MGNumber>>> &op,
+  const std::shared_ptr<MGTransferGlobalCoarsening<dim, VectorType<MGNumber>>>
                                         &transfer,
   const bool                             consider_edge_constraints,
   const PreconditionerGMGAdditionalData &additional_data)
@@ -259,11 +259,11 @@ PreconditionerGMG<dim>::initialize()
       op_ls.resize(min_level, max_level);
       for (unsigned int level = min_level; level <= max_level; level++)
         op_ls[level].initialize(*op[level]);
-      mg_matrix = std::make_unique<mg::Matrix<VectorType<Number>>>(op_ls);
+      mg_matrix = std::make_unique<mg::Matrix<VectorType<MGNumber>>>(op_ls);
     }
   else
     {
-      mg_matrix = std::make_unique<mg::Matrix<VectorType<Number>>>(op);
+      mg_matrix = std::make_unique<mg::Matrix<VectorType<MGNumber>>>(op);
     }
 
   // create interface matrices
@@ -272,8 +272,8 @@ PreconditionerGMG<dim>::initialize()
       mg_interface_matrices.resize(min_level, max_level);
       for (unsigned int level = min_level; level <= max_level; ++level)
         mg_interface_matrices[level].initialize(*op[level]);
-      mg_interface =
-        std::make_unique<mg::Matrix<VectorType<Number>>>(mg_interface_matrices);
+      mg_interface = std::make_unique<mg::Matrix<VectorType<MGNumber>>>(
+        mg_interface_matrices);
     }
 
   // setup smoothers on each level
@@ -329,16 +329,17 @@ PreconditionerGMG<dim>::initialize()
           }
       }
 
-  mg_smoother = std::make_unique<MGSmootherPrecondition<LevelMatrixType,
-                                                        SmootherType,
-                                                        VectorType<Number>>>();
+  mg_smoother =
+    std::make_unique<MGSmootherPrecondition<LevelMatrixType,
+                                            SmootherType,
+                                            VectorType<MGNumber>>>();
   mg_smoother->initialize(op, smoother_data);
 
   {
     MyScope scope(timer, "gmg::initialize::smoother::init1");
     for (unsigned int level = min_level; level <= max_level; ++level)
       {
-        VectorType<Number> vec;
+        VectorType<MGNumber> vec;
         op[level]->initialize_dof_vector(vec);
         const auto ev = mg_smoother->smoothers[level].estimate_eigenvalues(vec);
 
@@ -432,17 +433,17 @@ PreconditionerGMG<dim>::initialize()
     {
       if (additional_data.coarse_grid_solver == "AMG")
         mg_coarse = std::make_unique<
-          MGCoarseGridApplyPreconditioner<VectorType<Number>,
+          MGCoarseGridApplyPreconditioner<VectorType<MGNumber>,
                                           TrilinosWrappers::PreconditionAMG>>(
           *precondition_amg);
       else if (additional_data.coarse_grid_solver == "direct")
         mg_coarse = std::make_unique<
-          MGCoarseGridApplyPreconditioner<VectorType<Number>,
+          MGCoarseGridApplyPreconditioner<VectorType<MGNumber>,
                                           TrilinosWrappers::SolverDirect>>(
           *precondition_direct);
       else if (additional_data.coarse_grid_solver == "identity")
         mg_coarse = std::make_unique<
-          MGCoarseGridApplyPreconditioner<VectorType<Number>,
+          MGCoarseGridApplyPreconditioner<VectorType<MGNumber>,
                                           PreconditionIdentity>>(
           *precondition_identity);
       else
@@ -471,27 +472,29 @@ PreconditionerGMG<dim>::initialize()
           });
 
       mg_coarse = std::make_unique<
-        MGCoarseGridIterativeSolver<VectorType<Number>,
+        MGCoarseGridIterativeSolver<VectorType<MGNumber>,
                                     SolverGMRES<VectorType<Number>>,
-                                    OperatorBase<Number>,
+                                    TrilinosWrappers::SparseMatrix,
                                     TrilinosWrappers::PreconditionAMG>>(
-        *coarse_grid_solver, *op[min_level], *precondition_amg);
+        *coarse_grid_solver,
+        op[min_level]->get_system_matrix(),
+        *precondition_amg);
     }
 
-  mg = std::make_unique<Multigrid<VectorType<Number>>>(*mg_matrix,
-                                                       *mg_coarse,
-                                                       *transfer,
-                                                       *mg_smoother,
-                                                       *mg_smoother,
-                                                       min_level,
-                                                       max_level);
+  mg = std::make_unique<Multigrid<VectorType<MGNumber>>>(*mg_matrix,
+                                                         *mg_coarse,
+                                                         *transfer,
+                                                         *mg_smoother,
+                                                         *mg_smoother,
+                                                         min_level,
+                                                         max_level);
 
   if (consider_edge_constraints &&
       dof_handler.get_triangulation().has_hanging_nodes())
     mg->set_edge_in_matrix(*mg_interface);
 
   preconditioner =
-    std::make_unique<PreconditionMG<dim, VectorType<Number>, MGTransferType>>(
+    std::make_unique<PreconditionMG<dim, VectorType<MGNumber>, MGTransferType>>(
       dof_handler, *mg, *transfer);
 
   const auto create_mg_timer_function = [&](const std::string &label) {

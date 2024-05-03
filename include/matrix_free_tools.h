@@ -220,7 +220,8 @@ namespace dealii
 
                   for (unsigned int i = 0; i < matrices[v].m(); ++i)
                     for (unsigned int j = 0; j < matrices[v].n(); ++j)
-                      if (std::abs(matrices[v][i][j]) < 1e-10 * max)
+                      if (std::abs(matrices[v][i][j]) <
+                          max * std::numeric_limits<Number>::epsilon() * 10)
                         matrices[v][i][j] = 0.0;
 
                   constraints.distribute_local_to_global(matrices[v],
