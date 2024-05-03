@@ -350,10 +350,10 @@ PreconditionerGMG<dim>::initialize()
     {
       MyScope scope(timer, "gmg::initialize::amg");
 
-      TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
-
       if (!additional_data.coarse_grid_amg_use_default_parameters)
         {
+          TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
+
           amg_data.elliptic = additional_data.coarse_grid_amg_elliptic;
           amg_data.higher_order_elements =
             additional_data.coarse_grid_amg_higher_order_elements;
@@ -364,20 +364,49 @@ PreconditionerGMG<dim>::initialize()
             additional_data.coarse_grid_amg_smoother_sweeps;
           amg_data.smoother_overlap =
             additional_data.coarse_grid_amg_smoother_overlap;
-          amg_data.output_details =
-            additional_data.coarse_grid_amg_output_details;
+          amg_data.output_details = additional_data.output_details;
           amg_data.smoother_type =
             additional_data.coarse_grid_amg_smoother_type.c_str();
           amg_data.coarse_type =
             additional_data.coarse_grid_amg_coarse_type.c_str();
           amg_data.constant_modes = op[min_level]->extract_constant_modes();
+
+          Teuchos::ParameterList              parameter_ml;
+          std::unique_ptr<Epetra_MultiVector> distributed_constant_modes;
+          amg_data.set_parameters(parameter_ml,
+                                  distributed_constant_modes,
+                                  op[min_level]->get_system_matrix());
+
+          const double ilu_fill = 1.0;
+          const double ilu_atol = 1e-6;
+          const double ilu_rtol = 1.0;
+
+          parameter_ml.set("smoother: ifpack level-of-fill", ilu_fill);
+          parameter_ml.set("smoother: ifpack absolute threshold", ilu_atol);
+          parameter_ml.set("smoother: ifpack relative threshold", ilu_rtol);
+
+          parameter_ml.set("coarse: ifpack level-of-fill", ilu_fill);
+          parameter_ml.set("coarse: ifpack absolute threshold", ilu_atol);
+          parameter_ml.set("coarse: ifpack relative threshold", ilu_rtol);
+
+          precondition_amg =
+            std::make_unique<TrilinosWrappers::PreconditionAMG>();
+
+          const auto &matrix = op[min_level]->get_system_matrix();
+
+          precondition_amg->initialize(matrix, parameter_ml);
         }
+      else
+        {
+          TrilinosWrappers::PreconditionAMG::AdditionalData amg_data;
 
-      precondition_amg = std::make_unique<TrilinosWrappers::PreconditionAMG>();
+          precondition_amg =
+            std::make_unique<TrilinosWrappers::PreconditionAMG>();
 
-      const auto &matrix = op[min_level]->get_system_matrix();
+          const auto &matrix = op[min_level]->get_system_matrix();
 
-      precondition_amg->initialize(matrix, amg_data);
+          precondition_amg->initialize(matrix, amg_data);
+        }
     }
   else if (additional_data.coarse_grid_solver == "direct")
     {
