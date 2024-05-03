@@ -204,6 +204,8 @@ public:
       simulation = std::make_shared<SimulationCylinder<dim>>();
     else if (params.simulation_name == "rotation")
       simulation = std::make_shared<SimulationRotation<dim>>();
+    else if (params.simulation_name == "sphere")
+      simulation = std::make_shared<SimulationSphere<dim>>();
     else
       AssertThrow(false, ExcNotImplemented());
     simulation->parse_parameters(parameter_file_name);

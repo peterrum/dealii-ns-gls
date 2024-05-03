@@ -135,7 +135,7 @@ private:
 
 
 /**
- * Flow-past cylinder simulation with alternative mesh.
+ * Taylor-Couette flow.
  */
 template <int dim>
 class SimulationRotation : public SimulationBase<dim>
@@ -144,6 +144,35 @@ public:
   using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
 
   SimulationRotation();
+
+  void
+  create_triangulation(Triangulation<dim> &tria,
+                       const unsigned int  n_global_refinements) const override;
+
+  virtual BoundaryDescriptor
+  get_boundary_descriptor() const override;
+
+  void
+  postprocess(const double           t,
+              const Mapping<dim>    &mapping,
+              const DoFHandler<dim> &dof_handler,
+              const VectorType      &solution) const override;
+
+private:
+};
+
+
+
+/**
+ * Flow-past sphere.
+ */
+template <int dim>
+class SimulationSphere : public SimulationBase<dim>
+{
+public:
+  using BoundaryDescriptor = typename SimulationBase<dim>::BoundaryDescriptor;
+
+  SimulationSphere();
 
   void
   create_triangulation(Triangulation<dim> &tria,

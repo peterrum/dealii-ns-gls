@@ -1,0 +1,38 @@
+{
+  "dim"                  : 3,
+  "fe degree"            : 1,
+  "mapping degree"       : 0,
+  "n global refinements" : 2,
+
+  "simulation name" : "sphere",
+
+  "cfl"            : 1.0,
+  "t final"        : 20.0,
+  "theta"          : 1.0,
+  "bdf order"      : 2,
+  "time intration" : "none",
+
+  "c1"                         : 1.0,
+  "c2"                         : 1.0,
+  "nu"                         : 0.1,
+  "consider time deriverative" : true,
+  "cell wise stabilization"    : false,
+
+  "use matrix free ns operator" : true,
+
+  "linear solver" : "GMRES",
+  "lin relative tolerance" : 1e-2,
+  "lin n max iterations" : 100000,
+
+  "preconditioner" : "GMG",
+
+  "gmg coarse grid solver"  : "direct",
+  "gmg coarse grid iterate" : false,
+
+  "nonlinear solver" : "Newton",
+  "newton inexact"   : false,
+
+  "paraview prefix"    : "results_sphere",
+  "output granularity" : 0.1
+
+}
