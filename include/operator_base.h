@@ -10,6 +10,7 @@ using namespace dealii;
 /**
  * Linear/nonlinear operator.
  */
+template <typename Number = double>
 class OperatorBase : public Subscriptor
 {
 public:
@@ -23,34 +24,37 @@ public:
   el(unsigned int, unsigned int) const;
 
   virtual void
-  compute_inverse_diagonal(VectorType &diagonal) const = 0;
+  compute_inverse_diagonal(VectorType<Number> &diagonal) const = 0;
 
   virtual void
   invalidate_system() = 0;
 
   virtual void
-  set_previous_solution(const SolutionHistory &vec) = 0;
+  set_previous_solution(const SolutionHistory<Number> &vec) = 0;
 
   virtual void
-  set_linearization_point(const VectorType &src) = 0;
+  set_linearization_point(const VectorType<Number> &src) = 0;
 
   virtual void
-  evaluate_rhs(VectorType &dst) const = 0;
+  evaluate_rhs(VectorType<Number> &dst) const = 0;
 
   virtual void
-  evaluate_residual(VectorType &dst, const VectorType &src) const = 0;
+  evaluate_residual(VectorType<Number>       &dst,
+                    const VectorType<Number> &src) const = 0;
 
   virtual void
-  vmult(VectorType &dst, const VectorType &src) const = 0;
+  vmult(VectorType<Number> &dst, const VectorType<Number> &src) const = 0;
 
   void
-  Tvmult(VectorType &dst, const VectorType &src) const;
+  Tvmult(VectorType<Number> &dst, const VectorType<Number> &src) const;
 
   virtual void
-  vmult_interface_down(VectorType &dst, const VectorType &src) const;
+  vmult_interface_down(VectorType<Number>       &dst,
+                       const VectorType<Number> &src) const;
 
   virtual void
-  vmult_interface_up(VectorType &dst, const VectorType &src) const;
+  vmult_interface_up(VectorType<Number>       &dst,
+                     const VectorType<Number> &src) const;
 
   virtual std::vector<std::vector<bool>>
   extract_constant_modes() const;
@@ -62,8 +66,8 @@ public:
   get_system_matrix() const = 0;
 
   virtual void
-  initialize_dof_vector(VectorType &src) const = 0;
+  initialize_dof_vector(VectorType<Number> &src) const = 0;
 
   virtual double
-  get_max_u(const VectorType &src) const;
+  get_max_u(const VectorType<Number> &src) const;
 };

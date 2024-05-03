@@ -1,22 +1,26 @@
 #include "operator_base.h"
 
 
-
+template <typename Number>
 Number
-OperatorBase::el(unsigned int, unsigned int) const
+OperatorBase<Number>::el(unsigned int, unsigned int) const
 {
   Assert(false, ExcNotImplemented());
   return 0;
 }
 
+template <typename Number>
 void
-OperatorBase::Tvmult(VectorType &dst, const VectorType &src) const
+OperatorBase<Number>::Tvmult(VectorType<Number>       &dst,
+                             const VectorType<Number> &src) const
 {
   vmult(dst, src);
 }
 
+template <typename Number>
 void
-OperatorBase::vmult_interface_down(VectorType &dst, const VectorType &src) const
+OperatorBase<Number>::vmult_interface_down(VectorType<Number>       &dst,
+                                           const VectorType<Number> &src) const
 {
   AssertThrow(false, ExcNotImplemented());
 
@@ -24,8 +28,10 @@ OperatorBase::vmult_interface_down(VectorType &dst, const VectorType &src) const
   (void)src;
 }
 
+template <typename Number>
 void
-OperatorBase::vmult_interface_up(VectorType &dst, const VectorType &src) const
+OperatorBase<Number>::vmult_interface_up(VectorType<Number>       &dst,
+                                         const VectorType<Number> &src) const
 {
   AssertThrow(false, ExcNotImplemented());
 
@@ -33,16 +39,21 @@ OperatorBase::vmult_interface_up(VectorType &dst, const VectorType &src) const
   (void)src;
 }
 
+template <typename Number>
 std::vector<std::vector<bool>>
-OperatorBase::extract_constant_modes() const
+OperatorBase<Number>::extract_constant_modes() const
 {
   AssertThrow(false, ExcNotImplemented());
   return {};
 }
 
+template <typename Number>
 double
-OperatorBase::get_max_u(const VectorType &src) const
+OperatorBase<Number>::get_max_u(const VectorType<Number> &src) const
 {
   (void)src;
   return 1.0; // TODO
 }
+
+template class OperatorBase<double>;
+template class OperatorBase<float>;

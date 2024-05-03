@@ -14,8 +14,8 @@ using namespace dealii;
 /**
  * Matrix-free Navier-Stokes operator.
  */
-template <int dim>
-class NavierStokesOperator : public OperatorBase
+template <int dim, typename Number>
+class NavierStokesOperator : public OperatorBase<Number>
 {
 public:
   using FECellIntegrator = FEEvaluation<dim, -1, 0, dim + 1, Number>;
@@ -46,50 +46,53 @@ public:
   extract_constant_modes() const override;
 
   virtual void
-  compute_inverse_diagonal(VectorType &diagonal) const override;
+  compute_inverse_diagonal(VectorType<Number> &diagonal) const override;
 
   void
   invalidate_system() override;
 
   void
-  set_previous_solution(const SolutionHistory &history) override;
+  set_previous_solution(const SolutionHistory<Number> &history) override;
 
   void
-  compute_penalty_parameters(const VectorType &vec);
+  compute_penalty_parameters(const VectorType<Number> &vec);
 
   void
-  set_linearization_point(const VectorType &vec) override;
+  set_linearization_point(const VectorType<Number> &vec) override;
 
   void
-  evaluate_rhs(VectorType &dst) const override;
+  evaluate_rhs(VectorType<Number> &dst) const override;
 
   virtual void
-  evaluate_residual(VectorType &dst, const VectorType &src) const override;
+  evaluate_residual(VectorType<Number>       &dst,
+                    const VectorType<Number> &src) const override;
 
   void
-  vmult(VectorType &dst, const VectorType &src) const override;
+  vmult(VectorType<Number> &dst, const VectorType<Number> &src) const override;
 
   void
-  vmult_interface_down(VectorType &dst, const VectorType &src) const override;
+  vmult_interface_down(VectorType<Number>       &dst,
+                       const VectorType<Number> &src) const override;
 
   void
-  vmult_interface_up(VectorType &dst, const VectorType &src) const override;
+  vmult_interface_up(VectorType<Number>       &dst,
+                     const VectorType<Number> &src) const override;
 
   const SparseMatrixType &
   get_system_matrix() const override;
 
   void
-  initialize_dof_vector(VectorType &vec) const override;
+  initialize_dof_vector(VectorType<Number> &vec) const override;
 
   double
-  get_max_u(const VectorType &src) const override;
+  get_max_u(const VectorType<Number> &src) const override;
 
 private:
   const AffineConstraints<Number> &constraints_inhomogeneous;
 
   MatrixFree<dim, Number> matrix_free;
 
-  VectorType               linearization_point;
+  VectorType<Number>       linearization_point;
   mutable SparseMatrixType system_matrix;
 
   const VectorizedArray<Number> theta;
@@ -123,8 +126,8 @@ private:
   template <bool evaluate_residual>
   void
   do_vmult_range(const MatrixFree<dim, Number>               &matrix_free,
-                 VectorType                                  &dst,
-                 const VectorType                            &src,
+                 VectorType<Number>                          &dst,
+                 const VectorType<Number>                    &src,
                  const std::pair<unsigned int, unsigned int> &range) const;
 
   template <bool evaluate_residual>
@@ -153,8 +156,8 @@ private:
 /**
  * Matrix-based Navier-Stokes operator.
  */
-template <int dim>
-class NavierStokesOperatorMatrixBased : public OperatorBase
+template <int dim, typename Number>
+class NavierStokesOperatorMatrixBased : public OperatorBase<Number>
 {
 public:
   NavierStokesOperatorMatrixBased(
@@ -174,31 +177,32 @@ public:
   m() const override;
 
   void
-  compute_inverse_diagonal(VectorType &) const override;
+  compute_inverse_diagonal(VectorType<Number> &) const override;
 
   void
   invalidate_system() override;
 
   void
-  set_previous_solution(const SolutionHistory &vec) override;
+  set_previous_solution(const SolutionHistory<Number> &vec) override;
 
   void
-  set_linearization_point(const VectorType &src) override;
+  set_linearization_point(const VectorType<Number> &src) override;
 
   void
-  evaluate_rhs(VectorType &dst) const override;
+  evaluate_rhs(VectorType<Number> &dst) const override;
 
   virtual void
-  evaluate_residual(VectorType &dst, const VectorType &src) const override;
+  evaluate_residual(VectorType<Number>       &dst,
+                    const VectorType<Number> &src) const override;
 
   void
-  vmult(VectorType &dst, const VectorType &src) const override;
+  vmult(VectorType<Number> &dst, const VectorType<Number> &src) const override;
 
   const SparseMatrixType &
   get_system_matrix() const override;
 
   void
-  initialize_dof_vector(VectorType &src) const override;
+  initialize_dof_vector(VectorType<Number> &src) const override;
 
 private:
   const Mapping<dim>              &mapping;
@@ -213,11 +217,11 @@ private:
 
   mutable bool valid_system;
 
-  VectorType previous_solution;
-  VectorType linearization_point;
+  VectorType<Number> previous_solution;
+  VectorType<Number> linearization_point;
 
-  mutable SparseMatrixType system_matrix;
-  mutable VectorType       system_rhs;
+  mutable SparseMatrixType   system_matrix;
+  mutable VectorType<Number> system_rhs;
 
   std::shared_ptr<Utilities::MPI::Partitioner> partitioner;
 

@@ -94,10 +94,10 @@ namespace InflowBoundaryValues
 
 template <int dim>
 void
-SimulationBase<dim>::postprocess(const double           t,
-                                 const Mapping<dim>    &mapping,
-                                 const DoFHandler<dim> &dof_handler,
-                                 const VectorType      &vector) const
+SimulationBase<dim>::postprocess(const double              t,
+                                 const Mapping<dim>       &mapping,
+                                 const DoFHandler<dim>    &dof_handler,
+                                 const VectorType<Number> &vector) const
 {
   // to be implemented in derived classes
   (void)t;
@@ -384,10 +384,10 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
 
 template <int dim>
 void
-SimulationCylinder<dim>::postprocess(const double           t,
-                                     const Mapping<dim>    &mapping,
-                                     const DoFHandler<dim> &dof_handler,
-                                     const VectorType      &solution) const
+SimulationCylinder<dim>::postprocess(const double              t,
+                                     const Mapping<dim>       &mapping,
+                                     const DoFHandler<dim>    &dof_handler,
+                                     const VectorType<Number> &solution) const
 {
   const bool has_ghost_elements = solution.has_ghost_elements();
 
@@ -621,10 +621,10 @@ SimulationRotation<dim>::get_boundary_descriptor() const
 
 template <int dim>
 void
-SimulationRotation<dim>::postprocess(const double           t,
-                                     const Mapping<dim>    &mapping,
-                                     const DoFHandler<dim> &dof_handler,
-                                     const VectorType      &solution) const
+SimulationRotation<dim>::postprocess(const double              t,
+                                     const Mapping<dim>       &mapping,
+                                     const DoFHandler<dim>    &dof_handler,
+                                     const VectorType<Number> &solution) const
 {
   // nothing to do
   (void)t;
@@ -681,10 +681,10 @@ SimulationSphere<dim>::get_boundary_descriptor() const
 
 template <int dim>
 void
-SimulationSphere<dim>::postprocess(const double           t,
-                                   const Mapping<dim>    &mapping,
-                                   const DoFHandler<dim> &dof_handler,
-                                   const VectorType      &solution) const
+SimulationSphere<dim>::postprocess(const double              t,
+                                   const Mapping<dim>       &mapping,
+                                   const DoFHandler<dim>    &dof_handler,
+                                   const VectorType<Number> &solution) const
 {
   // nothing to do
   (void)t;

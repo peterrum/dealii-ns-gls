@@ -142,22 +142,23 @@ private:
 /**
  * A container storing solution vectors of multiple time steps.
  */
+template <typename Number>
 class SolutionHistory
 {
 public:
   SolutionHistory(const unsigned int size);
 
-  VectorType &
+  VectorType<Number> &
   get_current_solution();
 
-  std::vector<VectorType> &
+  std::vector<VectorType<Number>> &
   get_vectors();
 
-  const std::vector<VectorType> &
+  const std::vector<VectorType<Number>> &
   get_vectors() const;
 
   void
   commit_solution();
 
-  std::vector<VectorType> solutions;
+  std::vector<VectorType<Number>> solutions;
 };

@@ -2,7 +2,7 @@
 
 
 
-PreconditionerILU::PreconditionerILU(const OperatorBase &op)
+PreconditionerILU::PreconditionerILU(const OperatorBase<Number> &op)
   : op(op)
 {}
 
@@ -21,7 +21,8 @@ PreconditionerILU::initialize()
 }
 
 void
-PreconditionerILU::vmult(VectorType &dst, const VectorType &src) const
+PreconditionerILU::vmult(VectorType<Number>       &dst,
+                         const VectorType<Number> &src) const
 {
   precon.vmult(dst, src);
 }
@@ -35,7 +36,7 @@ PreconditionerILU::print_stats() const
 
 
 PreconditionerAMG::PreconditionerAMG(
-  const OperatorBase                   &op,
+  const OperatorBase<Number>           &op,
   const std::vector<std::vector<bool>> &constant_modes)
   : op(op)
   , constant_modes(constant_modes)
@@ -63,7 +64,8 @@ PreconditionerAMG::initialize()
 }
 
 void
-PreconditionerAMG::vmult(VectorType &dst, const VectorType &src) const
+PreconditionerAMG::vmult(VectorType<Number>       &dst,
+                         const VectorType<Number> &src) const
 {
   precon.vmult(dst, src);
 }

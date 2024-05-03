@@ -39,10 +39,10 @@ public:
   get_boundary_descriptor() const = 0;
 
   virtual void
-  postprocess(const double           t,
-              const Mapping<dim>    &mapping,
-              const DoFHandler<dim> &dof_handler,
-              const VectorType      &vector) const;
+  postprocess(const double              t,
+              const Mapping<dim>       &mapping,
+              const DoFHandler<dim>    &dof_handler,
+              const VectorType<Number> &vector) const;
 
   virtual void
   parse_parameters(const std::string &file_name);
@@ -98,10 +98,10 @@ public:
   get_boundary_descriptor() const override;
 
   void
-  postprocess(const double           t,
-              const Mapping<dim>    &mapping,
-              const DoFHandler<dim> &dof_handler,
-              const VectorType      &solution) const override;
+  postprocess(const double              t,
+              const Mapping<dim>       &mapping,
+              const DoFHandler<dim>    &dof_handler,
+              const VectorType<Number> &solution) const override;
 
   void
   parse_parameters(const std::string &file_name) override;
@@ -153,10 +153,10 @@ public:
   get_boundary_descriptor() const override;
 
   void
-  postprocess(const double           t,
-              const Mapping<dim>    &mapping,
-              const DoFHandler<dim> &dof_handler,
-              const VectorType      &solution) const override;
+  postprocess(const double              t,
+              const Mapping<dim>       &mapping,
+              const DoFHandler<dim>    &dof_handler,
+              const VectorType<Number> &solution) const override;
 
 private:
 };
@@ -182,10 +182,10 @@ public:
   get_boundary_descriptor() const override;
 
   void
-  postprocess(const double           t,
-              const Mapping<dim>    &mapping,
-              const DoFHandler<dim> &dof_handler,
-              const VectorType      &solution) const override;
+  postprocess(const double              t,
+              const Mapping<dim>       &mapping,
+              const DoFHandler<dim>    &dof_handler,
+              const VectorType<Number> &solution) const override;
 
 private:
 };

@@ -23,7 +23,7 @@ public:
   initialize() = 0;
 
   virtual void
-  solve(VectorType &dst, const VectorType &src) const = 0;
+  solve(VectorType<Number> &dst, const VectorType<Number> &src) const = 0;
 };
 
 
@@ -34,16 +34,16 @@ public:
 class LinearSolverDirect : public LinearSolverBase
 {
 public:
-  LinearSolverDirect(const OperatorBase &op);
+  LinearSolverDirect(const OperatorBase<Number> &op);
 
   void
   initialize() override;
 
   void
-  solve(VectorType &dst, const VectorType &src) const override;
+  solve(VectorType<Number> &dst, const VectorType<Number> &src) const override;
 
 private:
-  const OperatorBase                    &op;
+  const OperatorBase<Number>            &op;
   mutable TrilinosWrappers::SolverDirect solver;
 
   const ConditionalOStream pcout;
@@ -59,21 +59,21 @@ private:
 class LinearSolverGMRES : public LinearSolverBase
 {
 public:
-  LinearSolverGMRES(const OperatorBase &op,
-                    PreconditionerBase &preconditioner,
-                    const unsigned int  n_max_iterations,
-                    const double        absolute_tolerance,
-                    const double        relative_tolerance);
+  LinearSolverGMRES(const OperatorBase<Number> &op,
+                    PreconditionerBase         &preconditioner,
+                    const unsigned int          n_max_iterations,
+                    const double                absolute_tolerance,
+                    const double                relative_tolerance);
 
   void
   initialize() override;
 
   void
-  solve(VectorType &dst, const VectorType &src) const override;
+  solve(VectorType<Number> &dst, const VectorType<Number> &src) const override;
 
 private:
-  const OperatorBase &op;
-  PreconditionerBase &preconditioner;
+  const OperatorBase<Number> &op;
+  PreconditionerBase         &preconditioner;
 
   const unsigned int n_max_iterations;
   const double       absolute_tolerance;
