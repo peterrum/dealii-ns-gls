@@ -8,6 +8,8 @@
 #include <deal.II/multigrid/mg_tools.h>
 
 #include "config.h"
+#include "dof_tools.h"
+#include "matrix_free_tools.h"
 
 using namespace dealii;
 
@@ -930,7 +932,10 @@ NavierStokesOperator<dim>::initialize_system_matrix() const
                                        this->matrix_free.get_mg_level(),
                                        constraints);
       else
-        DoFTools::make_sparsity_pattern(dof_handler, dsp, constraints);
+        DoFTools::make_sparsity_pattern(dof_handler,
+                                        dsp,
+                                        constraints,
+                                        matrix_free.get_quadrature());
 
       dsp.compress();
 
@@ -941,7 +946,7 @@ NavierStokesOperator<dim>::initialize_system_matrix() const
     {
       system_matrix = 0.0;
 
-      MatrixFreeTools::compute_matrix(
+      MyMatrixFreeTools::compute_matrix(
         matrix_free,
         constraints,
         system_matrix,

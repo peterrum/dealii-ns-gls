@@ -55,6 +55,7 @@ struct Parameters
   unsigned int fe_degree            = 1;
   unsigned int mapping_degree       = 1;
   unsigned int n_global_refinements = 0;
+  bool         mg_use_fe_q_iso_q1   = false;
 
   // simulation
   std::string simulation_name = "channel";
@@ -118,6 +119,7 @@ private:
     prm.add_parameter("fe degree", fe_degree);
     prm.add_parameter("mapping degree", mapping_degree);
     prm.add_parameter("n global refinements", n_global_refinements);
+    prm.add_parameter("gmg coarse grid use fe q iso q1", mg_use_fe_q_iso_q1);
 
     // simulation
     prm.add_parameter("simulation name", simulation_name);
@@ -230,7 +232,7 @@ public:
           << "\n    [I] Global degrees of freedom: " << dof_handler.n_dofs()
           << std::endl;
 
-    QGauss<dim> quadrature(params.fe_degree + 1);
+    Quadrature<dim> quadrature = QGauss<dim>(params.fe_degree + 1);
 
     MappingQ<dim> mapping((params.mapping_degree == 0) ? params.fe_degree :
                                                          params.mapping_degree);
@@ -400,8 +402,18 @@ public:
             auto &dof_handler = mg_dof_handlers[level];
             auto &constraints = mg_constraints[level];
 
+            auto quadrature_mg = quadrature;
+
+            if (params.mg_use_fe_q_iso_q1 && (level == minlevel))
+              quadrature_mg = QIterated<dim>(QGauss<1>(2), params.fe_degree);
+
             dof_handler.reinit(*mg_trias[level]);
-            dof_handler.distribute_dofs(fe);
+
+            if (params.mg_use_fe_q_iso_q1 && (level == minlevel))
+              dof_handler.distribute_dofs(
+                FESystem<dim>(FE_Q_iso_Q1<dim>(params.fe_degree), dim + 1));
+            else
+              dof_handler.distribute_dofs(fe);
 
             const auto locally_relevant_dofs =
               DoFTools::extract_locally_relevant_dofs(dof_handler);
@@ -471,7 +483,7 @@ public:
                     constraints,
                     constraints,
                     constraints,
-                    quadrature,
+                    quadrature_mg,
                     params.nu,
                     params.c_1,
                     params.c_2,
@@ -490,7 +502,7 @@ public:
                     mapping,
                     dof_handler,
                     constraints,
-                    quadrature,
+                    quadrature_mg,
                     params.nu,
                     params.c_1,
                     params.c_2,
