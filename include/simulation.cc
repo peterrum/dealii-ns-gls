@@ -191,11 +191,12 @@ SimulationCylinder<dim>::SimulationCylinder()
   , u_max(1.0)
   , paraview_prefix("")
   , output_granularity(0.0)
-  , length((dim == 2) ? 2.2 : 2.5)
-  , height(0.41)
-  , cylinder_position((dim == 2) ? 0.2 : 0.5)
-  , diameter(0.1)
-  , shift(0.005)
+  , geometry_channel_length((dim == 2) ? 2.2 : 2.5)
+  , geometry_channel_extra_length(0.0)
+  , geometry_channel_height(0.41)
+  , geometry_cylinder_position((dim == 2) ? 0.2 : 0.5)
+  , geometry_cylinder_diameter(0.1)
+  , geometry_cylinder_shift(0.005)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -225,12 +226,17 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("paraview prefix", paraview_prefix);
   prm.add_parameter("output granularity", output_granularity);
 
-  prm.add_parameter("simulation geometry length", length);
-  prm.add_parameter("simulation geometry extra length", extra_length);
-  prm.add_parameter("simulation geometry height", height);
-  prm.add_parameter("simulation geometry cylinder position", cylinder_position);
-  prm.add_parameter("simulation geometry cylinder diameter", diameter);
-  prm.add_parameter("simulation geometry cylinder shift", shift);
+  prm.add_parameter("simulation geometry length", geometry_channel_length);
+  prm.add_parameter("simulation geometry extra length",
+                    geometry_channel_extra_length);
+  prm.add_parameter("simulation geometry geometry_channel_height",
+                    geometry_channel_height);
+  prm.add_parameter("simulation geometry cylinder position",
+                    geometry_cylinder_position);
+  prm.add_parameter("simulation geometry cylinder diameter",
+                    geometry_cylinder_diameter);
+  prm.add_parameter("simulation geometry cylinder shift",
+                    geometry_cylinder_shift);
 
   prm.parse_input(file_name, "", true);
 
@@ -257,8 +263,12 @@ SimulationCylinder<dim>::create_triangulation(
   Triangulation<dim> &tria,
   const unsigned int  n_global_refinements) const
 {
-  cylinder(
-    tria, length + extra_length, height, cylinder_position, diameter, shift);
+  cylinder(tria,
+           geometry_channel_length + geometry_channel_extra_length,
+           geometry_channel_height,
+           geometry_cylinder_position,
+           geometry_cylinder_diameter,
+           geometry_cylinder_shift);
 
   const auto refine_mesh = [&](Triangulation<dim> &tria,
                                const unsigned int  n_refinements) {
@@ -266,7 +276,8 @@ SimulationCylinder<dim>::create_triangulation(
       {
         for (const auto &cell : tria.active_cell_iterators())
           if (cell->is_locally_owned())
-            if (cell->center()[0] < (length - cylinder_position))
+            if (cell->center()[0] <
+                (geometry_channel_length - geometry_cylinder_position))
               cell->set_refine_flag();
 
         tria.execute_coarsening_and_refinement();
@@ -301,8 +312,8 @@ SimulationCylinder<dim>::create_triangulation(
       const auto matrix =
         Physics::Transformations::Rotations::rotation_matrix_2d(angle);
 
-      const auto bb =
-        BoundingBox<2>(Point<2>()).create_extended(diameter - 1e-6);
+      const auto bb = BoundingBox<2>(Point<2>())
+                        .create_extended(geometry_cylinder_diameter - 1e-6);
 
       std::vector<bool> vertex_state(tria.n_vertices(), false);
 
@@ -316,12 +327,14 @@ SimulationCylinder<dim>::create_triangulation(
 
               if (bb.point_inside(vertex_2D))
                 {
-                  double factor = diameter / std::max(std::abs(vertex_2D[0]),
-                                                      std::abs(vertex_2D[1]));
+                  double factor =
+                    geometry_cylinder_diameter /
+                    std::max(std::abs(vertex_2D[0]), std::abs(vertex_2D[1]));
 
-                  factor =
-                    (vertex_2D.norm() - (factor_i * diameter / 2)) /
-                    (vertex_2D.norm() * factor - (factor_i * diameter / 2));
+                  factor = (vertex_2D.norm() -
+                            (factor_i * geometry_cylinder_diameter / 2)) /
+                           (vertex_2D.norm() * factor -
+                            (factor_i * geometry_cylinder_diameter / 2));
 
                   vertex_2D = (matrix * vertex_2D) * (1.0 - factor) +
                               vertex_2D * (factor);
@@ -345,7 +358,11 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
   bcs.all_inhomogeneous_dbcs.emplace_back(
     0,
     std::make_shared<InflowBoundaryValues::Channel<dim>>(
-      t_init, u_max, use_no_slip_wall_bc, height, -height / 2.0 + shift));
+      t_init,
+      u_max,
+      use_no_slip_wall_bc,
+      geometry_channel_height,
+      -geometry_channel_height / 2.0 + geometry_cylinder_shift));
 
   // outflow
   bcs.all_homogeneous_nbcs.push_back(1);
@@ -436,10 +453,10 @@ SimulationCylinder<dim>::postprocess(const double           t,
   if (use_no_slip_wall_bc)
     u_bar *= (dim == 2 ? (2. / 3.) : (4. / 9.));
 
-  double scaling = 2 / diameter / std::pow(u_bar, 2);
+  double scaling = 2 / geometry_cylinder_diameter / std::pow(u_bar, 2);
 
   if (dim == 3)
-    scaling /= height;
+    scaling /= geometry_channel_height;
 
   drag = Utilities::MPI::sum(drag_local, comm) * scaling;
   lift = Utilities::MPI::sum(lift_local, comm) * scaling;
@@ -450,8 +467,8 @@ SimulationCylinder<dim>::postprocess(const double           t,
   if (rpe == nullptr)
     {
       Point<dim> p1, p2;
-      p1[0] = -diameter / 2.0;
-      p2[0] = +diameter / 2.0;
+      p1[0] = -geometry_cylinder_diameter / 2.0;
+      p2[0] = +geometry_cylinder_diameter / 2.0;
       p1[1] = p2[1] = 0.0;
 
       std::vector<Point<dim>> points;
@@ -500,8 +517,10 @@ SimulationCylinder<dim>::postprocess(const double           t,
           parallel::distributed::Triangulation<2, 3> patch_tria(comm);
 
           std::vector<unsigned int> repetitions = {6, 1};
-          Point<2> p1(-cylinder_position, -height / 2.0 + shift);
-          Point<2> p2(length - cylinder_position, +height / 2.0 + shift);
+          Point<2>                  p1(-geometry_cylinder_position,
+                      -geometry_channel_height / 2.0 + geometry_cylinder_shift);
+          Point<2> p2(geometry_channel_length - geometry_cylinder_position,
+                      +geometry_channel_height / 2.0 + geometry_cylinder_shift);
 
           GridGenerator::subdivided_hyper_rectangle(patch_tria,
                                                     repetitions,
@@ -519,9 +538,11 @@ SimulationCylinder<dim>::postprocess(const double           t,
           patch_tria.refine_global(
             dof_handler.get_triangulation().n_global_levels());
 
-          const auto bb = BoundingBox<dim>({Point<dim>(0., 0., 0.),
-                                            Point<dim>(9 * diameter, 0., 0.)})
-                            .create_extended(1.5 * diameter);
+          const auto bb =
+            BoundingBox<dim>(
+              {Point<dim>(0., 0., 0.),
+               Point<dim>(9 * geometry_cylinder_diameter, 0., 0.)})
+              .create_extended(1.5 * geometry_cylinder_diameter);
 
           for (unsigned int i = 0; i < 3; ++i)
             {
