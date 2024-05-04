@@ -20,14 +20,16 @@
 
   "use matrix free ns operator" : true,
 
-  "linear solver" : "direct",
+  "linear solver" : "GMRES",
   "lin relative tolerance" : 1e-2,
   "lin n max iterations" : 100000,
 
-  "preconditioner" : "ILU",
+  "preconditioner" : "GMG",
 
   "gmg coarse grid solver"       : "direct",
   "gmg coarse grid iterate"      : false,
+  "gmg coarse grid amg use default parameters" : true,
+  "gmg output details" : false,
 
   "nonlinear solver" : "Newton",
   "newton inexact"   : false,
@@ -36,7 +38,7 @@
   "output granularity" : 0.1,
   
   "simulation no slip cylinder"     : true,
-  "simulation no slip wall"         : true,
+  "simulation no slip wall"         : false,
   "simulation geometry cylinder shift" : 0.005,
   "simulation rotate"               : false,
   "simulation t init"               : 0.00,
