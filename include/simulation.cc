@@ -11,7 +11,6 @@
 #include <deal.II/physics/transformations.h>
 
 #include "grid_cylinder.h"
-#include "grid_cylinder_old.h"
 
 using namespace dealii;
 
