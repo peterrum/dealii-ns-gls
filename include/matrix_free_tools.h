@@ -1,3 +1,5 @@
+#pragma once
+
 #include <deal.II/base/config.h>
 
 #include <deal.II/grid/tria.h>
@@ -5,6 +7,8 @@
 #include <deal.II/matrix_free/fe_evaluation.h>
 #include <deal.II/matrix_free/matrix_free.h>
 #include <deal.II/matrix_free/vector_access_internal.h>
+
+#include "dof_tools.h"
 
 
 namespace dealii
@@ -137,48 +141,7 @@ namespace dealii
       const auto &quadrature = matrix_free.get_quadrature(quad_no);
       const auto &fe         = matrix_free.get_dof_handler(dof_no).get_fe();
 
-      const auto compute_scalar_bool_dof_mask = [&quadrature](const auto &fe) {
-        Table<2, bool> bool_dof_mask(fe.dofs_per_cell, fe.dofs_per_cell);
-        MappingQ1<dim> mapping;
-        FEValues<dim>  fe_values(mapping, fe, quadrature, update_values);
-
-        Triangulation<dim> tria;
-        GridGenerator::hyper_cube(tria);
-
-        fe_values.reinit(tria.begin());
-        for (unsigned int i = 0; i < fe.dofs_per_cell; ++i)
-          for (unsigned int j = 0; j < fe.dofs_per_cell; ++j)
-            {
-              double sum = 0;
-              for (unsigned int q = 0; q < quadrature.size(); ++q)
-                sum +=
-                  fe_values.shape_value(i, q) * fe_values.shape_value(j, q);
-              if (sum != 0)
-                bool_dof_mask(i, j) = true;
-            }
-
-        return bool_dof_mask;
-      };
-
-      Table<2, bool> bool_dof_mask(fe.dofs_per_cell, fe.dofs_per_cell);
-
-      AssertDimension(n_components, fe.n_components());
-
-      if (fe.n_components() == 1)
-        {
-          bool_dof_mask = compute_scalar_bool_dof_mask(fe);
-        }
-      else
-        {
-          const auto scalar_bool_dof_mask =
-            compute_scalar_bool_dof_mask(fe.base_element(0));
-
-          for (unsigned int i = 0; i < fe.n_dofs_per_cell(); ++i)
-            for (unsigned int j = 0; j < fe.n_dofs_per_cell(); ++j)
-              if (scalar_bool_dof_mask[fe.system_to_component_index(i).second]
-                                      [fe.system_to_component_index(j).second])
-                bool_dof_mask[i][j] = true;
-        }
+      const auto bool_dof_mask = DoFTools::create_bool_dof_mask(fe, quadrature);
 
       std::unique_ptr<AffineConstraints<typename MatrixType::value_type>>
         constraints_for_matrix;

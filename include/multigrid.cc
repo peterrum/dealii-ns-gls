@@ -337,7 +337,7 @@ PreconditionerGMG<dim>::initialize()
 
   {
     MyScope scope(timer, "gmg::initialize::smoother::init1");
-    for (unsigned int level = min_level; level <= max_level; ++level)
+    for (unsigned int level = min_level + 1; level <= max_level; ++level)
       {
         VectorType<MGNumber> vec;
         op[level]->initialize_dof_vector(vec);
