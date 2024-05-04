@@ -92,6 +92,53 @@ run(const unsigned int n_global_refinements, const unsigned int fe_degree)
       matrix.vmult(dst, src);
   }
 
+  {
+    typename MatrixFree<dim, Number>::AdditionalData additional_data;
+
+    additional_data.mapping_update_flags = update_values | update_gradients;
+
+    MatrixFree<dim, Number> matrix_free;
+    matrix_free.reinit(
+      mapping, dof_handler, constraints, quadrature, additional_data);
+
+    VectorType<Number> src, dst;
+    matrix_free.initialize_dof_vector(src);
+    matrix_free.initialize_dof_vector(dst);
+
+    MyScope scope(timer, "poisson::vmult::mf");
+    for (unsigned int i = 0; i < n_repetitions; ++i)
+      {
+        matrix_free.template cell_loop<VectorType<Number>, VectorType<Number>>(
+          [](const auto &data, auto &dst, const auto &src, const auto range) {
+            FEEvaluation<dim, -1, 0, dim + 1, Number> phi(data);
+
+            for (unsigned int cell = range.first; cell < range.second; ++cell)
+              {
+                phi.reinit(cell);
+
+                phi.gather_evaluate(
+                  src,
+                  EvaluationFlags::EvaluationFlags::values |
+                    EvaluationFlags::EvaluationFlags::gradients);
+
+                for (const auto q : phi.quadrature_point_indices())
+                  {
+                    phi.submit_value(phi.get_value(q), q);
+                    phi.submit_gradient(phi.get_gradient(q), q);
+                  }
+
+                phi.integrate_scatter(
+                  EvaluationFlags::EvaluationFlags::values |
+                    EvaluationFlags::EvaluationFlags::gradients,
+                  dst);
+              }
+          },
+          dst,
+          src,
+          true);
+      }
+  }
+
   TimerCollection::print_all_wall_time_statistics(true);
 }
 
