@@ -1,18 +1,3 @@
-// ---------------------------------------------------------------------
-//
-// Copyright (C) 2023 by the hpsint authors
-//
-// This file is part of the hpsint library.
-//
-// The hpsint library is free software; you can use it, redistribute
-// it, and/or modify it under the terms of the GNU Lesser General
-// Public License as published by the Free Software Foundation; either
-// version 3.0 of the License, or (at your option) any later version.
-// The full text of the license can be found in the file LICENSE.MD at
-// the top level directory of hpsint.
-//
-// ---------------------------------------------------------------------
-
 #pragma once
 
 #include <deal.II/dofs/dof_tools.h>
@@ -24,21 +9,13 @@ namespace dealii
 {
   namespace DoFTools
   {
-    template <int dim,
-              int spacedim,
-              typename SparsityPatternType,
-              typename number>
-    void
-    make_sparsity_pattern(const DoFHandler<dim, spacedim> &dof_handler,
-                          SparsityPatternType             &sparsity,
-                          const AffineConstraints<number> &constraints,
-                          const Quadrature<dim>           &quadrature,
-                          const bool keep_constrained_dofs = true)
-    {
-      const auto &fe = dof_handler.get_fe();
 
-      const auto compute_scalar_bool_dof_mask = [&quadrature,
-                                                 &dof_handler](const auto &fe) {
+    template <int dim, int spacedim>
+    Table<2, bool>
+    create_bool_dof_mask(const FiniteElement<dim, spacedim> &fe,
+                         const Quadrature<dim>              &quadrature)
+    {
+      const auto compute_scalar_bool_dof_mask = [&quadrature](const auto &fe) {
         Table<2, bool> bool_dof_mask(fe.dofs_per_cell, fe.dofs_per_cell);
         MappingQ1<dim, spacedim> mapping;
         FEValues<dim> fe_values(mapping, fe, quadrature, update_values);
@@ -78,6 +55,25 @@ namespace dealii
                                       [fe.system_to_component_index(j).second])
                 bool_dof_mask[i][j] = true;
         }
+
+
+      return bool_dof_mask;
+    }
+
+    template <int dim,
+              int spacedim,
+              typename SparsityPatternType,
+              typename number>
+    void
+    make_sparsity_pattern(const DoFHandler<dim, spacedim> &dof_handler,
+                          SparsityPatternType             &sparsity,
+                          const AffineConstraints<number> &constraints,
+                          const Quadrature<dim>           &quadrature,
+                          const bool keep_constrained_dofs = true)
+    {
+      const auto &fe = dof_handler.get_fe();
+
+      const auto bool_dof_mask = create_bool_dof_mask(fe, quadrature);
 
       std::vector<types::global_dof_index> dofs_on_this_cell(fe.dofs_per_cell);
 
