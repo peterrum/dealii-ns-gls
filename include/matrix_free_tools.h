@@ -134,6 +134,52 @@ namespace dealii
       const unsigned int quad_no,
       const unsigned int first_selected_component)
     {
+      const auto &quadrature = matrix_free.get_quadrature(quad_no);
+      const auto &fe         = matrix_free.get_dof_handler(dof_no).get_fe();
+
+      const auto compute_scalar_bool_dof_mask = [&quadrature](const auto &fe) {
+        Table<2, bool> bool_dof_mask(fe.dofs_per_cell, fe.dofs_per_cell);
+        MappingQ1<dim> mapping;
+        FEValues<dim>  fe_values(mapping, fe, quadrature, update_values);
+
+        Triangulation<dim> tria;
+        GridGenerator::hyper_cube(tria);
+
+        fe_values.reinit(tria.begin());
+        for (unsigned int i = 0; i < fe.dofs_per_cell; ++i)
+          for (unsigned int j = 0; j < fe.dofs_per_cell; ++j)
+            {
+              double sum = 0;
+              for (unsigned int q = 0; q < quadrature.size(); ++q)
+                sum +=
+                  fe_values.shape_value(i, q) * fe_values.shape_value(j, q);
+              if (sum != 0)
+                bool_dof_mask(i, j) = true;
+            }
+
+        return bool_dof_mask;
+      };
+
+      Table<2, bool> bool_dof_mask(fe.dofs_per_cell, fe.dofs_per_cell);
+
+      AssertDimension(n_components, fe.n_components());
+
+      if (fe.n_components() == 1)
+        {
+          bool_dof_mask = compute_scalar_bool_dof_mask(fe);
+        }
+      else
+        {
+          const auto scalar_bool_dof_mask =
+            compute_scalar_bool_dof_mask(fe.base_element(0));
+
+          for (unsigned int i = 0; i < fe.n_dofs_per_cell(); ++i)
+            for (unsigned int j = 0; j < fe.n_dofs_per_cell(); ++j)
+              if (scalar_bool_dof_mask[fe.system_to_component_index(i).second]
+                                      [fe.system_to_component_index(j).second])
+                bool_dof_mask[i][j] = true;
+        }
+
       std::unique_ptr<AffineConstraints<typename MatrixType::value_type>>
         constraints_for_matrix;
       const AffineConstraints<typename MatrixType::value_type> &constraints =
@@ -212,16 +258,10 @@ namespace dealii
                     dof_indices_mf[j] = dof_indices[lexicographic_numbering[j]];
 
                   // new: remove small entries (TODO: only for FE_Q_iso_1)
-                  Number max = 0.0;
-
                   for (unsigned int i = 0; i < matrices[v].m(); ++i)
                     for (unsigned int j = 0; j < matrices[v].n(); ++j)
-                      max = std::max<Number>(max, std::abs(matrices[v][i][j]));
-
-                  for (unsigned int i = 0; i < matrices[v].m(); ++i)
-                    for (unsigned int j = 0; j < matrices[v].n(); ++j)
-                      if (std::abs(matrices[v][i][j]) <
-                          max * std::numeric_limits<Number>::epsilon() * 10)
+                      if (!bool_dof_mask[lexicographic_numbering[i]]
+                                        [lexicographic_numbering[j]])
                         matrices[v][i][j] = 0.0;
 
                   constraints.distribute_local_to_global(matrices[v],
