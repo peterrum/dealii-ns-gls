@@ -405,14 +405,19 @@ public:
 
             auto quadrature_mg = quadrature;
 
+            const auto points =
+              true ? QGaussLobatto<1>(params.fe_degree + 1).get_points() :
+                     QIterated<1>(QGaussLobatto<1>(2), params.fe_degree)
+                       .get_points();
+
             if (params.mg_use_fe_q_iso_q1 && (level == minlevel))
-              quadrature_mg = QIterated<dim>(QGauss<1>(2), params.fe_degree);
+              quadrature_mg = QIterated<dim>(QGauss<1>(2), points);
 
             dof_handler.reinit(*mg_trias[level]);
 
             if (params.mg_use_fe_q_iso_q1 && (level == minlevel))
               dof_handler.distribute_dofs(
-                FESystem<dim>(FE_Q_iso_Q1<dim>(params.fe_degree), dim + 1));
+                FESystem<dim>(FE_Q_iso_Q1<dim>(points), dim + 1));
             else
               dof_handler.distribute_dofs(fe);
 

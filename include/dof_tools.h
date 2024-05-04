@@ -63,8 +63,6 @@ namespace dealii
 
       Table<2, bool> bool_dof_mask(fe.dofs_per_cell, fe.dofs_per_cell);
 
-      const unsigned int n_components = fe.n_components();
-
       if (fe.n_components() == 1)
         {
           bool_dof_mask = compute_scalar_bool_dof_mask(fe);
@@ -74,13 +72,11 @@ namespace dealii
           const auto scalar_bool_dof_mask =
             compute_scalar_bool_dof_mask(fe.base_element(0));
 
-          for (unsigned int i = 0; i < scalar_bool_dof_mask.size(0); ++i)
-            for (unsigned int j = 0; j < scalar_bool_dof_mask.size(1); ++j)
-              if (scalar_bool_dof_mask[i][j])
-                for (unsigned ic = 0; ic < n_components; ++ic)
-                  for (unsigned jc = 0; jc < n_components; ++jc)
-                    bool_dof_mask[i * n_components + ic]
-                                 [j * n_components + jc] = true;
+          for (unsigned int i = 0; i < fe.n_dofs_per_cell(); ++i)
+            for (unsigned int j = 0; j < fe.n_dofs_per_cell(); ++j)
+              if (scalar_bool_dof_mask[fe.system_to_component_index(i).second]
+                                      [fe.system_to_component_index(j).second])
+                bool_dof_mask[i][j] = true;
         }
 
       std::vector<types::global_dof_index> dofs_on_this_cell(fe.dofs_per_cell);
