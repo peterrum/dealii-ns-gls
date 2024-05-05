@@ -105,6 +105,8 @@ private:
   const bool                    cell_wise_stabilization;
   const bool compute_penalty_parameters_for_previous_solution;
 
+  const Table<2, bool> bool_dof_mask;
+
   mutable bool valid_system;
 
   AlignedVector<VectorizedArray<Number>> delta_1;

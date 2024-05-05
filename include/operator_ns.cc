@@ -1,6 +1,8 @@
 
 #include "operator_ns.h"
 
+#include <deal.II/grid/grid_generator.h>
+
 #include <deal.II/lac/trilinos_sparsity_pattern.h>
 
 #include <deal.II/matrix_free/tools.h>
@@ -8,10 +10,57 @@
 #include <deal.II/multigrid/mg_tools.h>
 
 #include "config.h"
-#include "dof_tools.h"
-#include "matrix_free_tools.h"
 
 using namespace dealii;
+
+template <int dim, int spacedim>
+Table<2, bool>
+create_bool_dof_mask(const FiniteElement<dim, spacedim> &fe,
+                     const Quadrature<dim>              &quadrature)
+{
+  const auto compute_scalar_bool_dof_mask = [&quadrature](const auto &fe) {
+    Table<2, bool>           bool_dof_mask(fe.dofs_per_cell, fe.dofs_per_cell);
+    MappingQ1<dim, spacedim> mapping;
+    FEValues<dim>            fe_values(mapping, fe, quadrature, update_values);
+
+    Triangulation<dim, spacedim> tria;
+    GridGenerator::hyper_cube(tria);
+
+    fe_values.reinit(tria.begin());
+    for (unsigned int i = 0; i < fe.dofs_per_cell; ++i)
+      for (unsigned int j = 0; j < fe.dofs_per_cell; ++j)
+        {
+          double sum = 0;
+          for (unsigned int q = 0; q < quadrature.size(); ++q)
+            sum += fe_values.shape_value(i, q) * fe_values.shape_value(j, q);
+          if (sum != 0)
+            bool_dof_mask(i, j) = true;
+        }
+
+    return bool_dof_mask;
+  };
+
+  Table<2, bool> bool_dof_mask(fe.dofs_per_cell, fe.dofs_per_cell);
+
+  if (fe.n_components() == 1)
+    {
+      bool_dof_mask = compute_scalar_bool_dof_mask(fe);
+    }
+  else
+    {
+      const auto scalar_bool_dof_mask =
+        compute_scalar_bool_dof_mask(fe.base_element(0));
+
+      for (unsigned int i = 0; i < fe.n_dofs_per_cell(); ++i)
+        for (unsigned int j = 0; j < fe.n_dofs_per_cell(); ++j)
+          if (scalar_bool_dof_mask[fe.system_to_component_index(i).second]
+                                  [fe.system_to_component_index(j).second])
+            bool_dof_mask[i][j] = true;
+    }
+
+
+  return bool_dof_mask;
+}
 
 /**
  * Matrix-free Navier-Stokes operator.
@@ -43,6 +92,7 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
   , increment_form(increment_form)
   , cell_wise_stabilization(cell_wise_stabilization)
   , compute_penalty_parameters_for_previous_solution(false)
+  , bool_dof_mask(create_bool_dof_mask(dof_handler.get_fe(), quadrature))
   , valid_system(false)
 {
   const std::vector<const DoFHandler<dim> *> mf_dof_handlers = {&dof_handler,
@@ -939,6 +989,8 @@ NavierStokesOperator<dim, Number>::initialize_system_matrix() const
 {
   MyScope scope(timer, "ns::initialize_system_matrix");
 
+  const bool keep_constrained_dofs = false;
+
   const auto &dof_handler = matrix_free.get_dof_handler();
   const auto &constraints = matrix_free.get_affine_constraints();
 
@@ -960,10 +1012,26 @@ NavierStokesOperator<dim, Number>::initialize_system_matrix() const
                                        this->matrix_free.get_mg_level(),
                                        constraints);
       else
-        DoFTools::make_sparsity_pattern(dof_handler,
-                                        dsp,
-                                        constraints,
-                                        matrix_free.get_quadrature());
+        {
+          // the following code does the same as
+          // DoFTools::make_sparsity_pattern() but also
+          // consideres bool_dof_mask for FE_Q_iso_Q1
+          std::vector<types::global_dof_index> dofs_on_this_cell;
+
+          for (const auto &cell : dof_handler.active_cell_iterators())
+            if (cell->is_locally_owned())
+              {
+                const unsigned int dofs_per_cell =
+                  cell->get_fe().n_dofs_per_cell();
+                dofs_on_this_cell.resize(dofs_per_cell);
+                cell->get_dof_indices(dofs_on_this_cell);
+
+                constraints.add_entries_local_to_global(dofs_on_this_cell,
+                                                        dsp,
+                                                        keep_constrained_dofs,
+                                                        bool_dof_mask);
+              }
+        }
 
       dsp.compress();
 
@@ -974,12 +1042,31 @@ NavierStokesOperator<dim, Number>::initialize_system_matrix() const
     {
       system_matrix = 0.0;
 
-      MyMatrixFreeTools::compute_matrix(
-        matrix_free,
-        constraints,
-        system_matrix,
-        &NavierStokesOperator<dim, Number>::do_vmult_cell<false>,
-        this);
+      const auto &lexicographic_numbering =
+        matrix_free.get_shape_info().lexicographic_numbering;
+
+      unsigned int cell   = numbers::invalid_unsigned_int;
+      unsigned int column = numbers::invalid_unsigned_int;
+
+      MatrixFreeTools::
+        compute_matrix<dim, -1, 0, dim + 1, Number, VectorizedArray<Number>>(
+          matrix_free, constraints, system_matrix, [&](auto &integrator) {
+            if (cell != integrator.get_current_cell_index())
+              {
+                cell   = integrator.get_current_cell_index();
+                column = 0;
+              }
+
+            this->template do_vmult_cell<false>(integrator);
+
+            // remove spurious entries for FE_Q_iso_Q1
+            for (unsigned int i = 0; i < lexicographic_numbering.size(); ++i)
+              if (!bool_dof_mask[lexicographic_numbering[i]]
+                                [lexicographic_numbering[column]])
+                integrator.begin_dof_values()[i] = 0.0;
+
+            column++;
+          });
 
       this->valid_system = true;
     }
