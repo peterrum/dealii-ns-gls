@@ -227,6 +227,8 @@ public:
     DoFHandler<dim> dof_handler(tria);
     dof_handler.distribute_dofs(fe);
 
+    DoFHandler<dim> dof_handler_q_iso_q1;
+
     pcout << "    [I] Number of active cells:    "
           << tria.n_global_active_cells()
           << "\n    [I] Global degrees of freedom: " << dof_handler.n_dofs()
@@ -540,6 +542,19 @@ public:
       {
         dof_handler.distribute_mg_dofs(); // TODO
 
+        const auto points =
+          true ?
+            QGaussLobatto<1>(params.fe_degree + 1).get_points() :
+            QIterated<1>(QGaussLobatto<1>(2), params.fe_degree).get_points();
+
+        if (params.mg_use_fe_q_iso_q1)
+          {
+            dof_handler_q_iso_q1.reinit(tria);
+            dof_handler_q_iso_q1.distribute_dofs(
+              FESystem<dim>(FE_Q_iso_Q1<dim>(points), dim + 1));
+            dof_handler_q_iso_q1.distribute_mg_dofs();
+          }
+
         unsigned int minlevel = 0;
         unsigned int maxlevel = tria.n_global_levels() - 1;
 
@@ -628,17 +643,24 @@ public:
             mg_constrained_dofs.merge_constraints(
               constraints, level, true, false, true, true);
 
+            auto quadrature_mg = quadrature;
+
+            if (params.mg_use_fe_q_iso_q1 && (level == minlevel))
+              quadrature_mg = QIterated<dim>(QGauss<1>(2), points);
+
             if (params.use_matrix_free_ns_operator)
               {
                 const bool increment_form = params.nonlinear_solver == "Newton";
                 mg_ns_operators[level] =
                   std::make_shared<NavierStokesOperator<dim, MGNumber>>(
                     mapping,
-                    dof_handler,
+                    (params.mg_use_fe_q_iso_q1 && (level == minlevel)) ?
+                      dof_handler_q_iso_q1 :
+                      dof_handler,
                     constraints,
                     constraints,
                     constraints,
-                    quadrature,
+                    quadrature_mg,
                     params.nu,
                     params.c_1,
                     params.c_2,
