@@ -1000,17 +1000,34 @@ NavierStokesOperator<dim, Number>::initialize_system_matrix() const
 
       TrilinosWrappers::SparsityPattern dsp;
 
-      dsp.reinit(
-        this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int ?
-          dof_handler.locally_owned_mg_dofs(this->matrix_free.get_mg_level()) :
-          dof_handler.locally_owned_dofs(),
-        dof_handler.get_communicator());
+      const unsigned int mg_level = this->matrix_free.get_mg_level();
 
-      if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
-        MGTools::make_sparsity_pattern(dof_handler,
-                                       dsp,
-                                       this->matrix_free.get_mg_level(),
-                                       constraints);
+      dsp.reinit(mg_level != numbers::invalid_unsigned_int ?
+                   dof_handler.locally_owned_mg_dofs(mg_level) :
+                   dof_handler.locally_owned_dofs(),
+                 dof_handler.get_communicator());
+
+      if (mg_level != numbers::invalid_unsigned_int)
+        {
+          // the following code does the same as
+          // MGTools::make_sparsity_pattern() but also
+          // consideres bool_dof_mask for FE_Q_iso_Q1
+          std::vector<types::global_dof_index> dofs_on_this_cell;
+
+          for (const auto &cell : dof_handler.cell_iterators_on_level(mg_level))
+            if (cell->is_locally_owned_on_level())
+              {
+                const unsigned int dofs_per_cell =
+                  dof_handler.get_fe().n_dofs_per_cell();
+                dofs_on_this_cell.resize(dofs_per_cell);
+                cell->get_mg_dof_indices(dofs_on_this_cell);
+
+                constraints.add_entries_local_to_global(dofs_on_this_cell,
+                                                        dsp,
+                                                        keep_constrained_dofs,
+                                                        bool_dof_mask);
+              }
+        }
       else
         {
           // the following code does the same as
