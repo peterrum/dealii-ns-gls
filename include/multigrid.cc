@@ -164,7 +164,7 @@ PreconditionerGMGAdditionalData::add_parameters(ParameterHandler &prm)
   prm.add_parameter("gmg coarse grid solver",
                     coarse_grid_solver,
                     "",
-                    Patterns::Selection("AMG|direct|identity"));
+                    Patterns::Selection("AMG|ILU|direct|identity"));
   prm.add_parameter("gmg coarse grid iterate", coarse_grid_iterate);
 
   // coarse-grid GMRES
@@ -431,6 +431,20 @@ PreconditionerGMG<dim>::initialize()
           precondition_amg->initialize(matrix, amg_data);
         }
     }
+  else if (additional_data.coarse_grid_solver == "ILU")
+    {
+      MyScope scope(timer, "gmg::initialize::ilu");
+
+      precondition_ilu = std::make_unique<TrilinosWrappers::PreconditionILU>();
+
+      const int    current_preconditioner_fill_level = 0;
+      const double ilu_atol                          = 1e-12;
+      const double ilu_rtol                          = 1.00;
+      TrilinosWrappers::PreconditionILU::AdditionalData ad(
+        current_preconditioner_fill_level, ilu_atol, ilu_rtol, 0);
+
+      precondition_ilu->initialize(op[min_level]->get_system_matrix(), ad);
+    }
   else if (additional_data.coarse_grid_solver == "direct")
     {
       MyScope scope(timer, "gmg::initialize::direct");
@@ -455,6 +469,11 @@ PreconditionerGMG<dim>::initialize()
           MGCoarseGridApplyPreconditioner<VectorType<MGNumber>,
                                           TrilinosWrappers::PreconditionAMG>>(
           *precondition_amg);
+      else if (additional_data.coarse_grid_solver == "ILU")
+        mg_coarse = std::make_unique<
+          MGCoarseGridApplyPreconditioner<VectorType<MGNumber>,
+                                          TrilinosWrappers::PreconditionILU>>(
+          *precondition_ilu);
       else if (additional_data.coarse_grid_solver == "direct")
         mg_coarse = std::make_unique<
           MGCoarseGridApplyPreconditioner<VectorType<MGNumber>,
@@ -490,14 +509,26 @@ PreconditionerGMG<dim>::initialize()
             return SolverControl::State::success;
           });
 
-      mg_coarse = std::make_unique<
-        MGCoarseGridIterativeSolver<VectorType<MGNumber>,
-                                    SolverGMRES<VectorType<Number>>,
-                                    TrilinosWrappers::SparseMatrix,
-                                    TrilinosWrappers::PreconditionAMG>>(
-        *coarse_grid_solver,
-        op[min_level]->get_system_matrix(),
-        *precondition_amg);
+      if (additional_data.coarse_grid_solver == "AMG")
+        mg_coarse = std::make_unique<
+          MGCoarseGridIterativeSolver<VectorType<MGNumber>,
+                                      SolverGMRES<VectorType<Number>>,
+                                      TrilinosWrappers::SparseMatrix,
+                                      TrilinosWrappers::PreconditionAMG>>(
+          *coarse_grid_solver,
+          op[min_level]->get_system_matrix(),
+          *precondition_amg);
+      else if (additional_data.coarse_grid_solver == "ILU")
+        mg_coarse = std::make_unique<
+          MGCoarseGridIterativeSolver<VectorType<MGNumber>,
+                                      SolverGMRES<VectorType<Number>>,
+                                      TrilinosWrappers::SparseMatrix,
+                                      TrilinosWrappers::PreconditionILU>>(
+          *coarse_grid_solver,
+          op[min_level]->get_system_matrix(),
+          *precondition_ilu);
+      else
+        AssertThrow(false, ExcInternalError());
     }
 
   mg = std::make_unique<Multigrid<VectorType<MGNumber>>>(*mg_matrix,

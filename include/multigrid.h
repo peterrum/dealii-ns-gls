@@ -117,6 +117,8 @@ private:
 
   mutable std::unique_ptr<TrilinosWrappers::PreconditionAMG> precondition_amg;
 
+  mutable std::unique_ptr<TrilinosWrappers::PreconditionILU> precondition_ilu;
+
   mutable std::unique_ptr<TrilinosWrappers::SolverDirect> precondition_direct;
 
   mutable std::unique_ptr<PreconditionIdentity> precondition_identity;
