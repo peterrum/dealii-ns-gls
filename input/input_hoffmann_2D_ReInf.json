@@ -1,0 +1,43 @@
+{
+  "dim"                  : 2,
+  "fe degree"            : 2,
+  "mapping degree"       : 0,
+  "n global refinements" : 4,
+
+  "simulation name" : "cylinder",
+
+  "cfl"            : 1.0,
+  "t final"        : 1.0,
+  "theta"          : 1.0,
+  "bdf order"      : 2,
+  "time intration" : "bdf",
+
+  "c1"                         : 1.00,
+  "c2"                         : 1.0,
+  "nu"                         : 0.000,
+  "consider time deriverative" : true,
+  "cell wise stabilization"    : true,
+
+  "use matrix free ns operator" : true,
+
+  "lin relative tolerance" : 1e-2,
+
+  "preconditioner" : "GMG",
+
+  "gmg coarse grid solver"       : "direct",
+  "gmg coarse grid iterate"      : false,
+
+  "nonlinear solver" : "Newton",
+  "newton inexact"   : true,
+
+  "paraview prefix"    : "results_hoffmann_2D_Re3900",
+  "output granularity" : 0.001,
+
+  "simulation no slip cylinder"     : true,
+  "simulation no slip wall"         : false,
+  "simulation geometry cylinder shift" : 0.0,
+  "simulation rotate"               : false,
+  "simulation t init"               : 0.00,
+  "simulation reset manifold level" : -1,
+  "simulation u max"                : 39.0
+}
