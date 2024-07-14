@@ -11,7 +11,8 @@ cylinder(Triangulation<2, 2> &triangulation,
          const double         height,
          const double         cylinder_position,
          const double         cylinder_diameter,
-         const double         shift)
+         const double         shift,
+         const bool           for_3D = false)
 {
   constexpr int dim = 2;
 
@@ -58,19 +59,19 @@ cylinder(Triangulation<2, 2> &triangulation,
   // left
   GridGenerator::subdivided_hyper_rectangle(
     tria7,
-    {1, 2},
+    {for_3D ? 4 : 1, 2},
     Point<2>(-cylinder_position, -cylinder_diameter),
     Point<2>(-cylinder_diameter, cylinder_diameter));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria8,
-    {1, 1},
+    {for_3D ? 4 : 1, 1},
     Point<2>(-cylinder_position, cylinder_diameter),
     Point<2>(-cylinder_diameter, height / 2. + shift));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria9,
-    {1, 1},
+    {for_3D ? 4 : 1, 1},
     Point<2>(-cylinder_position, -height / 2. + shift),
     Point<2>(-cylinder_diameter, -cylinder_diameter));
 
@@ -146,12 +147,13 @@ cylinder(Triangulation<3, 3> &triangulation,
 {
   dealii::Triangulation<2, 2> tria1;
 
-  cylinder(tria1, length, height, cylinder_position, cylinder_diameter, shift);
+  cylinder(
+    tria1, length, height, cylinder_position, cylinder_diameter, shift, true);
 
   dealii::Triangulation<3, 3> tria2;
   tria2.set_mesh_smoothing(triangulation.get_mesh_smoothing());
 
-  GridGenerator::extrude_triangulation(tria1, 4, height, tria2, true);
+  GridGenerator::extrude_triangulation(tria1, 5, height, tria2, true);
   dealii::GridTools::transform(
     [height](auto point) {
       return point - dealii::Tensor<1, 3>{{0, 0, height / 2.}};
