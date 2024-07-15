@@ -196,6 +196,8 @@ SimulationCylinder<dim>::SimulationCylinder()
   , geometry_cylinder_position((dim == 2) ? 0.2 : 0.5)
   , geometry_cylinder_diameter(0.1)
   , geometry_cylinder_shift(0.005)
+  , fe_degree(1)
+  , mapping_degree(1)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -214,6 +216,9 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
     return;
 
   dealii::ParameterHandler prm;
+
+  prm.add_parameter("fe degree", fe_degree);
+  prm.add_parameter("mapping degree", mapping_degree);
 
   prm.add_parameter("nu", nu);
   prm.add_parameter("simulation no slip cylinder", use_no_slip_cylinder_bc);
@@ -575,8 +580,12 @@ SimulationCylinder<dim>::postprocess(const double              t,
                 dof_handler.get_triangulation().n_global_levels() - 1);
             }
 
-          MappingQ<2, 3> patch_mapping(2 /*TODO*/);
-          MappingQ<3, 3> mapping(2 /*TODO*/);
+          const unsigned int mapping_degree = (this->mapping_degree == 0) ?
+                                                this->fe_degree :
+                                                this->mapping_degree;
+
+          MappingQ<2, 3> patch_mapping(mapping_degree);
+          MappingQ<3, 3> mapping(mapping_degree);
 
           DataOutBase::VtkFlags flags;
           flags.write_higher_order_cells = true;
@@ -586,7 +595,7 @@ SimulationCylinder<dim>::postprocess(const double              t,
           data_out.set_flags(flags);
 
           data_out.add_data_vector(dof_handler, solution, "solution");
-          data_out.build_patches(mapping, 2 /*TODO*/);
+          data_out.build_patches(mapping, fe_degree);
           data_out.write_vtu_in_parallel(paraview_prefix + "_slice_" +
                                            std::to_string(c) + "_" +
                                            std::to_string(counter) + ".vtu",

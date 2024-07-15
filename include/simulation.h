@@ -127,6 +127,9 @@ private:
   double geometry_cylinder_diameter;
   double geometry_cylinder_shift;
 
+  unsigned int fe_degree;
+  unsigned int mapping_degree;
+
   mutable std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
   mutable std::ofstream drag_lift_pressure_file;
