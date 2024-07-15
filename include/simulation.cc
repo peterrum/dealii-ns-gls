@@ -515,50 +515,78 @@ SimulationCylinder<dim>::postprocess(const double              t,
         {
           parallel::distributed::Triangulation<2, 3> patch_tria(comm);
 
-          std::vector<unsigned int> repetitions = {6, 1};
-          Point<2>                  p1(-geometry_cylinder_position,
-                      -geometry_channel_height / 2.0 + geometry_cylinder_shift);
-          Point<2> p2(geometry_channel_length - geometry_cylinder_position,
-                      +geometry_channel_height / 2.0 + geometry_cylinder_shift);
-
-          GridGenerator::subdivided_hyper_rectangle(patch_tria,
-                                                    repetitions,
-                                                    p1,
-                                                    p2);
-
           if (c == 0)
             {
-              Tensor<1, dim, double> normal;
-              normal[0] = 1.0;
+              cylinder(patch_tria,
+                       geometry_channel_length + geometry_channel_extra_length,
+                       geometry_channel_height,
+                       geometry_cylinder_position,
+                       geometry_cylinder_diameter,
+                       geometry_cylinder_shift,
+                       true);
 
-              GridTools::rotate(normal, numbers::PI / 2., patch_tria);
+              const auto refine_mesh = [&](Triangulation<2, 3> &tria,
+                                           const unsigned int   n_refinements) {
+                for (unsigned int i = 0; i < n_refinements; ++i)
+                  {
+                    for (const auto &cell : tria.active_cell_iterators())
+                      if (cell->is_locally_owned())
+                        if (cell->center()[0] < (geometry_channel_length -
+                                                 geometry_cylinder_position))
+                          cell->set_refine_flag();
+
+                    tria.execute_coarsening_and_refinement();
+                  }
+              };
+
+              const unsigned int n_global_refinements =
+                dof_handler.get_triangulation().n_global_levels() - 1;
+
+              if (reset_manifold_level == 0)
+                {
+                  patch_tria.reset_all_manifolds();
+                  refine_mesh(patch_tria, n_global_refinements);
+                }
+              else if (static_cast<unsigned int>(reset_manifold_level) >
+                       n_global_refinements)
+                {
+                  refine_mesh(patch_tria, n_global_refinements);
+                }
+              else
+                {
+                  refine_mesh(patch_tria, reset_manifold_level);
+                  patch_tria.reset_all_manifolds();
+                  refine_mesh(patch_tria,
+                              n_global_refinements - reset_manifold_level);
+                }
             }
-
-          patch_tria.refine_global(
-            dof_handler.get_triangulation().n_global_levels());
-
-          const auto bb =
-            BoundingBox<dim>(
-              {Point<dim>(0., 0., 0.),
-               Point<dim>(9 * geometry_cylinder_diameter, 0., 0.)})
-              .create_extended(1.5 * geometry_cylinder_diameter);
-
-          for (unsigned int i = 0; i < 3; ++i)
+          else
             {
-              for (const auto &cell : patch_tria.active_cell_iterators())
-                if (cell->is_active() && cell->is_locally_owned())
-                  if (bb.point_inside(cell->center()))
-                    cell->set_refine_flag();
-              patch_tria.execute_coarsening_and_refinement();
+              cylinder_crossection(patch_tria,
+                                   geometry_channel_length +
+                                     geometry_channel_extra_length,
+                                   geometry_channel_height,
+                                   geometry_cylinder_position,
+                                   geometry_cylinder_diameter,
+                                   geometry_cylinder_shift,
+                                   true);
+
+              patch_tria.refine_global(
+                dof_handler.get_triangulation().n_global_levels() - 1);
             }
 
-          MappingQ<2, 3> patch_mapping(2);
-          MappingQ<3, 3> mapping(2);
+          MappingQ<2, 3> patch_mapping(2 /*TODO*/);
+          MappingQ<3, 3> mapping(2 /*TODO*/);
+
+          DataOutBase::VtkFlags flags;
+          flags.write_higher_order_cells = true;
 
           DataOutResample<3, 2, 3> data_out(patch_tria, patch_mapping);
 
+          data_out.set_flags(flags);
+
           data_out.add_data_vector(dof_handler, solution, "solution");
-          data_out.build_patches(mapping);
+          data_out.build_patches(mapping, 2 /*TODO*/);
           data_out.write_vtu_in_parallel(paraview_prefix + "_slice_" +
                                            std::to_string(c) + "_" +
                                            std::to_string(counter) + ".vtu",
