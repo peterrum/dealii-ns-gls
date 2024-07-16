@@ -431,7 +431,7 @@ public:
             if (params.gmg_constraint_coarse_pressure_dof &&
                 (level == minlevel))
               {
-                unsigned int min_index = numbers::invalid_unsigned_int;
+                auto min_index = numbers::invalid_dof_index;
 
                 std::vector<types::global_dof_index> dof_indices;
 
@@ -593,7 +593,7 @@ public:
             if (params.gmg_constraint_coarse_pressure_dof &&
                 (level == minlevel))
               {
-                unsigned int min_index = numbers::invalid_unsigned_int;
+                auto min_index = numbers::invalid_dof_index;
 
                 std::vector<types::global_dof_index> dof_indices;
 
