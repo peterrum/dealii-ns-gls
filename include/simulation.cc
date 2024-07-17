@@ -541,40 +541,10 @@ SimulationCylinder<dim>::postprocess(const double              t,
                        geometry_cylinder_shift,
                        true);
 
-              const auto refine_mesh = [&](Triangulation<2, 3> &tria,
-                                           const unsigned int   n_refinements) {
-                for (unsigned int i = 0; i < n_refinements; ++i)
-                  {
-                    for (const auto &cell : tria.active_cell_iterators())
-                      if (cell->is_locally_owned())
-                        if (cell->center()[0] < (geometry_channel_length -
-                                                 geometry_cylinder_position))
-                          cell->set_refine_flag();
+              patch_tria.reset_all_manifolds();
 
-                    tria.execute_coarsening_and_refinement();
-                  }
-              };
-
-              const unsigned int n_global_refinements =
-                dof_handler.get_triangulation().n_global_levels() - 1;
-
-              if (reset_manifold_level == 0)
-                {
-                  patch_tria.reset_all_manifolds();
-                  refine_mesh(patch_tria, n_global_refinements);
-                }
-              else if (static_cast<unsigned int>(reset_manifold_level) >
-                       n_global_refinements)
-                {
-                  refine_mesh(patch_tria, n_global_refinements);
-                }
-              else
-                {
-                  refine_mesh(patch_tria, reset_manifold_level);
-                  patch_tria.reset_all_manifolds();
-                  refine_mesh(patch_tria,
-                              n_global_refinements - reset_manifold_level);
-                }
+              patch_tria.refine_global(
+                dof_handler.get_triangulation().n_global_levels() - 1);
             }
           else
             {
