@@ -288,36 +288,8 @@ SimulationCylinder<dim>::create_triangulation(
            geometry_cylinder_diameter,
            geometry_cylinder_shift);
 
-  const auto refine_mesh = [&](Triangulation<dim> &tria,
-                               const unsigned int  n_refinements) {
-    for (unsigned int i = 0; i < n_refinements; ++i)
-      {
-        for (const auto &cell : tria.active_cell_iterators())
-          if (cell->is_locally_owned())
-            if (cell->center()[0] <
-                (geometry_channel_length - geometry_cylinder_position))
-              cell->set_refine_flag();
-
-        tria.execute_coarsening_and_refinement();
-      }
-  };
-
-  if (reset_manifold_level == 0)
-    {
-      tria.reset_all_manifolds();
-      refine_mesh(tria, n_global_refinements);
-    }
-  else if (static_cast<unsigned int>(reset_manifold_level) >
-           n_global_refinements)
-    {
-      refine_mesh(tria, n_global_refinements);
-    }
-  else
-    {
-      refine_mesh(tria, reset_manifold_level);
-      tria.reset_all_manifolds();
-      refine_mesh(tria, n_global_refinements - reset_manifold_level);
-    }
+  tria.reset_all_manifolds();
+  tria.refine_global(n_global_refinements);
 
   if (rotate)
     {
@@ -615,6 +587,42 @@ SimulationCylinder<dim>::get_mapping_private(
 {
   Triangulation<2> tria_2D;
 
+  const unsigned int n_levels = tria.n_global_levels();
+
+  const unsigned int n_global_refinements = n_levels - 1;
+
+  std::vector<std::vector<Point<2>>> points(n_levels);
+  std::vector<std::vector<Point<2>>> points_moved(n_levels);
+
+  const FloatingPointComparator<double> comparator(1e-10);
+  std::vector<std::map<Point<2>, Point<2>, FloatingPointComparator<double>>>
+    map(n_levels,
+        std::map<Point<2>, Point<2>, FloatingPointComparator<double>>(
+          comparator));
+
+  auto mapping_2D = std::make_shared<MappingQCache<2, 2>>(mapping_degree);
+
+  // 1) create undeformed mesh and collect support points
+  GridGenerator::my_hyper_cube_with_cylindrical_hole(
+    tria_2D,
+    geometry_cylinder_diameter / 2.,
+    geometry_cylinder_diameter,
+    0.05,
+    1,
+    false);
+  tria_2D.reset_all_manifolds();
+  tria_2D.refine_global(n_global_refinements);
+  mapping_2D->initialize(
+    MappingQ1<2, 2>(),
+    tria_2D,
+    [&points](const auto &cell, const auto &point) {
+      points[cell->level()].emplace_back(point);
+      return point;
+    },
+    false);
+  tria_2D.clear();
+
+  // 2) create deformed mesh and collrect support points
   GridGenerator::my_hyper_cube_with_cylindrical_hole(
     tria_2D,
     geometry_cylinder_diameter / 2.,
@@ -623,15 +631,55 @@ SimulationCylinder<dim>::get_mapping_private(
     1,
     false);
 
+  const auto refine_mesh = [&](Triangulation<2, 2> &tria,
+                               const unsigned int   n_refinements) {
+    for (unsigned int i = 0; i < n_refinements; ++i)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          if (cell->is_locally_owned())
+            if (cell->center()[0] <
+                (geometry_channel_length - geometry_cylinder_position))
+              cell->set_refine_flag();
+
+        tria.execute_coarsening_and_refinement();
+      }
+  };
+
+  if (reset_manifold_level == 0)
+    {
+      tria_2D.reset_all_manifolds();
+      refine_mesh(tria_2D, n_global_refinements);
+    }
+  else if (static_cast<unsigned int>(reset_manifold_level) >
+           n_global_refinements)
+    {
+      refine_mesh(tria_2D, n_global_refinements);
+    }
+  else
+    {
+      refine_mesh(tria_2D, reset_manifold_level);
+      tria_2D.reset_all_manifolds();
+      refine_mesh(tria_2D, n_global_refinements - reset_manifold_level);
+    }
+
+  mapping_2D->initialize(
+    MappingQ1<2, 2>(),
+    tria_2D,
+    [&points_moved](const auto &cell, const auto &point) {
+      points_moved[cell->level()].emplace_back(point);
+      return point;
+    },
+    false);
+
+  for (unsigned int l = 0; l < points.size(); ++l)
+    for (unsigned int i = 0; i < points[l].size(); ++i)
+      map[l][points[l][i]] = points_moved[l][i];
+
+  // 3) create map (undeformed points -> deformed points)
   auto mapping =
     std::make_shared<MappingQCache<structdim, dim>>(mapping_degree);
 
-  const FloatingPointComparator<double> comparator(1e-10);
-  std::vector<std::map<Point<2>, Point<2>, FloatingPointComparator<double>>>
-    map(10,
-        std::map<Point<2>, Point<2>, FloatingPointComparator<double>>(
-          comparator));
-
+  // 4) create mapping (by moving support points)
   mapping->initialize(
     MappingQ1<structdim, dim>(),
     tria,
@@ -648,8 +696,6 @@ SimulationCylinder<dim>::get_mapping_private(
         }
       else
         {
-          AssertThrow(false, ExcNotImplemented());
-
           auto point_temp = point;
 
           for (unsigned int i = 0; i < 2; ++i)
