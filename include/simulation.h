@@ -113,6 +113,10 @@ public:
   double
   get_u_max() const override;
 
+  virtual std::shared_ptr<Mapping<dim>>
+  get_mapping(const Triangulation<dim> &tria,
+              const unsigned int        mapping_degree) const override;
+
 private:
   bool        use_no_slip_cylinder_bc;
   bool        use_no_slip_wall_bc;
@@ -137,6 +141,11 @@ private:
   mutable std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
   mutable std::ofstream drag_lift_pressure_file;
+
+  template <int spacedim>
+  std::shared_ptr<Mapping<dim, spacedim>>
+  get_mapping_private(const Triangulation<dim, spacedim> &tria,
+                      const unsigned int                  mapping_degree) const;
 };
 
 

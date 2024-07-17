@@ -619,6 +619,29 @@ SimulationCylinder<dim>::postprocess(const double              t,
 
 
 template <int dim>
+std::shared_ptr<Mapping<dim>>
+SimulationCylinder<dim>::get_mapping(const Triangulation<dim> &tria,
+                                     const unsigned int mapping_degree) const
+{
+  return get_mapping_private<dim>(tria, mapping_degree);
+}
+
+
+
+template <int dim>
+template <int spacedim>
+std::shared_ptr<Mapping<dim, spacedim>>
+SimulationCylinder<dim>::get_mapping_private(
+  const Triangulation<dim, spacedim> &tria,
+  const unsigned int                  mapping_degree) const
+{
+  (void)tria;
+  return std::make_shared<MappingQ<dim, spacedim>>(mapping_degree);
+}
+
+
+
+template <int dim>
 SimulationRotation<dim>::SimulationRotation()
 {}
 
