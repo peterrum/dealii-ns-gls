@@ -596,7 +596,6 @@ SimulationCylinder<dim>::postprocess(const double              t,
                                                 this->mapping_degree;
 
           MappingQ<2, 3> patch_mapping(mapping_degree);
-          MappingQ<3, 3> mapping(mapping_degree);
 
           DataOutBase::VtkFlags flags;
           flags.write_higher_order_cells = true;
