@@ -142,10 +142,10 @@ private:
 
   mutable std::ofstream drag_lift_pressure_file;
 
-  template <int spacedim>
-  std::shared_ptr<Mapping<dim, spacedim>>
-  get_mapping_private(const Triangulation<dim, spacedim> &tria,
-                      const unsigned int                  mapping_degree) const;
+  template <int structdim>
+  std::shared_ptr<Mapping<structdim, dim>>
+  get_mapping_private(const Triangulation<structdim, dim> &tria,
+                      const unsigned int mapping_degree) const;
 };
 
 

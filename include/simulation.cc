@@ -531,6 +531,8 @@ SimulationCylinder<dim>::postprocess(const double              t,
         {
           parallel::distributed::Triangulation<2, 3> patch_tria(comm);
 
+          std::shared_ptr<Mapping<2, 3>> patch_mapping;
+
           if (c == 0)
             {
               cylinder(patch_tria,
@@ -545,6 +547,9 @@ SimulationCylinder<dim>::postprocess(const double              t,
 
               patch_tria.refine_global(
                 dof_handler.get_triangulation().n_global_levels() - 1);
+
+              patch_mapping =
+                get_mapping_private<2>(patch_tria, mapping_degree);
             }
           else
             {
@@ -559,18 +564,18 @@ SimulationCylinder<dim>::postprocess(const double              t,
 
               patch_tria.refine_global(
                 dof_handler.get_triangulation().n_global_levels() - 1);
+
+              patch_mapping = std::make_shared<MappingQ<2, 3>>(mapping_degree);
             }
 
           const unsigned int mapping_degree = (this->mapping_degree == 0) ?
                                                 this->fe_degree :
                                                 this->mapping_degree;
 
-          MappingQ<2, 3> patch_mapping(mapping_degree);
-
           DataOutBase::VtkFlags flags;
           flags.write_higher_order_cells = true;
 
-          DataOutResample<3, 2, 3> data_out(patch_tria, patch_mapping);
+          DataOutResample<3, 2, 3> data_out(patch_tria, *patch_mapping);
 
           data_out.set_flags(flags);
 
@@ -599,14 +604,14 @@ SimulationCylinder<dim>::get_mapping(const Triangulation<dim> &tria,
 
 
 template <int dim>
-template <int spacedim>
-std::shared_ptr<Mapping<dim, spacedim>>
+template <int structdim>
+std::shared_ptr<Mapping<structdim, dim>>
 SimulationCylinder<dim>::get_mapping_private(
-  const Triangulation<dim, spacedim> &tria,
-  const unsigned int                  mapping_degree) const
+  const Triangulation<structdim, dim> &tria,
+  const unsigned int                   mapping_degree) const
 {
   (void)tria;
-  return std::make_shared<MappingQ<dim, spacedim>>(mapping_degree);
+  return std::make_shared<MappingQ<structdim, dim>>(mapping_degree);
 }
 
 
