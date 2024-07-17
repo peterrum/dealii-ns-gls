@@ -1,13 +1,13 @@
 {
-  "dim"                  : 2,
+  "dim"                  : 3,
   "fe degree"            : 2,
   "mapping degree"       : 0,
-  "n global refinements" : 4,
+  "n global refinements" : 2,
 
   "simulation name" : "cylinder",
 
   "cfl"            : 1.0,
-  "t final"        : 1.0,
+  "t final"        : 0.1,
   "theta"          : 1.0,
   "bdf order"      : 2,
   "time intration" : "bdf",
@@ -30,14 +30,14 @@
   "nonlinear solver" : "Newton",
   "newton inexact"   : true,
 
-  "paraview prefix"    : "results_hoffmann_2D_Re3900",
-  "output granularity" : 0.001,
+  "paraview prefix"    : "results_hoffmann_2D_ReInf",
+  "output granularity" : 0.01,
 
-  "simulation no slip cylinder"     : true,
+  "simulation no slip cylinder"     : false,
   "simulation no slip wall"         : false,
   "simulation geometry cylinder shift" : 0.0,
   "simulation rotate"               : false,
-  "simulation t init"               : 0.00,
-  "simulation reset manifold level" : -1,
+  "simulation t init"               : 0.02,
+  "simulation reset manifold level" : 3,
   "simulation u max"                : 39.0
 }
