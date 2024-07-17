@@ -1,8 +1,11 @@
 #include "simulation.h"
 
+#include <deal.II/base/floating_point_comparator.h>
 #include <deal.II/base/parameter_handler.h>
 
 #include <deal.II/distributed/tria.h>
+
+#include <deal.II/fe/mapping_q_cache.h>
 
 #include <deal.II/grid/grid_in.h>
 
@@ -533,6 +536,10 @@ SimulationCylinder<dim>::postprocess(const double              t,
 
           std::shared_ptr<Mapping<2, 3>> patch_mapping;
 
+          const unsigned int mapping_degree = (this->mapping_degree == 0) ?
+                                                this->fe_degree :
+                                                this->mapping_degree;
+
           if (c == 0)
             {
               cylinder(patch_tria,
@@ -567,10 +574,6 @@ SimulationCylinder<dim>::postprocess(const double              t,
 
               patch_mapping = std::make_shared<MappingQ<2, 3>>(mapping_degree);
             }
-
-          const unsigned int mapping_degree = (this->mapping_degree == 0) ?
-                                                this->fe_degree :
-                                                this->mapping_degree;
 
           DataOutBase::VtkFlags flags;
           flags.write_higher_order_cells = true;
@@ -610,8 +613,53 @@ SimulationCylinder<dim>::get_mapping_private(
   const Triangulation<structdim, dim> &tria,
   const unsigned int                   mapping_degree) const
 {
-  (void)tria;
-  return std::make_shared<MappingQ<structdim, dim>>(mapping_degree);
+  Triangulation<2> tria_2D;
+
+  GridGenerator::my_hyper_cube_with_cylindrical_hole(
+    tria_2D,
+    geometry_cylinder_diameter / 2.,
+    geometry_cylinder_diameter,
+    0.05,
+    1,
+    false);
+
+  auto mapping =
+    std::make_shared<MappingQCache<structdim, dim>>(mapping_degree);
+
+  const FloatingPointComparator<double> comparator(1e-10);
+  std::vector<std::map<Point<2>, Point<2>, FloatingPointComparator<double>>>
+    map(10,
+        std::map<Point<2>, Point<2>, FloatingPointComparator<double>>(
+          comparator));
+
+  mapping->initialize(
+    MappingQ1<structdim, dim>(),
+    tria,
+    [&map](const auto &cell, const auto &point) {
+      Point<2> point_2D;
+      for (unsigned int i = 0; i < 2; ++i)
+        point_2D[i] = point[i];
+
+      const auto it = map[cell->level()].find(point_2D);
+
+      if (it == map[cell->level()].end())
+        {
+          return point;
+        }
+      else
+        {
+          AssertThrow(false, ExcNotImplemented());
+
+          auto point_temp = point;
+
+          for (unsigned int i = 0; i < 2; ++i)
+            point_temp[i] = it->second[i];
+          return point_temp;
+        }
+    },
+    false);
+
+  return mapping;
 }
 
 
