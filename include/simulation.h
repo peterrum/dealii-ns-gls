@@ -49,6 +49,10 @@ public:
 
   virtual double
   get_u_max() const;
+
+  virtual std::shared_ptr<Mapping<dim>>
+  get_mapping(const Triangulation<dim> &tria,
+              const unsigned int        mapping_degree) const;
 };
 
 

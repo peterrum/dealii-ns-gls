@@ -127,6 +127,17 @@ SimulationBase<dim>::get_u_max() const
 
 
 template <int dim>
+std::shared_ptr<Mapping<dim>>
+SimulationBase<dim>::get_mapping(const Triangulation<dim> &tria,
+                                 const unsigned int        mapping_degree) const
+{
+  (void)tria;
+  return std::make_shared<MappingQ<dim>>(mapping_degree);
+}
+
+
+
+template <int dim>
 SimulationChannel<dim>::SimulationChannel()
   : n_stretching(4)
 {}
