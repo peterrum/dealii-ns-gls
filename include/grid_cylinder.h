@@ -215,19 +215,19 @@ cylinder(Triangulation<2, spacedim> &triangulation,
   // left
   GridGenerator::subdivided_hyper_rectangle(
     tria7,
-    {for_3D ? 4 : 1, 2},
+    {for_3D ? 4u : 1u, 2},
     Point<2>(-cylinder_position, -cylinder_diameter),
     Point<2>(-cylinder_diameter, cylinder_diameter));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria8,
-    {for_3D ? 4 : 1, 1},
+    {for_3D ? 4u : 1u, 1},
     Point<2>(-cylinder_position, cylinder_diameter),
     Point<2>(-cylinder_diameter, height / 2. + shift));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria9,
-    {for_3D ? 4 : 1, 1},
+    {for_3D ? 4u : 1u, 1},
     Point<2>(-cylinder_position, -height / 2. + shift),
     Point<2>(-cylinder_diameter, -cylinder_diameter));
 
@@ -385,6 +385,8 @@ cylinder_crossection(Triangulation<2, 3> &triangulation,
   const unsigned int dim      = 2;
   const unsigned int spacedim = 3;
 
+  (void)shift;
+
   dealii::Triangulation<dim, spacedim> tria1, tria2, tria3, tria4, tria5, tria6,
     tria7, tria8, tria9, tria_tmp;
 
@@ -410,7 +412,7 @@ cylinder_crossection(Triangulation<2, 3> &triangulation,
   // left
   GridGenerator::subdivided_hyper_rectangle(
     tria4,
-    {for_3D ? 4 : 1, 4},
+    {for_3D ? 4u : 1u, 4},
     Point<2>(-cylinder_position, -height / 2.),
     Point<2>(-cylinder_diameter, height / 2.));
 
