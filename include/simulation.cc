@@ -212,6 +212,7 @@ SimulationCylinder<dim>::SimulationCylinder()
   , geometry_cylinder_shift(0.005)
   , fe_degree(1)
   , mapping_degree(1)
+  , use_exact_normal(false)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -288,7 +289,8 @@ SimulationCylinder<dim>::create_triangulation(
            geometry_cylinder_diameter,
            geometry_cylinder_shift);
 
-  tria.reset_all_manifolds();
+  if ((reset_manifold_level != -1) || !use_exact_normal)
+    tria.reset_all_manifolds();
   tria.refine_global(n_global_refinements);
 
   if (rotate)
@@ -522,7 +524,8 @@ SimulationCylinder<dim>::postprocess(const double              t,
                        geometry_cylinder_shift,
                        true);
 
-              patch_tria.reset_all_manifolds();
+              if ((reset_manifold_level != -1) || !use_exact_normal)
+                patch_tria.reset_all_manifolds();
 
               patch_tria.refine_global(
                 dof_handler.get_triangulation().n_global_levels() - 1);
@@ -585,6 +588,9 @@ SimulationCylinder<dim>::get_mapping_private(
   const Triangulation<structdim, dim> &tria,
   const unsigned int                   mapping_degree) const
 {
+  if ((reset_manifold_level == -1) && !use_exact_normal)
+    return std::make_shared<MappingQ<structdim, dim>>(mapping_degree);
+
   Triangulation<2> tria_2D;
 
   const unsigned int n_levels = tria.n_global_levels();
