@@ -379,20 +379,6 @@ public:
           MGTransferGlobalCoarseningTools::create_geometric_coarsening_sequence(
             dof_handler.get_triangulation());
 
-        if (true /*TODO*/)
-          {
-            for (unsigned int i = 0; i < mg_trias.size(); ++i)
-              {
-                DataOut<dim> data_out;
-                data_out.attach_triangulation(*mg_trias[i]);
-                data_out.build_patches();
-
-                data_out.write_vtu_in_parallel("grid." + std::to_string(i) +
-                                                 ".vtu",
-                                               MPI_COMM_WORLD);
-              }
-          }
-
         unsigned int minlevel = 0;
         unsigned int maxlevel = mg_trias.size() - 1;
 
@@ -406,6 +392,17 @@ public:
           {
             const auto mapping =
               simulation->get_mapping(*mg_trias[level], mapping_degree);
+
+            if (true)
+              {
+                DataOut<dim> data_out;
+                data_out.attach_triangulation(*mg_trias[level]);
+                data_out.build_patches(*mapping, params.fe_degree);
+
+                data_out.write_vtu_in_parallel("grid." + std::to_string(level) +
+                                                 ".vtu",
+                                               MPI_COMM_WORLD);
+              }
 
             auto &dof_handler = mg_dof_handlers[level];
             auto &constraints = mg_constraints[level];
@@ -721,11 +718,12 @@ public:
     else if (params.linear_solver == "direct")
       linear_solver = std::make_shared<LinearSolverDirect>(*ns_operator);
     else if (params.linear_solver == "Richardson")
-      linear_solver = std::make_shared<LinearSolverRichardson>(*ns_operator,
-                                            *preconditioner,
-                                            params.lin_n_max_iterations,
-                                            params.lin_absolute_tolerance,
-                                            params.lin_relative_tolerance);
+      linear_solver =
+        std::make_shared<LinearSolverRichardson>(*ns_operator,
+                                                 *preconditioner,
+                                                 params.lin_n_max_iterations,
+                                                 params.lin_absolute_tolerance,
+                                                 params.lin_relative_tolerance);
     else
       AssertThrow(false, ExcNotImplemented());
 
