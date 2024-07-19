@@ -83,3 +83,36 @@ private:
 
   mutable MyTimerOutput timer;
 };
+
+
+
+/**
+ * Wrapper class around dealii::SolverRicharson.
+ */
+class LinearSolverRichardson : public LinearSolverBase
+{
+public:
+  LinearSolverRichardson(const OperatorBase<Number> &op,
+                         PreconditionerBase         &preconditioner,
+                         const unsigned int          n_max_iterations,
+                         const double                absolute_tolerance,
+                         const double                relative_tolerance);
+
+  void
+  initialize() override;
+
+  void
+  solve(VectorType<Number> &dst, const VectorType<Number> &src) const override;
+
+private:
+  const OperatorBase<Number> &op;
+  PreconditionerBase         &preconditioner;
+
+  const unsigned int n_max_iterations;
+  const double       absolute_tolerance;
+  const double       relative_tolerance;
+
+  const ConditionalOStream pcout;
+
+  mutable MyTimerOutput timer;
+};

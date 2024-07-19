@@ -150,7 +150,7 @@ private:
     prm.add_parameter("linear solver",
                       linear_solver,
                       "",
-                      Patterns::Selection("GMRES|direct"));
+                      Patterns::Selection("GMRES|direct|Richardson"));
     prm.add_parameter("lin n max iterations", lin_n_max_iterations);
     prm.add_parameter("lin absolute tolerance", lin_absolute_tolerance);
     prm.add_parameter("lin relative tolerance", lin_relative_tolerance);
@@ -720,6 +720,12 @@ public:
                                             params.lin_relative_tolerance);
     else if (params.linear_solver == "direct")
       linear_solver = std::make_shared<LinearSolverDirect>(*ns_operator);
+    else if (params.linear_solver == "Richardson")
+      linear_solver = std::make_shared<LinearSolverRichardson>(*ns_operator,
+                                            *preconditioner,
+                                            params.lin_n_max_iterations,
+                                            params.lin_absolute_tolerance,
+                                            params.lin_relative_tolerance);
     else
       AssertThrow(false, ExcNotImplemented());
 
