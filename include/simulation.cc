@@ -609,13 +609,13 @@ SimulationCylinder<dim>::get_mapping_private(
   auto mapping_2D = std::make_shared<MappingQCache<2, 2>>(mapping_degree);
 
   // 1) create undeformed mesh and collect support points
-  GridGenerator::my_hyper_cube_with_cylindrical_hole(
-    tria_2D,
-    geometry_cylinder_diameter / 2.,
-    geometry_cylinder_diameter,
-    0.05,
-    1,
-    false);
+  GridGenerator::hyper_cube_with_cylindrical_hole(tria_2D,
+                                                  geometry_cylinder_diameter /
+                                                    2.,
+                                                  geometry_cylinder_diameter,
+                                                  0.05,
+                                                  1,
+                                                  false);
   tria_2D.reset_all_manifolds();
   tria_2D.refine_global(n_global_refinements);
   mapping_2D->initialize(
@@ -629,13 +629,13 @@ SimulationCylinder<dim>::get_mapping_private(
   tria_2D.clear();
 
   // 2) create deformed mesh and collrect support points
-  GridGenerator::my_hyper_cube_with_cylindrical_hole(
-    tria_2D,
-    geometry_cylinder_diameter / 2.,
-    geometry_cylinder_diameter,
-    0.05,
-    1,
-    false);
+  GridGenerator::hyper_cube_with_cylindrical_hole(tria_2D,
+                                                  geometry_cylinder_diameter /
+                                                    2.,
+                                                  geometry_cylinder_diameter,
+                                                  0.05,
+                                                  1,
+                                                  false);
 
   const auto refine_mesh = [&](Triangulation<2, 2> &tria,
                                const unsigned int   n_refinements) {
