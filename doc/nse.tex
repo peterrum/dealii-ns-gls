@@ -1,5 +1,5 @@
 %\documentclass[review,leqno]{siamart1116}
-\documentclass[review,onefignum,onetabnum]{siamart190516} 
+\documentclass[onefignum,onetabnum]{siamart190516} 
 \usepackage{amssymb}
 \usepackage{graphicx} 
 \usepackage{xspace}
@@ -83,7 +83,7 @@ $\varepsilon(\bu)=\frac{1}{2}(\nabla \bu + (\nabla \bu)^\top)$.
     \left( \partial_t \bu ,\  \bv \right) 
     + \big( \bu \SCAL \GRAD \bu,\ \bv \big)
     - \big( p,\ \DIV \bv \big) + 
-    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big)&=0, \\
+    \big(2 \nu \varepsilon(\bu),\ \varepsilon(\bv) \big)&=0, \\
     \big( \DIV \bu,\ q)&  = 0 
   \end{aligned}
 \end{equation}
@@ -105,7 +105,7 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
 \left(
 \begin{array}{c}
     \partial_t \bu  + \bu \SCAL \GRAD \bu 
-    + \nabla p - \nu \Delta \bm u \\
+    + \nabla p - 2 \nu \Delta \bm u \\
     \DIV \bu 
 \end{array}
 \right)
@@ -113,7 +113,7 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
 \left(
 \begin{array}{c}
     \partial_t \bv  + \bu \SCAL \GRAD \bv 
-    + \nabla q - \nu \Delta \bv \\
+    + \nabla q - 2 \nu \Delta \bv \\
     \DIV \bv
 \end{array}
 \right)
@@ -121,10 +121,10 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
 \left(
 \begin{array}{ccc}
     (\partial_t \bu  + \bu \SCAL \GRAD \bu 
-    + \nabla p - \nu \Delta \bm u ,\,\partial_t \bv  + \bu \SCAL \GRAD \bv 
-    - \nu \Delta \bv) &+& (\nabla \cdot \bu,\, \nabla \cdot \bv) \\
+    + \nabla p - 2 \nu \Delta \bm u ,\,\partial_t \bv  + \bu \SCAL \GRAD \bv 
+    - 2 \nu \Delta \bv) &+& (\nabla \cdot \bu,\, \nabla \cdot \bv) \\
     (\partial_t \bu  + \bu \SCAL \GRAD \bu 
-    + \nabla p - \nu \Delta \bm u,\, \nabla q)
+    + \nabla p - 2 \nu \Delta \bm u,\, \nabla q)
 \end{array}
 \right)
   \end{aligned}
@@ -135,10 +135,10 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
 \left(
 \begin{array}{ccc}
     (\partial_t \bu  + \bu \SCAL \GRAD \bu 
-    + \nabla p - \nu \Delta \bm u ,\,\bu \SCAL \GRAD \bv 
-    - \nu \Delta \bv) &+ & (\nabla \cdot \bu,\, \nabla \cdot \bv) \\
+    + \nabla p - 2 \nu \Delta \bm u ,\,\bu \SCAL \GRAD \bv 
+    - 2 \nu \Delta \bv) &+ & (\nabla \cdot \bu,\, \nabla \cdot \bv) \\
     (\partial_t \bu  + \bu \SCAL \GRAD \bu 
-    + \nabla p - \nu \Delta \bm u,\, \nabla q)
+    + \nabla p - 2 \nu \Delta \bm u,\, \nabla q)
 \end{array}
 \right)
   \end{aligned}
@@ -149,10 +149,10 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
 \left(
 \begin{array}{ccc}
     \overbrace{(\partial_t \bu  + \bu \SCAL \GRAD \bu 
-    + \nabla p  - \nu \Delta \bm u ,\,\bu \SCAL \GRAD \bv)}^{\text{SUPG}} &+ & 
+    + \nabla p  - 2 \nu \Delta \bm u ,\,\bu \SCAL \GRAD \bv)}^{\text{SUPG}} &+ & 
     \overbrace{(\nabla \cdot \bu,\, \nabla \cdot \bv)}^{\text{GD}} \\
     \underbrace{(\partial_t \bu  + \bu \SCAL \GRAD \bu 
-    + \nabla p - \nu \Delta \bm u,\, \nabla q)}_{\text{PSPG}} &&
+    + \nabla p - 2 \nu \Delta \bm u,\, \nabla q)}_{\text{PSPG}} &&
 \end{array}
 \right)
   \end{aligned}
@@ -163,7 +163,7 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
 %\left(
 %\begin{array}{c}
 %    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
-%    + \nabla p - \nu \Delta \bm u,\,\bu \SCAL \GRAD \bv) \\
+%    + \nabla p - 2 \nu \Delta \bm u,\,\bu \SCAL \GRAD \bv) \\
 %    (\partial_t \bu  + \bu \SCAL \GRAD \bu 
 %    + \nabla p,\, \nabla q)
 %\end{array}
@@ -197,15 +197,15 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
     \left( \partial_t \bu ,\  \bv \right) 
     &+ \big( \bu \SCAL \GRAD \bu,\ \bv \big)
     - \big( p,\ \DIV \bv \big) + 
-    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
+    \big( 2 \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
     & 
     +  
-    \underbrace{\delta_1 \big( \partial_t \bu + \bu \SCAL \GRAD \bu + \GRAD p - \nu \Delta \bu,\ \bu \cdot \GRAD \bv \big)}_{\text{SUPG}}  +
+    \underbrace{\delta_1 \big( \partial_t \bu + \bu \SCAL \GRAD \bu + \GRAD p - 2 \nu \Delta \bu,\ \bu \cdot \GRAD \bv \big)}_{\text{SUPG}}  +
     {\underbrace{\delta_2 \big(\DIV \bu, \, \DIV \bv \big)}_{\text{GD}}}
     =0, \\
     \hspace{2.2em} 
     \big( \DIV \bu,\ q)&
-    + \underbrace{\delta_1 \big( \partial_t \bu + \bu \SCAL \GRAD \bu + \GRAD p - \nu \Delta \bu,\ \GRAD q \big)}_{\text{PSPG}} = 0 
+    + \underbrace{\delta_1 \big( \partial_t \bu + \bu \SCAL \GRAD \bu + \GRAD p - 2 \nu \Delta \bu,\ \GRAD q \big)}_{\text{PSPG}} = 0 
   \end{aligned}
 \end{equation}
 
@@ -216,15 +216,15 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
     \left( \partial_t \bu ,\  \bv \right) 
     &+ \big( {\color{black}\bu^*} \SCAL \GRAD \bu,\ \bv \big)
     - \big( {\color{black}p^{n+1}},\ \DIV \bv \big) + 
-    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
+    \big( 2 \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
     & 
     +  
-    \underbrace{\delta_1 \big( \partial_t \bu + {\color{black}\bu^*} \SCAL \GRAD \bu + \GRAD p - \nu \Delta \bu,\ {\color{black}\bu^*} \cdot \GRAD \bv \big)}_{\text{SUPG}}  +
+    \underbrace{\delta_1 \big( \partial_t \bu + {\color{black}\bu^*} \SCAL \GRAD \bu + \GRAD p - 2 \nu \Delta \bu,\ {\color{black}\bu^*} \cdot \GRAD \bv \big)}_{\text{SUPG}}  +
     {\underbrace{\delta_2 \big(\DIV \bu, \, \DIV \bv \big)}_{\text{GD}}}
     =0, \\
     \hspace{2.2em} 
     \big( \DIV \bu,\ q)&
-    + \underbrace{\delta_1 \big( \partial_t \bu + {\color{black}\bu^*} \SCAL \GRAD \bu + {\color{black}\GRAD p^{n+1}} - \nu \Delta \bu,\ \GRAD q \big)}_{\text{PSPG}} = 0 
+    + \underbrace{\delta_1 \big( \partial_t \bu + {\color{black}\bu^*} \SCAL \GRAD \bu + {\color{black}\GRAD p^{n+1}} - 2 \nu \Delta \bu,\ \GRAD q \big)}_{\text{PSPG}} = 0 
   \end{aligned}
 \end{equation}
 
@@ -236,19 +236,19 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
     &+ \big( \bu^* \SCAL \GRAD \bu,\ \bv \big)
     + {\color{black}\big( \bu \SCAL \GRAD \bu^*,\ \bv \big)}
     - \big( p,\ \DIV \bv \big) + 
-    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
+    \big( 2 \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
     & 
     +  
-    \underbrace{\delta_1 \big( {\color{black}\partial_t'} \bu + {\color{black}\bu^*} \SCAL \GRAD \bu +  {\color{black}\bu \SCAL \GRAD \bu^*} + \GRAD p - \nu \Delta \bu,\ {\color{black}\bu^*} \cdot \GRAD \bv \big)}_{\text{SUPG}} 
+    \underbrace{\delta_1 \big( {\color{black}\partial_t'} \bu + {\color{black}\bu^*} \SCAL \GRAD \bu +  {\color{black}\bu \SCAL \GRAD \bu^*} + \GRAD p - 2 \nu \Delta \bu,\ {\color{black}\bu^*} \cdot \GRAD \bv \big)}_{\text{SUPG}} 
     \\
     & 
     +  
-    \underbrace{{\color{black}\delta_1 \big(\partial_t' \bu^* + \bu^* \SCAL \GRAD \bu^* + \GRAD p^* - \nu \Delta \bu^*,\ \bu \cdot \GRAD \bv \big)}}_{\text{SUPG}}  +
+    \underbrace{{\color{black}\delta_1 \big(\partial_t' \bu^* + \bu^* \SCAL \GRAD \bu^* + \GRAD p^* - 2 \nu \Delta \bu^*,\ \bu \cdot \GRAD \bv \big)}}_{\text{SUPG}}  +
     {\underbrace{\delta_2 \big(\DIV \bu, \, \DIV \bv \big)}_{\text{GD}}}
     =0, \\
     \hspace{2.2em} 
     \big( \DIV \bu,\ q)&
-    + \underbrace{\delta_1 \big( {\color{black}\partial_t'} \bu + {\color{black}\bu^*} \SCAL \GRAD \bu + {\color{black}\bu \SCAL \GRAD \bu^*} + \GRAD p - \nu \Delta \bu,\ \GRAD q \big)}_{\text{PSPG}} = 0 
+    + \underbrace{\delta_1 \big( {\color{black}\partial_t'} \bu + {\color{black}\bu^*} \SCAL \GRAD \bu + {\color{black}\bu \SCAL \GRAD \bu^*} + \GRAD p - 2 \nu \Delta \bu,\ \GRAD q \big)}_{\text{PSPG}} = 0 
   \end{aligned}
 \end{equation}
 
@@ -264,7 +264,7 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
 %\begin{itemize}
 %\item shift time-discretization scaling
 %\item add time derivative to SUPG/PSPG
-%\item add Hessian $\rightarrow$ $\nu \Delta \bu$
+%\item add Hessian $\rightarrow$ $2 \nu \Delta \bu$
 %\item definition of $\delta_1$ and  $\delta_2$
 %\item BB: why is GD missing?
 %\end{itemize}
@@ -278,16 +278,16 @@ F_{\text{STAB}} &= \int_\Omega f_{\text{NS}}(p,\bu) \cdot f_{\text{NS}}(q,\bv)
     \left( \tilde{\bu} ,\  \bv \right) 
     &+ \tau \big( \bu^* \SCAL \GRAD \overline{\bu},\ \bv \big)
     - \tau \big( p^{n+1},\ \DIV \bv \big) + 
-    \tau \big( \nu \varepsilon(\overline{\bu}),\ \varepsilon(\bv) \big) \\
+    \tau \big( 2 \nu \varepsilon(\overline{\bu}),\ \varepsilon(\bv) \big) \\
     & 
     +  
-    \underbrace{\delta_1 \tau \big(\tilde{\bu}/\tau +  \bu^* \SCAL \GRAD \overline{\bu} + \GRAD \overline{p} - \nu \Delta \overline{\bu}, \
+    \underbrace{\delta_1 \tau \big(\tilde{\bu}/\tau +  \bu^* \SCAL \GRAD \overline{\bu} + \GRAD \overline{p} - 2 \nu \Delta \overline{\bu}, \
     \bu^* \SCAL \GRAD \bv\big)}_{\text{SUPG}}  +
     \underbrace{\delta_2 \tau \big(\DIV \overline{\bu}, \, \DIV \bv \big)}_{\text{GD}}
     =0, \\
     \hspace{2.2em} 
     \big( \DIV \overline{\bu},\ q)&
-    + \underbrace{\delta_1 \big( \tilde{\bu}/\tau +  \bu^* \SCAL \GRAD \overline{\bu} + \GRAD p^{n+1}  - \nu \Delta \overline{\bu},\ \GRAD q \big)}_{\text{PSPG}} = 0 
+    + \underbrace{\delta_1 \big( \tilde{\bu}/\tau +  \bu^* \SCAL \GRAD \overline{\bu} + \GRAD p^{n+1}  - 2 \nu \Delta \overline{\bu},\ \GRAD q \big)}_{\text{PSPG}} = 0 
   \end{aligned}
 \end{equation}
 
@@ -300,7 +300,7 @@ discretize with Crank-Nicolson:
     \left( \tilde{\bu} ,\  \bv \right) 
     &+ \tau \big( \bu^* \SCAL \GRAD \overline{\bu},\ \bv \big)
     - \tau \big( p^{n+1},\ \DIV \bv \big) + 
-    \tau \big( \nu \varepsilon(\overline{\bu}),\ \varepsilon(\bv) \big) \\
+    \tau \big( 2 \nu \varepsilon(\overline{\bu}),\ \varepsilon(\bv) \big) \\
     & 
     +  
     \underbrace{\delta_1 \tau \big( \bu^* \SCAL \GRAD \overline{\bu} + \GRAD \overline{p}, \
@@ -327,15 +327,15 @@ and $\bu^*_i:=\bu^n$.
 %    \left( \partial_t \bu ,\  \bv \right) 
 %    &+ \big( \bu \SCAL \GRAD \bu,\ \bv \big)
 %    - \big( p,\ \DIV \bv \big) + 
-%    \big( \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
+%    \big( 2 \nu \varepsilon(\bu),\ \varepsilon(\bv) \big) \\
 %    & 
 %    +  
-%    \underbrace{\delta_1 \big( {\color{black}\partial_t \bu} +  \bu \SCAL \GRAD \bu + \GRAD p - {\color{black}\nu \Delta \bu}, \
+%    \underbrace{\delta_1 \big( {\color{black}\partial_t \bu} +  \bu \SCAL \GRAD \bu + \GRAD p - {\color{black}2 \nu \Delta \bu}, \
 %    \bu \SCAL \GRAD \bv\big)}_{\text{SUPG}}
 %    =0, \\
 %    \hspace{2.2em} 
 %    \big( \DIV \bu,\ q)&
-%    + \underbrace{\delta_1 \big( {\color{black}\partial_t \bu} + \bu \SCAL \GRAD \bu + \GRAD p - {\color{black}\nu \Delta \bu},\ \GRAD q \big)}_{\text{PSPG}} = 0 
+%    + \underbrace{\delta_1 \big( {\color{black}\partial_t \bu} + \bu \SCAL \GRAD \bu + \GRAD p - {\color{black}2 \nu \Delta \bu},\ \GRAD q \big)}_{\text{PSPG}} = 0 
 %  \end{aligned}
 %\end{equation}
 

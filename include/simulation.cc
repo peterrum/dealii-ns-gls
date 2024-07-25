@@ -303,13 +303,20 @@ template <int dim>
 SimulationCylinder<dim>::BoundaryDescriptor
 SimulationCylinder<dim>::get_boundary_descriptor() const
 {
+  const double length            = 2.2;
+  const double height            = 0.41;
+  const double cylinder_position = 0.2;
+  const double cylinder_diameter = 0.1;
+
+  const double shift = symm ? 0.00 : 0.005;
+
   BoundaryDescriptor bcs;
 
   // inflow
   bcs.all_inhomogeneous_dbcs.emplace_back(
     0,
     std::make_shared<InflowBoundaryValues::Channel<dim>>(
-      t_init, u_max, use_no_slip_wall_bc, 0.41, symm ? -0.205 : -0.200));
+      t_init, u_max, use_no_slip_wall_bc, height, - height / 2.0 + (symm ? 0.00 : 0.005)));
 
   // outflow
   bcs.all_homogeneous_nbcs.push_back(1);
