@@ -270,7 +270,7 @@ public:
 
     for (const auto bci : bcs.all_slip_bcs)
       VectorTools::compute_no_normal_flux_constraints(
-        dof_handler, 0, {bci}, constraints, *mapping);
+        dof_handler, 0, {bci}, constraints, *mapping, false);
 
     DoFTools::make_hanging_node_constraints(dof_handler, constraints);
 
@@ -470,7 +470,7 @@ public:
 
             for (const auto bci : bcs.all_slip_bcs)
               VectorTools::compute_no_normal_flux_constraints(
-                dof_handler, 0, {bci}, constraints, *mapping);
+                dof_handler, 0, {bci}, constraints, *mapping, false);
 
             for (const auto &[bci, _] : bcs.all_inhomogeneous_dbcs)
               DoFTools::make_zero_boundary_constraints(dof_handler,
@@ -627,7 +627,8 @@ public:
                 constraints,
                 *mapping,
                 refinement_edge_indices,
-                level);
+                level,
+                false);
 
             constraints.close();
 
