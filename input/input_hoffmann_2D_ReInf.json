@@ -7,7 +7,7 @@
   "simulation name" : "cylinder",
 
   "cfl"            : 1.0,
-  "t final"        : 0.1,
+  "t final"        : 0.4,
   "theta"          : 1.0,
   "bdf order"      : 2,
   "time intration" : "bdf",
@@ -23,6 +23,7 @@
   "lin relative tolerance" : 1e-2,
 
   "preconditioner" : "GMG",
+  "gmg constraint coarse pressure dof" : true,
 
   "gmg coarse grid solver"       : "direct",
   "gmg coarse grid iterate"      : false,
