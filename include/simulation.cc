@@ -357,7 +357,15 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
       -geometry_channel_height / 2.0 + geometry_cylinder_shift));
 
   // outflow
-  bcs.all_homogeneous_nbcs.push_back(1);
+  // bcs.all_homogeneous_nbcs.push_back(1);
+  bcs.all_inhomogeneous_dbcs.emplace_back(
+    1,
+    std::make_shared<InflowBoundaryValues::Channel<dim>>(
+      t_init,
+      u_max,
+      use_no_slip_wall_bc,
+      geometry_channel_height,
+      -geometry_channel_height / 2.0 + geometry_cylinder_shift));
 
   // walls
   if (use_no_slip_wall_bc)
