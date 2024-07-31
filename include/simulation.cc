@@ -291,7 +291,17 @@ SimulationCylinder<dim>::create_triangulation(
 
   if ((reset_manifold_level != -1) || !use_exact_normal)
     tria.reset_all_manifolds();
-  tria.refine_global(n_global_refinements);
+
+  for (unsigned int i = 0; i < n_global_refinements; ++i)
+    {
+      for (const auto &cell : tria.active_cell_iterators())
+        if (cell->is_locally_owned())
+          if (cell->center()[0] <
+              (geometry_channel_length - geometry_cylinder_position))
+            cell->set_refine_flag();
+
+      tria.execute_coarsening_and_refinement();
+    }
 
   if (rotate)
     {
@@ -357,15 +367,7 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
       -geometry_channel_height / 2.0 + geometry_cylinder_shift));
 
   // outflow
-  // bcs.all_homogeneous_nbcs.push_back(1);
-  bcs.all_inhomogeneous_dbcs.emplace_back(
-    1,
-    std::make_shared<InflowBoundaryValues::Channel<dim>>(
-      t_init,
-      u_max,
-      use_no_slip_wall_bc,
-      geometry_channel_height,
-      -geometry_channel_height / 2.0 + geometry_cylinder_shift));
+  bcs.all_homogeneous_nbcs.push_back(1);
 
   // walls
   if (use_no_slip_wall_bc)
