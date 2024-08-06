@@ -19,6 +19,7 @@ class NavierStokesOperator : public OperatorBase<Number>
 {
 public:
   using FECellIntegrator = FEEvaluation<dim, -1, 0, dim + 1, Number>;
+  using FEFaceIntegrator = FEFaceEvaluation<dim, -1, 0, dim + 1, Number>;
 
   NavierStokesOperator(
     const Mapping<dim>              &mapping,
@@ -123,6 +124,8 @@ private:
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> u_old_gradient;
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> p_old_gradient;
 
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>> face_velocity;
+
   std::vector<unsigned int> constrained_indices;
 
   template <bool evaluate_residual>
@@ -135,6 +138,29 @@ private:
   template <bool evaluate_residual>
   void
   do_vmult_cell(FECellIntegrator &integrator) const;
+
+  template <bool evaluate_residual>
+  void
+  do_vmult_face_range(const MatrixFree<dim, Number>               &matrix_free,
+                      VectorType<Number>                          &dst,
+                      const VectorType<Number>                    &src,
+                      const std::pair<unsigned int, unsigned int> &range) const;
+
+  template <bool evaluate_residual>
+  void
+  do_vmult_face(FEFaceIntegrator &integrator) const;
+
+  template <bool evaluate_residual>
+  void
+  do_vmult_boundary_range(
+    const MatrixFree<dim, Number>               &matrix_free,
+    VectorType<Number>                          &dst,
+    const VectorType<Number>                    &src,
+    const std::pair<unsigned int, unsigned int> &range) const;
+
+  template <bool evaluate_residual>
+  void
+  do_vmult_boundary(FEFaceIntegrator &integrator) const;
 
   void
   initialize_system_matrix() const;
