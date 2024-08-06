@@ -272,6 +272,10 @@ public:
       VectorTools::compute_no_normal_flux_constraints(
         dof_handler, 0, {bci}, constraints, *mapping, false);
 
+    for (const auto &[face_0, face_1, direction] : bcs.periodic_bcs)
+      DoFTools::make_periodicity_constraints(
+        dof_handler, face_0, face_1, direction, constraints);
+
     DoFTools::make_hanging_node_constraints(dof_handler, constraints);
 
     constraints_copy.copy_from(constraints);
@@ -471,6 +475,10 @@ public:
             for (const auto bci : bcs.all_slip_bcs)
               VectorTools::compute_no_normal_flux_constraints(
                 dof_handler, 0, {bci}, constraints, *mapping, false);
+
+            for (const auto &[face_0, face_1, direction] : bcs.periodic_bcs)
+              DoFTools::make_periodicity_constraints(
+                dof_handler, face_0, face_1, direction, constraints);
 
             for (const auto &[bci, _] : bcs.all_inhomogeneous_dbcs)
               DoFTools::make_zero_boundary_constraints(dof_handler,

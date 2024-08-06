@@ -213,6 +213,7 @@ SimulationCylinder<dim>::SimulationCylinder()
   , fe_degree(1)
   , mapping_degree(1)
   , use_exact_normal(false)
+  , use_symmetric_walls(false)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -287,7 +288,8 @@ SimulationCylinder<dim>::create_triangulation(
            geometry_channel_height,
            geometry_cylinder_position,
            geometry_cylinder_diameter,
-           geometry_cylinder_shift);
+           geometry_cylinder_shift,
+           use_symmetric_walls);
 
   if ((reset_manifold_level != -1) || !use_exact_normal)
     tria.reset_all_manifolds();
@@ -370,16 +372,29 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
   bcs.all_homogeneous_nbcs.push_back(1);
 
   // walls
-  if (use_no_slip_wall_bc)
-    bcs.all_homogeneous_dbcs.push_back(2);
+  if (use_symmetric_walls)
+    {
+      bcs.periodic_bcs.emplace_back(3, 4, 1);
+
+      if (dim == 3)
+        bcs.periodic_bcs.emplace_back(5, 6, 2);
+    }
   else
-    bcs.all_slip_bcs.push_back(2);
+    {
+      for (unsigned int i = 0; i < 2 * dim; ++i)
+        {
+          if (use_no_slip_wall_bc)
+            bcs.all_homogeneous_dbcs.push_back(3 + i);
+          else
+            bcs.all_slip_bcs.push_back(3 + i);
+        }
+    }
 
   // cylinder
   if (use_no_slip_cylinder_bc)
-    bcs.all_homogeneous_dbcs.push_back(3);
+    bcs.all_homogeneous_dbcs.push_back(2);
   else
-    bcs.all_slip_bcs.push_back(3);
+    bcs.all_slip_bcs.push_back(2);
 
   return bcs;
 }
@@ -532,6 +547,7 @@ SimulationCylinder<dim>::postprocess(const double              t,
                        geometry_cylinder_position,
                        geometry_cylinder_diameter,
                        geometry_cylinder_shift,
+                       use_symmetric_walls,
                        true);
 
               if ((reset_manifold_level != -1) || !use_exact_normal)

@@ -12,6 +12,7 @@ cylinder(Triangulation<2, spacedim> &triangulation,
          const double                cylinder_position,
          const double                cylinder_diameter,
          const double                shift,
+         const bool                  use_symmetric_walls,
          const bool                  for_3D = false)
 {
   constexpr int dim = 2;
@@ -128,13 +129,24 @@ cylinder(Triangulation<2, spacedim> &triangulation,
             face->set_boundary_id(0);
           else if (std::abs(center[1] - (+height / 2. + shift)) < 1.e-6)
             // wall (top)
-            face->set_boundary_id(2);
+            face->set_boundary_id(4);
           else if (std::abs(center[1] - (-height / 2. + shift)) < 1.e-6)
             // wall (bottom)
-            face->set_boundary_id(2);
-          else
             face->set_boundary_id(3);
+          else
+            face->set_boundary_id(2);
         }
+    }
+
+  if (use_symmetric_walls)
+    {
+      std::vector<GridTools::PeriodicFacePair<
+        typename Triangulation<2, spacedim>::cell_iterator>>
+        periodic_faces;
+
+      GridTools::collect_periodic_faces(triangulation, 3, 4, 1, periodic_faces);
+
+      triangulation.add_periodicity(periodic_faces);
     }
 }
 
@@ -144,12 +156,19 @@ cylinder(Triangulation<3, 3> &triangulation,
          const double         height,
          const double         cylinder_position,
          const double         cylinder_diameter,
-         const double         shift)
+         const double         shift,
+         const bool           use_symmetric_walls)
 {
   dealii::Triangulation<2, 2> tria1;
 
-  cylinder(
-    tria1, length, height, cylinder_position, cylinder_diameter, shift, true);
+  cylinder(tria1,
+           length,
+           height,
+           cylinder_position,
+           cylinder_diameter,
+           shift,
+           use_symmetric_walls,
+           true);
 
   dealii::Triangulation<3, 3> tria2;
   tria2.set_mesh_smoothing(triangulation.get_mesh_smoothing());
@@ -184,13 +203,6 @@ cylinder(Triangulation<3, 3> &triangulation,
           if (!face->at_boundary())
             continue;
 
-          /*
-           * We want slip boundary conditions (i.e. indicator 1) almost
-           * everywhere except on the faces with normal in x-direction.
-           * There, on the left side we set inflow conditions (indicator 2)
-           * and on the right side we set indicator 0, i.e. do nothing.
-           */
-
           const auto center = face->center();
 
           if (center[0] > length - cylinder_position - 1.e-6)
@@ -201,19 +213,31 @@ cylinder(Triangulation<3, 3> &triangulation,
             face->set_boundary_id(0);
           else if (std::abs(center[1] - (+height / 2. + shift)) < 1.e-6)
             // wall (top)
-            face->set_boundary_id(2);
+            face->set_boundary_id(4);
           else if (std::abs(center[1] - (-height / 2. + shift)) < 1.e-6)
             // wall (bottom)
-            face->set_boundary_id(2);
+            face->set_boundary_id(3);
           else if (std::abs(center[2] - (+height / 2.)) < 1.e-6)
             // wall (top)
-            face->set_boundary_id(2);
+            face->set_boundary_id(6);
           else if (std::abs(center[2] - (-height / 2.)) < 1.e-6)
             // wall (bottom)
-            face->set_boundary_id(2);
+            face->set_boundary_id(5);
           else
-            face->set_boundary_id(3);
+            face->set_boundary_id(2);
         }
+    }
+
+  if (use_symmetric_walls)
+    {
+      std::vector<GridTools::PeriodicFacePair<
+        typename Triangulation<3, 3>::cell_iterator>>
+        periodic_faces;
+
+      GridTools::collect_periodic_faces(triangulation, 3, 4, 1, periodic_faces);
+      GridTools::collect_periodic_faces(triangulation, 5, 6, 2, periodic_faces);
+
+      triangulation.add_periodicity(periodic_faces);
     }
 }
 

@@ -27,6 +27,9 @@ public:
       all_inhomogeneous_dbcs;
 
     std::vector<unsigned int> all_slip_bcs;
+
+    std::vector<std::tuple<unsigned int, unsigned int, unsigned int>>
+      periodic_bcs;
   };
 
   virtual ~SimulationBase() = default;
@@ -139,6 +142,7 @@ private:
   unsigned int mapping_degree;
 
   bool use_exact_normal;
+  bool use_symmetric_walls;
 
   mutable std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 

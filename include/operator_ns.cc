@@ -563,7 +563,7 @@ NavierStokesOperator<dim, Number>::evaluate_residual(
   VectorType<Number> tmp = src;              // TODO: needed?
   constraints_inhomogeneous.distribute(tmp); //
 
-  if (true)
+  if (false)
     this->matrix_free.cell_loop(
       &NavierStokesOperator<dim, Number>::do_vmult_range<true>,
       this,
