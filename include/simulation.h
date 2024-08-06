@@ -26,6 +26,8 @@ public:
     std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim, Number>>>>
       all_inhomogeneous_dbcs;
 
+    std::set<unsigned int> all_outflow_bcs;
+
     std::vector<unsigned int> all_slip_bcs;
 
     std::vector<std::tuple<unsigned int, unsigned int, unsigned int>>
@@ -143,6 +145,7 @@ private:
 
   bool use_exact_normal;
   bool use_symmetric_walls;
+  bool use_outflow_bc;
 
   mutable std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 

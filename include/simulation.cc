@@ -214,6 +214,7 @@ SimulationCylinder<dim>::SimulationCylinder()
   , mapping_degree(1)
   , use_exact_normal(false)
   , use_symmetric_walls(false)
+  , use_outflow_bc(false)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -369,6 +370,8 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
       -geometry_channel_height / 2.0 + geometry_cylinder_shift));
 
   // outflow
+  if (use_outflow_bc)
+    bcs.all_outflow_bcs.insert(1);
   bcs.all_homogeneous_nbcs.push_back(1);
 
   // walls

@@ -76,6 +76,7 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
   const Number                     nu,
   const Number                     c_1,
   const Number                     c_2,
+  const std::set<unsigned int>    &all_outflow_bcs,
   const TimeIntegratorData        &time_integrator_data,
   const bool                       consider_time_deriverative,
   const bool                       increment_form,
@@ -86,6 +87,7 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
   , nu(nu)
   , c_1(c_1)
   , c_2(c_2)
+  , all_outflow_bcs(all_outflow_bcs)
   , time_integrator_data(time_integrator_data)
   , consider_time_deriverative(consider_time_deriverative &&
                                (time_integrator_data.get_order() > 0))
@@ -103,8 +105,9 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
   typename MatrixFree<dim, Number>::AdditionalData additional_data;
 
   additional_data.mapping_update_flags = update_values | update_gradients;
-  additional_data.mapping_update_flags_boundary_faces = update_values;
-  additional_data.mg_level                            = mg_level;
+  if (!all_outflow_bcs.empty())
+    additional_data.mapping_update_flags_boundary_faces = update_values;
+  additional_data.mg_level = mg_level;
 
   matrix_free.reinit(
     mapping, mf_dof_handlers, mf_constraints, quadrature, additional_data);
@@ -190,7 +193,7 @@ NavierStokesOperator<dim, Number>::compute_inverse_diagonal(
 
   std::function<void(FEFaceIntegrator &)> boundary_function;
 
-  if (false)
+  if ((!all_outflow_bcs.empty()) && false)
     boundary_function = [&](auto &integrator) {
       this->template do_vmult_boundary<false>(integrator);
     };
@@ -563,7 +566,7 @@ NavierStokesOperator<dim, Number>::evaluate_residual(
   VectorType<Number> tmp = src;              // TODO: needed?
   constraints_inhomogeneous.distribute(tmp); //
 
-  if (false)
+  if (all_outflow_bcs.empty())
     this->matrix_free.cell_loop(
       &NavierStokesOperator<dim, Number>::do_vmult_range<true>,
       this,
@@ -605,7 +608,7 @@ NavierStokesOperator<dim, Number>::vmult(VectorType<Number>       &dst,
         .local_element(edge_constrained_indices[i]) = 0.;
     }
 
-  if (false)
+  if (all_outflow_bcs.empty())
     this->matrix_free.cell_loop(
       &NavierStokesOperator<dim, Number>::do_vmult_range<false>,
       this,
@@ -767,7 +770,7 @@ NavierStokesOperator<dim, Number>::do_vmult_boundary_range(
     {
       phi.reinit(cell);
 
-      if (phi.boundary_id() != 1)
+      if (all_outflow_bcs.find(phi.boundary_id()) == all_outflow_bcs.end())
         continue;
 
       if (evaluate_residual)
@@ -1246,7 +1249,7 @@ NavierStokesOperator<dim, Number>::initialize_system_matrix() const
 
       std::function<void(FEFaceIntegrator &)> boundary_function;
 
-      if (false)
+      if (!all_outflow_bcs.empty())
         boundary_function = [&](auto &integrator) {
           if (face != integrator.get_current_cell_index())
             {
