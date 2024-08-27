@@ -193,7 +193,7 @@ NavierStokesOperator<dim, Number>::compute_inverse_diagonal(
 
   std::function<void(FEFaceIntegrator &)> boundary_function;
 
-  if ((!all_outflow_bcs.empty()) && false)
+  if (!all_outflow_bcs.empty())
     boundary_function = [&](auto &integrator) {
       this->template do_vmult_boundary<false>(integrator);
     };
