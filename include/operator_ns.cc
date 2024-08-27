@@ -1104,6 +1104,16 @@ void
 NavierStokesOperator<dim, Number>::do_vmult_boundary(
   FEFaceIntegrator &integrator) const
 {
+  if (all_outflow_bcs.find(integrator.boundary_id()) == all_outflow_bcs.end())
+    {
+      const VectorizedArray<Number> zero = 0.0;
+
+      for (unsigned int i = 0; i < integrator.dofs_per_cell; ++i)
+        integrator.begin_dof_values()[i] = zero;
+
+      return;
+    }
+
   const double beta = 100.0;
 
   const auto face = integrator.get_current_cell_index();
