@@ -114,7 +114,7 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
     additional_data.mapping_update_flags_boundary_faces = update_values;
   if (!all_outflow_bcs_nitsche.empty())
     additional_data.mapping_update_flags_boundary_faces =
-      update_values | update_gradients;
+      update_values | update_gradients | update_quadrature_points;
   additional_data.mg_level = mg_level;
 
   matrix_free.reinit(
@@ -420,10 +420,43 @@ NavierStokesOperator<dim, Number>::compute_penalty_parameters(
         }
     }
 
+  if (!(all_outflow_bcs_cut.empty() && all_outflow_bcs_nitsche.empty()))
+    {
+      const double beta = 100.0; // TODO
+
+      const unsigned fe_degree =
+        matrix_free.get_dof_handler().get_fe().tensor_degree();
+
+      effective_beta_face.reinit(n_boundary_faces);
+
+      for (unsigned int face = n_inner_faces;
+           face < n_inner_faces + n_boundary_faces;
+           ++face)
+        {
+          VectorizedArray<Number> cell_size = 1.0;
+
+          for (unsigned int v = 0;
+               v < matrix_free.n_active_entries_per_face_batch(face);
+               ++v)
+            {
+              const auto [cell_it, _] = matrix_free.get_face_iterator(face, v);
+
+              if (dim == 2)
+                cell_size[v] =
+                  std::sqrt(4. * cell_it->measure() / M_PI) / fe_degree;
+              else if (dim == 3)
+                cell_size[v] =
+                  std::pow(6 * cell_it->measure() / M_PI, 1. / 3.) / fe_degree;
+            }
+
+          effective_beta_face[face - n_inner_faces] =
+            beta / std::pow(cell_size, static_cast<Number>(fe_degree + 1));
+        }
+    }
+
   if (!all_outflow_bcs_cut.empty())
     {
-      face_velocity.reinit(n_inner_faces + n_boundary_faces,
-                           n_face_quadrature_points);
+      face_velocity.reinit(n_boundary_faces, n_face_quadrature_points);
 
       for (unsigned int face = n_inner_faces;
            face < n_inner_faces + n_boundary_faces;
@@ -435,12 +468,50 @@ NavierStokesOperator<dim, Number>::compute_penalty_parameters(
           face_integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
 
           for (const auto q : face_integrator.quadrature_point_indices())
-            face_velocity[face][q] = face_integrator.get_value(q);
+            face_velocity[face - n_inner_faces][q] =
+              face_integrator.get_value(q);
         }
     }
   else if (!all_outflow_bcs_nitsche.empty())
     {
-      AssertThrow(false, ExcNotImplemented());
+      face_target_velocity.reinit(n_boundary_faces, n_face_quadrature_points);
+
+      for (unsigned int face = n_inner_faces;
+           face < n_inner_faces + n_boundary_faces;
+           ++face)
+        {
+          face_integrator.reinit(face);
+
+          const auto fu_ptr =
+            all_outflow_bcs_nitsche.find(face_integrator.boundary_id());
+
+          if (fu_ptr == all_outflow_bcs_nitsche.end())
+            continue;
+
+          for (const auto q : face_integrator.quadrature_point_indices())
+            {
+              const auto point_batch = face_integrator.quadrature_point(q);
+
+              Tensor<1, dim + 1, VectorizedArray<Number>> target_velocity_value;
+
+              for (unsigned int v = 0;
+                   v < matrix_free.n_active_entries_per_face_batch(face);
+                   ++v)
+                {
+                  Point<dim> point;
+
+                  for (unsigned int d = 0; d < dim; ++d)
+                    point[d] = point_batch[d][v];
+
+                  for (unsigned int d = 0; d < dim; ++d)
+                    target_velocity_value[d][v] =
+                      fu_ptr->second->value(point, d);
+                }
+
+              face_target_velocity[face - n_inner_faces][q] =
+                target_velocity_value;
+            }
+        }
     }
 
 
@@ -1124,31 +1195,10 @@ NavierStokesOperator<dim, Number>::do_vmult_boundary(
   if (all_outflow_bcs_cut.find(integrator.boundary_id()) !=
       all_outflow_bcs_cut.end())
     {
-      const double beta = 100.0;
+      const auto         face       = integrator.get_current_cell_index();
+      const unsigned int face_index = face - matrix_free.n_inner_face_batches();
 
-      const auto face = integrator.get_current_cell_index();
-
-      const unsigned fe_degree =
-        matrix_free.get_dof_handler().get_fe().tensor_degree();
-
-      VectorizedArray<Number> cell_size = 1.0;
-
-      for (unsigned int v = 0;
-           v < matrix_free.n_active_entries_per_face_batch(face);
-           ++v)
-        {
-          const auto [cell_it, _] = matrix_free.get_face_iterator(face, v);
-
-          if (dim == 2)
-            cell_size[v] =
-              std::sqrt(4. * cell_it->measure() / M_PI) / fe_degree;
-          else if (dim == 3)
-            cell_size[v] =
-              std::pow(6 * cell_it->measure() / M_PI, 1. / 3.) / fe_degree;
-        }
-
-      VectorizedArray<Number> penalty_parameter =
-        beta / std::pow(cell_size, static_cast<Number>(fe_degree + 1));
+      const auto penalty_parameter = this->effective_beta_face[face_index];
 
       integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
 
@@ -1167,7 +1217,7 @@ NavierStokesOperator<dim, Number>::do_vmult_boundary(
             }
           else
             {
-              star_velocity = face_velocity[face][q];
+              star_velocity = face_velocity[face_index][q];
             }
 
           const VectorizedArray<Number> zero = 0.0;
@@ -1187,7 +1237,48 @@ NavierStokesOperator<dim, Number>::do_vmult_boundary(
   else if (all_outflow_bcs_nitsche.find(integrator.boundary_id()) !=
            all_outflow_bcs_nitsche.end())
     {
-      AssertThrow(false, ExcNotImplemented());
+      const auto         face       = integrator.get_current_cell_index();
+      const unsigned int face_index = face - matrix_free.n_inner_face_batches();
+
+      const auto penalty_parameter = this->effective_beta_face[face_index];
+
+      integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                          EvaluationFlags::EvaluationFlags::gradients);
+
+      for (const auto q : integrator.quadrature_point_indices())
+        {
+          typename FEFaceIntegrator::value_type    value_result    = {};
+          typename FEFaceIntegrator::gradient_type gradient_result = {};
+
+          const auto normal_vector = integrator.get_normal_vector(q);
+
+          auto       value    = integrator.get_value(q);
+          const auto gradient = integrator.get_gradient(q);
+
+          // If we are assembling the residual, substract the target velocity
+          // from the velocity value.
+          if constexpr (evaluate_residual)
+            value -= this->face_target_velocity[face_index][q];
+
+          for (unsigned int d = 0; d < dim; ++d)
+            {
+              // Assemble (v,beta (u-u_target))
+              value_result[d] += penalty_parameter * value[d];
+
+              // Assemble ν(v,∇δu·n)
+              for (unsigned int i = 0; i < dim; ++i)
+                value_result[d] -= nu * gradient[d][i] * normal_vector[i];
+
+              // Assemble ν(∇v·n,(u-u_target))
+              for (unsigned int i = 0; i < dim; ++i)
+                gradient_result[d][i] -= nu * value[d] * normal_vector[i];
+            }
+
+          integrator.submit_value(value_result, q);
+          integrator.submit_gradient(gradient_result, q);
+        }
+      integrator.integrate(EvaluationFlags::EvaluationFlags::values |
+                           EvaluationFlags::EvaluationFlags::gradients);
     }
   else
     {

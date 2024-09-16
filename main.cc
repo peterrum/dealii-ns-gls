@@ -870,6 +870,10 @@ public:
           VectorTools::interpolate_boundary_values(
             *mapping, dof_handler, bci, *fu, constraints_inhomogeneous, mask_v);
         }
+      for (const auto &[bci, fu] : bcs.all_outflow_bcs_nitsche)
+        {
+          fu->set_time(0.0); // TODO: correct?
+        }
       constraints_inhomogeneous.close();
 
       constraints_inhomogeneous.distribute(solution.get_current_solution());
@@ -916,6 +920,10 @@ public:
                                                      *fu,
                                                      constraints_inhomogeneous,
                                                      mask_v);
+          }
+        for (const auto &[bci, fu] : bcs.all_outflow_bcs_nitsche)
+          {
+            fu->set_time(t); // TODO: correct?
           }
         constraints_inhomogeneous.close();
 

@@ -371,7 +371,8 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
 
   // outflow
   if (use_outflow_bc)
-    bcs.all_outflow_bcs_cut.insert(1);
+    // bcs.all_outflow_bcs_cut.insert(1);
+    bcs.all_outflow_bcs_nitsche[1] = bcs.all_inhomogeneous_dbcs[0].second;
   // bcs.all_homogeneous_nbcs.push_back(1);
 
   // walls

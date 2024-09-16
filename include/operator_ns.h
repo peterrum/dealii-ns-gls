@@ -131,7 +131,9 @@ private:
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> u_old_gradient;
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> p_old_gradient;
 
-  Table<2, Tensor<1, dim, VectorizedArray<Number>>> face_velocity;
+  Table<1, VectorizedArray<Number>>                     effective_beta_face;
+  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> face_target_velocity;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>>     face_velocity;
 
   std::vector<unsigned int> constrained_indices;
 
