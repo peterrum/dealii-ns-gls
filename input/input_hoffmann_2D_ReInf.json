@@ -40,5 +40,7 @@
   "simulation rotate"               : false,
   "simulation t init"               : 0.02,
   "simulation reset manifold level" : 3,
-  "simulation u max"                : 39.0
+  "simulation u max"                : 39.0,
+  "simulation geometry extra length" : 0.0,
+  "simulation use outflow bc"        : true
 }

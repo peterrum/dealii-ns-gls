@@ -214,7 +214,7 @@ SimulationCylinder<dim>::SimulationCylinder()
   , mapping_degree(1)
   , use_exact_normal(false)
   , use_symmetric_walls(false)
-  , use_outflow_bc(true)
+  , use_outflow_bc(false)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -258,6 +258,8 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
                     geometry_cylinder_diameter);
   prm.add_parameter("simulation geometry cylinder shift",
                     geometry_cylinder_shift);
+
+  prm.add_parameter("simulation use outflow bc", use_outflow_bc);
 
   prm.parse_input(file_name, "", true);
 
