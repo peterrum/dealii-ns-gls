@@ -31,7 +31,7 @@ public:
     const Number                     nu,
     const Number                     c_1,
     const Number                     c_2,
-    const std::set<unsigned int>    &all_outflow_bcs,
+    const std::set<unsigned int>    &all_outflow_bcs_cut,
     const TimeIntegratorData        &time_integrator_data,
     const bool                       consider_time_deriverative,
     const bool                       increment_form,
@@ -101,7 +101,7 @@ private:
   const VectorizedArray<Number> nu;
   const Number                  c_1;
   const Number                  c_2;
-  const std::set<unsigned int>  all_outflow_bcs;
+  const std::set<unsigned int>  all_outflow_bcs_cut;
   const TimeIntegratorData     &time_integrator_data;
   const bool                    consider_time_deriverative;
   const bool                    increment_form;
