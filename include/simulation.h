@@ -26,7 +26,9 @@ public:
     std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim, Number>>>>
       all_inhomogeneous_dbcs;
 
-    std::set<unsigned int> all_outflow_bcs;
+    std::set<unsigned int> all_outflow_bcs_cut;
+    std::map<unsigned int, std::shared_ptr<Function<dim, Number>>>
+      all_outflow_bcs_nitsche;
 
     std::vector<unsigned int> all_slip_bcs;
 
