@@ -375,7 +375,10 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
   if (use_outflow_bc)
     // bcs.all_outflow_bcs_cut.insert(1);
     bcs.all_outflow_bcs_nitsche[1] = bcs.all_inhomogeneous_dbcs[0].second;
-  // bcs.all_homogeneous_nbcs.push_back(1);
+  // bcs.all_inhomogeneous_dbcs.emplace_back(
+  //   1,
+  //   bcs.all_inhomogeneous_dbcs[0].second);
+  //  bcs.all_homogeneous_nbcs.push_back(1);
 
   // walls
   if (use_symmetric_walls)
@@ -452,7 +455,7 @@ SimulationCylinder<dim>::postprocess(const double              t,
 
       for (const auto face : cell->face_indices())
         if (cell->face(face)->at_boundary() &&
-            (cell->face(face)->boundary_id() == 3))
+            (cell->face(face)->boundary_id() == 2))
           {
             fe_face_values.reinit(cell, face);
 
