@@ -422,7 +422,7 @@ NavierStokesOperator<dim, Number>::compute_penalty_parameters(
 
   if (!(all_outflow_bcs_cut.empty() && all_outflow_bcs_nitsche.empty()))
     {
-      const double beta = 100.0; // TODO
+      const double beta = 1.0; // TODO
 
       const unsigned fe_degree =
         matrix_free.get_dof_handler().get_fe().tensor_degree();
