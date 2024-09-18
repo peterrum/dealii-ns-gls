@@ -212,7 +212,6 @@ SimulationCylinder<dim>::SimulationCylinder()
   , geometry_cylinder_shift(0.005)
   , fe_degree(1)
   , mapping_degree(1)
-  , use_exact_normal(false)
   , use_symmetric_walls(false)
   , use_outflow_bc(false)
 {
@@ -294,7 +293,7 @@ SimulationCylinder<dim>::create_triangulation(
            geometry_cylinder_shift,
            use_symmetric_walls);
 
-  if ((reset_manifold_level != -1) || !use_exact_normal)
+  if (reset_manifold_level != -1)
     tria.reset_all_manifolds();
 
   for (unsigned int i = 0; i < n_global_refinements; ++i)
@@ -559,7 +558,7 @@ SimulationCylinder<dim>::postprocess(const double              t,
                        use_symmetric_walls,
                        true);
 
-              if ((reset_manifold_level != -1) || !use_exact_normal)
+              if (reset_manifold_level != -1)
                 patch_tria.reset_all_manifolds();
 
               patch_tria.refine_global(
@@ -623,7 +622,7 @@ SimulationCylinder<dim>::get_mapping_private(
   const Triangulation<structdim, dim> &tria,
   const unsigned int                   mapping_degree) const
 {
-  if ((reset_manifold_level == -1) && !use_exact_normal)
+  if (reset_manifold_level == -1)
     return std::make_shared<MappingQ<structdim, dim>>(mapping_degree);
 
   Triangulation<2> tria_2D;
