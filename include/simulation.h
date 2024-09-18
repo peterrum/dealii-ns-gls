@@ -147,7 +147,9 @@ private:
 
   bool use_exact_normal;
   bool use_symmetric_walls;
-  bool use_outflow_bc;
+  bool use_outflow_bc_weak_cut;
+  bool use_outflow_bc_weak_nitsche;
+  bool use_outflow_bc_strong;
 
   mutable std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 

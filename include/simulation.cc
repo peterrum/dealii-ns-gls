@@ -213,7 +213,9 @@ SimulationCylinder<dim>::SimulationCylinder()
   , fe_degree(1)
   , mapping_degree(1)
   , use_symmetric_walls(false)
-  , use_outflow_bc(false)
+  , use_outflow_bc_weak_cut(false)
+  , use_outflow_bc_weak_nitsche(false)
+  , use_outflow_bc_strong(false)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -258,7 +260,16 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("simulation geometry cylinder shift",
                     geometry_cylinder_shift);
 
-  prm.add_parameter("simulation use outflow bc", use_outflow_bc);
+  prm.add_parameter("simulation use outflow bc weak cut",
+                    use_outflow_bc_weak_cut);
+  prm.add_parameter("simulation use outflow bc weak nitsche",
+                    use_outflow_bc_weak_nitsche);
+  prm.add_parameter("simulation use outflow bc strong", use_outflow_bc_strong);
+
+  AssertIndexRange(static_cast<unsigned int>(use_outflow_bc_weak_cut) +
+                     static_cast<unsigned int>(use_outflow_bc_weak_nitsche) +
+                     static_cast<unsigned int>(use_outflow_bc_strong),
+                   2);
 
   prm.parse_input(file_name, "", true);
 
@@ -371,13 +382,15 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
       -geometry_channel_height / 2.0 + geometry_cylinder_shift));
 
   // outflow
-  if (use_outflow_bc)
-    // bcs.all_outflow_bcs_cut.insert(1);
+  if (use_outflow_bc_weak_cut)
+    bcs.all_outflow_bcs_cut.insert(1);
+  else if (use_outflow_bc_weak_nitsche)
     bcs.all_outflow_bcs_nitsche[1] = bcs.all_inhomogeneous_dbcs[0].second;
-  // bcs.all_inhomogeneous_dbcs.emplace_back(
-  //   1,
-  //   bcs.all_inhomogeneous_dbcs[0].second);
-  //  bcs.all_homogeneous_nbcs.push_back(1);
+  else if (use_outflow_bc_strong)
+    bcs.all_inhomogeneous_dbcs.emplace_back(
+      1, bcs.all_inhomogeneous_dbcs[0].second);
+  else
+    bcs.all_homogeneous_nbcs.push_back(1);
 
   // walls
   if (use_symmetric_walls)

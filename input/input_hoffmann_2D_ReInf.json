@@ -42,5 +42,5 @@
   "simulation reset manifold level" : 3,
   "simulation u max"                : 39.0,
   "simulation geometry extra length" : 0.0,
-  "simulation use outflow bc"        : true
+  "simulation use outflow bc weak nitsche" : true
 }
