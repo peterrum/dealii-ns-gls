@@ -1,8 +1,11 @@
 #include "simulation.h"
 
+#include <deal.II/base/floating_point_comparator.h>
 #include <deal.II/base/parameter_handler.h>
 
 #include <deal.II/distributed/tria.h>
+
+#include <deal.II/fe/mapping_q_cache.h>
 
 #include <deal.II/grid/grid_in.h>
 
@@ -127,6 +130,17 @@ SimulationBase<dim>::get_u_max() const
 
 
 template <int dim>
+std::shared_ptr<Mapping<dim>>
+SimulationBase<dim>::get_mapping(const Triangulation<dim> &tria,
+                                 const unsigned int        mapping_degree) const
+{
+  (void)tria;
+  return std::make_shared<MappingQ<dim>>(mapping_degree);
+}
+
+
+
+template <int dim>
 SimulationChannel<dim>::SimulationChannel()
   : n_stretching(4)
 {}
@@ -196,6 +210,12 @@ SimulationCylinder<dim>::SimulationCylinder()
   , geometry_cylinder_position((dim == 2) ? 0.2 : 0.5)
   , geometry_cylinder_diameter(0.1)
   , geometry_cylinder_shift(0.005)
+  , fe_degree(1)
+  , mapping_degree(1)
+  , use_symmetric_walls(false)
+  , use_outflow_bc_weak_cut(false)
+  , use_outflow_bc_weak_nitsche(false)
+  , use_outflow_bc_strong(false)
 {
   drag_lift_pressure_file.open("drag_lift_pressure.m", std::ios::out);
 }
@@ -214,6 +234,9 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
     return;
 
   dealii::ParameterHandler prm;
+
+  prm.add_parameter("fe degree", fe_degree);
+  prm.add_parameter("mapping degree", mapping_degree);
 
   prm.add_parameter("nu", nu);
   prm.add_parameter("simulation no slip cylinder", use_no_slip_cylinder_bc);
@@ -236,6 +259,17 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
                     geometry_cylinder_diameter);
   prm.add_parameter("simulation geometry cylinder shift",
                     geometry_cylinder_shift);
+
+  prm.add_parameter("simulation use outflow bc weak cut",
+                    use_outflow_bc_weak_cut);
+  prm.add_parameter("simulation use outflow bc weak nitsche",
+                    use_outflow_bc_weak_nitsche);
+  prm.add_parameter("simulation use outflow bc strong", use_outflow_bc_strong);
+
+  AssertIndexRange(static_cast<unsigned int>(use_outflow_bc_weak_cut) +
+                     static_cast<unsigned int>(use_outflow_bc_weak_nitsche) +
+                     static_cast<unsigned int>(use_outflow_bc_strong),
+                   2);
 
   prm.parse_input(file_name, "", true);
 
@@ -267,37 +301,21 @@ SimulationCylinder<dim>::create_triangulation(
            geometry_channel_height,
            geometry_cylinder_position,
            geometry_cylinder_diameter,
-           geometry_cylinder_shift);
+           geometry_cylinder_shift,
+           use_symmetric_walls);
 
-  const auto refine_mesh = [&](Triangulation<dim> &tria,
-                               const unsigned int  n_refinements) {
-    for (unsigned int i = 0; i < n_refinements; ++i)
-      {
-        for (const auto &cell : tria.active_cell_iterators())
-          if (cell->is_locally_owned())
-            if (cell->center()[0] <
-                (geometry_channel_length - geometry_cylinder_position))
-              cell->set_refine_flag();
+  if (reset_manifold_level != -1)
+    tria.reset_all_manifolds();
 
-        tria.execute_coarsening_and_refinement();
-      }
-  };
+  for (unsigned int i = 0; i < n_global_refinements; ++i)
+    {
+      for (const auto &cell : tria.active_cell_iterators())
+        if (cell->is_locally_owned())
+          if (cell->center()[0] <
+              (geometry_channel_length - geometry_cylinder_position))
+            cell->set_refine_flag();
 
-  if (reset_manifold_level == 0)
-    {
-      tria.reset_all_manifolds();
-      refine_mesh(tria, n_global_refinements);
-    }
-  else if (static_cast<unsigned int>(reset_manifold_level) >
-           n_global_refinements)
-    {
-      refine_mesh(tria, n_global_refinements);
-    }
-  else
-    {
-      refine_mesh(tria, reset_manifold_level);
-      tria.reset_all_manifolds();
-      refine_mesh(tria, n_global_refinements - reset_manifold_level);
+      tria.execute_coarsening_and_refinement();
     }
 
   if (rotate)
@@ -364,19 +382,40 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
       -geometry_channel_height / 2.0 + geometry_cylinder_shift));
 
   // outflow
-  bcs.all_homogeneous_nbcs.push_back(1);
+  if (use_outflow_bc_weak_cut)
+    bcs.all_outflow_bcs_cut.insert(1);
+  else if (use_outflow_bc_weak_nitsche)
+    bcs.all_outflow_bcs_nitsche[1] = bcs.all_inhomogeneous_dbcs[0].second;
+  else if (use_outflow_bc_strong)
+    bcs.all_inhomogeneous_dbcs.emplace_back(
+      1, bcs.all_inhomogeneous_dbcs[0].second);
+  else
+    bcs.all_homogeneous_nbcs.push_back(1);
 
   // walls
-  if (use_no_slip_wall_bc)
-    bcs.all_homogeneous_dbcs.push_back(2);
+  if (use_symmetric_walls)
+    {
+      bcs.periodic_bcs.emplace_back(3, 4, 1);
+
+      if (dim == 3)
+        bcs.periodic_bcs.emplace_back(5, 6, 2);
+    }
   else
-    bcs.all_slip_bcs.push_back(2);
+    {
+      for (unsigned int i = 0; i < 2 * dim; ++i)
+        {
+          if (use_no_slip_wall_bc)
+            bcs.all_homogeneous_dbcs.push_back(3 + i);
+          else
+            bcs.all_slip_bcs.push_back(3 + i);
+        }
+    }
 
   // cylinder
   if (use_no_slip_cylinder_bc)
-    bcs.all_homogeneous_dbcs.push_back(3);
+    bcs.all_homogeneous_dbcs.push_back(2);
   else
-    bcs.all_slip_bcs.push_back(3);
+    bcs.all_slip_bcs.push_back(2);
 
   return bcs;
 }
@@ -428,7 +467,7 @@ SimulationCylinder<dim>::postprocess(const double              t,
 
       for (const auto face : cell->face_indices())
         if (cell->face(face)->at_boundary() &&
-            (cell->face(face)->boundary_id() == 3))
+            (cell->face(face)->boundary_id() == 2))
           {
             fe_face_values.reinit(cell, face);
 
@@ -515,50 +554,58 @@ SimulationCylinder<dim>::postprocess(const double              t,
         {
           parallel::distributed::Triangulation<2, 3> patch_tria(comm);
 
-          std::vector<unsigned int> repetitions = {6, 1};
-          Point<2>                  p1(-geometry_cylinder_position,
-                      -geometry_channel_height / 2.0 + geometry_cylinder_shift);
-          Point<2> p2(geometry_channel_length - geometry_cylinder_position,
-                      +geometry_channel_height / 2.0 + geometry_cylinder_shift);
+          std::shared_ptr<Mapping<2, 3>> patch_mapping;
 
-          GridGenerator::subdivided_hyper_rectangle(patch_tria,
-                                                    repetitions,
-                                                    p1,
-                                                    p2);
+          const unsigned int mapping_degree = (this->mapping_degree == 0) ?
+                                                this->fe_degree :
+                                                this->mapping_degree;
 
           if (c == 0)
             {
-              Tensor<1, dim, double> normal;
-              normal[0] = 1.0;
+              cylinder(patch_tria,
+                       geometry_channel_length + geometry_channel_extra_length,
+                       geometry_channel_height,
+                       geometry_cylinder_position,
+                       geometry_cylinder_diameter,
+                       geometry_cylinder_shift,
+                       use_symmetric_walls,
+                       true);
 
-              GridTools::rotate(normal, numbers::PI / 2., patch_tria);
+              if (reset_manifold_level != -1)
+                patch_tria.reset_all_manifolds();
+
+              patch_tria.refine_global(
+                dof_handler.get_triangulation().n_global_levels() - 1);
+
+              patch_mapping =
+                get_mapping_private<2>(patch_tria, mapping_degree);
             }
-
-          patch_tria.refine_global(
-            dof_handler.get_triangulation().n_global_levels());
-
-          const auto bb =
-            BoundingBox<dim>(
-              {Point<dim>(0., 0., 0.),
-               Point<dim>(9 * geometry_cylinder_diameter, 0., 0.)})
-              .create_extended(1.5 * geometry_cylinder_diameter);
-
-          for (unsigned int i = 0; i < 3; ++i)
+          else
             {
-              for (const auto &cell : patch_tria.active_cell_iterators())
-                if (cell->is_active() && cell->is_locally_owned())
-                  if (bb.point_inside(cell->center()))
-                    cell->set_refine_flag();
-              patch_tria.execute_coarsening_and_refinement();
+              cylinder_crossection(patch_tria,
+                                   geometry_channel_length +
+                                     geometry_channel_extra_length,
+                                   geometry_channel_height,
+                                   geometry_cylinder_position,
+                                   geometry_cylinder_diameter,
+                                   geometry_cylinder_shift,
+                                   true);
+
+              patch_tria.refine_global(
+                dof_handler.get_triangulation().n_global_levels() - 1);
+
+              patch_mapping = std::make_shared<MappingQ<2, 3>>(mapping_degree);
             }
 
-          MappingQ<2, 3> patch_mapping(2);
-          MappingQ<3, 3> mapping(2);
+          DataOutBase::VtkFlags flags;
+          flags.write_higher_order_cells = true;
 
-          DataOutResample<3, 2, 3> data_out(patch_tria, patch_mapping);
+          DataOutResample<3, 2, 3> data_out(patch_tria, *patch_mapping);
+
+          data_out.set_flags(flags);
 
           data_out.add_data_vector(dof_handler, solution, "solution");
-          data_out.build_patches(mapping);
+          data_out.build_patches(mapping, fe_degree);
           data_out.write_vtu_in_parallel(paraview_prefix + "_slice_" +
                                            std::to_string(c) + "_" +
                                            std::to_string(counter) + ".vtu",
@@ -567,6 +614,151 @@ SimulationCylinder<dim>::postprocess(const double              t,
 
       counter++;
     }
+}
+
+
+
+template <int dim>
+std::shared_ptr<Mapping<dim>>
+SimulationCylinder<dim>::get_mapping(const Triangulation<dim> &tria,
+                                     const unsigned int mapping_degree) const
+{
+  return get_mapping_private<dim>(tria, mapping_degree);
+}
+
+
+
+template <int dim>
+template <int structdim>
+std::shared_ptr<Mapping<structdim, dim>>
+SimulationCylinder<dim>::get_mapping_private(
+  const Triangulation<structdim, dim> &tria,
+  const unsigned int                   mapping_degree) const
+{
+  if (reset_manifold_level == -1)
+    return std::make_shared<MappingQ<structdim, dim>>(mapping_degree);
+
+  Triangulation<2> tria_2D;
+
+  const unsigned int n_levels = tria.n_global_levels();
+
+  const unsigned int n_global_refinements = n_levels - 1;
+
+  std::vector<std::vector<Point<2>>> points(n_levels);
+  std::vector<std::vector<Point<2>>> points_moved(n_levels);
+
+  const FloatingPointComparator<double> comparator(1e-10);
+  std::vector<std::map<Point<2>, Point<2>, FloatingPointComparator<double>>>
+    map(n_levels,
+        std::map<Point<2>, Point<2>, FloatingPointComparator<double>>(
+          comparator));
+
+  auto mapping_2D = std::make_shared<MappingQCache<2, 2>>(mapping_degree);
+
+  // 1) create undeformed mesh and collect support points
+  GridGenerator::hyper_cube_with_cylindrical_hole(tria_2D,
+                                                  geometry_cylinder_diameter /
+                                                    2.,
+                                                  geometry_cylinder_diameter,
+                                                  0.05,
+                                                  1,
+                                                  false);
+  tria_2D.reset_all_manifolds();
+  tria_2D.refine_global(n_global_refinements);
+  mapping_2D->initialize(
+    MappingQ1<2, 2>(),
+    tria_2D,
+    [&points](const auto &cell, const auto &point) {
+      points[cell->level()].emplace_back(point);
+      return point;
+    },
+    false);
+  tria_2D.clear();
+
+  // 2) create deformed mesh and collrect support points
+  GridGenerator::hyper_cube_with_cylindrical_hole(tria_2D,
+                                                  geometry_cylinder_diameter /
+                                                    2.,
+                                                  geometry_cylinder_diameter,
+                                                  0.05,
+                                                  1,
+                                                  false);
+
+  const auto refine_mesh = [&](Triangulation<2, 2> &tria,
+                               const unsigned int   n_refinements) {
+    for (unsigned int i = 0; i < n_refinements; ++i)
+      {
+        for (const auto &cell : tria.active_cell_iterators())
+          if (cell->is_locally_owned())
+            if (cell->center()[0] <
+                (geometry_channel_length - geometry_cylinder_position))
+              cell->set_refine_flag();
+
+        tria.execute_coarsening_and_refinement();
+      }
+  };
+
+  if (reset_manifold_level == 0)
+    {
+      tria_2D.reset_all_manifolds();
+      refine_mesh(tria_2D, n_global_refinements);
+    }
+  else if (static_cast<unsigned int>(reset_manifold_level) >
+           n_global_refinements)
+    {
+      refine_mesh(tria_2D, n_global_refinements);
+    }
+  else
+    {
+      refine_mesh(tria_2D, reset_manifold_level);
+      tria_2D.reset_all_manifolds();
+      refine_mesh(tria_2D, n_global_refinements - reset_manifold_level);
+    }
+
+  mapping_2D->initialize(
+    MappingQ1<2, 2>(),
+    tria_2D,
+    [&points_moved](const auto &cell, const auto &point) {
+      points_moved[cell->level()].emplace_back(point);
+      return point;
+    },
+    false);
+
+  for (unsigned int l = 0; l < points.size(); ++l)
+    for (unsigned int i = 0; i < points[l].size(); ++i)
+      map[l][points[l][i]] = points_moved[l][i];
+
+  // 3) create map (undeformed points -> deformed points)
+  auto mapping =
+    std::make_shared<MappingQCache<structdim, dim>>(mapping_degree);
+
+  // 4) create mapping (by moving support points)
+  mapping->initialize(
+    MappingQ1<structdim, dim>(),
+    tria,
+    [&map](const auto &cell, const auto &point) {
+      Point<2> point_2D;
+      for (unsigned int i = 0; i < 2; ++i)
+        point_2D[i] = point[i];
+
+      const auto it = map[cell->level()].find(point_2D);
+
+      if (it == map[cell->level()].end())
+        {
+          return point;
+        }
+      else
+        {
+          auto point_temp = point;
+
+          for (unsigned int i = 0; i < 2; ++i)
+            point_temp[i] = it->second[i];
+          return point_temp;
+        }
+    },
+    false);
+
+  return mapping;
 }
 
 

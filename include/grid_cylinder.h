@@ -4,20 +4,22 @@
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/manifold_lib.h>
 
-
+template <int spacedim>
 void
-cylinder(Triangulation<2, 2> &triangulation,
-         const double         length,
-         const double         height,
-         const double         cylinder_position,
-         const double         cylinder_diameter,
-         const double         shift)
+cylinder(Triangulation<2, spacedim> &triangulation,
+         const double                length,
+         const double                height,
+         const double                cylinder_position,
+         const double                cylinder_diameter,
+         const double                shift,
+         const bool                  use_symmetric_walls,
+         const bool                  for_3D = false)
 {
   constexpr int dim = 2;
 
   using namespace dealii;
 
-  dealii::Triangulation<dim, dim> tria1, tria2, tria3, tria4, tria5, tria6,
+  dealii::Triangulation<dim, spacedim> tria1, tria2, tria3, tria4, tria5, tria6,
     tria7, tria8, tria9, tria_tmp;
 
   // center
@@ -58,19 +60,19 @@ cylinder(Triangulation<2, 2> &triangulation,
   // left
   GridGenerator::subdivided_hyper_rectangle(
     tria7,
-    {1, 2},
+    {for_3D ? 4u : 1u, 2},
     Point<2>(-cylinder_position, -cylinder_diameter),
     Point<2>(-cylinder_diameter, cylinder_diameter));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria8,
-    {1, 1},
+    {for_3D ? 4u : 1u, 1},
     Point<2>(-cylinder_position, cylinder_diameter),
     Point<2>(-cylinder_diameter, height / 2. + shift));
 
   GridGenerator::subdivided_hyper_rectangle(
     tria9,
-    {1, 1},
+    {for_3D ? 4u : 1u, 1},
     Point<2>(-cylinder_position, -height / 2. + shift),
     Point<2>(-cylinder_diameter, -cylinder_diameter));
 
@@ -84,7 +86,8 @@ cylinder(Triangulation<2, 2> &triangulation,
 
   /* Restore polar manifold for disc: */
 
-  triangulation.set_manifold(0, PolarManifold<2>(Point<2>()));
+  triangulation.set_manifold(0,
+                             PolarManifold<dim, spacedim>(Point<spacedim>()));
 
   /* Fix up position of left boundary: */
 
@@ -102,7 +105,7 @@ cylinder(Triangulation<2, 2> &triangulation,
 
   for (auto cell : triangulation.active_cell_iterators())
     {
-      for (auto f : GeometryInfo<2>::face_indices())
+      for (auto f : GeometryInfo<dim>::face_indices())
         {
           const auto face = cell->face(f);
 
@@ -126,13 +129,24 @@ cylinder(Triangulation<2, 2> &triangulation,
             face->set_boundary_id(0);
           else if (std::abs(center[1] - (+height / 2. + shift)) < 1.e-6)
             // wall (top)
-            face->set_boundary_id(2);
+            face->set_boundary_id(4);
           else if (std::abs(center[1] - (-height / 2. + shift)) < 1.e-6)
             // wall (bottom)
-            face->set_boundary_id(2);
-          else
             face->set_boundary_id(3);
+          else
+            face->set_boundary_id(2);
         }
+    }
+
+  if (use_symmetric_walls)
+    {
+      std::vector<GridTools::PeriodicFacePair<
+        typename Triangulation<2, spacedim>::cell_iterator>>
+        periodic_faces;
+
+      GridTools::collect_periodic_faces(triangulation, 3, 4, 1, periodic_faces);
+
+      triangulation.add_periodicity(periodic_faces);
     }
 }
 
@@ -142,16 +156,24 @@ cylinder(Triangulation<3, 3> &triangulation,
          const double         height,
          const double         cylinder_position,
          const double         cylinder_diameter,
-         const double         shift)
+         const double         shift,
+         const bool           use_symmetric_walls)
 {
   dealii::Triangulation<2, 2> tria1;
 
-  cylinder(tria1, length, height, cylinder_position, cylinder_diameter, shift);
+  cylinder(tria1,
+           length,
+           height,
+           cylinder_position,
+           cylinder_diameter,
+           shift,
+           use_symmetric_walls,
+           true);
 
   dealii::Triangulation<3, 3> tria2;
   tria2.set_mesh_smoothing(triangulation.get_mesh_smoothing());
 
-  GridGenerator::extrude_triangulation(tria1, 4, height, tria2, true);
+  GridGenerator::extrude_triangulation(tria1, 5, height, tria2, true);
   dealii::GridTools::transform(
     [height](auto point) {
       return point - dealii::Tensor<1, 3>{{0, 0, height / 2.}};
@@ -181,13 +203,6 @@ cylinder(Triangulation<3, 3> &triangulation,
           if (!face->at_boundary())
             continue;
 
-          /*
-           * We want slip boundary conditions (i.e. indicator 1) almost
-           * everywhere except on the faces with normal in x-direction.
-           * There, on the left side we set inflow conditions (indicator 2)
-           * and on the right side we set indicator 0, i.e. do nothing.
-           */
-
           const auto center = face->center();
 
           if (center[0] > length - cylinder_position - 1.e-6)
@@ -198,18 +213,87 @@ cylinder(Triangulation<3, 3> &triangulation,
             face->set_boundary_id(0);
           else if (std::abs(center[1] - (+height / 2. + shift)) < 1.e-6)
             // wall (top)
-            face->set_boundary_id(2);
+            face->set_boundary_id(4);
           else if (std::abs(center[1] - (-height / 2. + shift)) < 1.e-6)
             // wall (bottom)
-            face->set_boundary_id(2);
+            face->set_boundary_id(3);
           else if (std::abs(center[2] - (+height / 2.)) < 1.e-6)
             // wall (top)
-            face->set_boundary_id(2);
+            face->set_boundary_id(6);
           else if (std::abs(center[2] - (-height / 2.)) < 1.e-6)
             // wall (bottom)
-            face->set_boundary_id(2);
+            face->set_boundary_id(5);
           else
-            face->set_boundary_id(3);
+            face->set_boundary_id(2);
         }
     }
+
+  if (use_symmetric_walls)
+    {
+      std::vector<GridTools::PeriodicFacePair<
+        typename Triangulation<3, 3>::cell_iterator>>
+        periodic_faces;
+
+      GridTools::collect_periodic_faces(triangulation, 3, 4, 1, periodic_faces);
+      GridTools::collect_periodic_faces(triangulation, 5, 6, 2, periodic_faces);
+
+      triangulation.add_periodicity(periodic_faces);
+    }
+}
+
+void
+cylinder_crossection(Triangulation<2, 3> &triangulation,
+                     const double         length,
+                     const double         height,
+                     const double         cylinder_position,
+                     const double         cylinder_diameter,
+                     const double         shift,
+                     const bool           for_3D)
+{
+  const unsigned int dim      = 2;
+  const unsigned int spacedim = 3;
+
+  (void)shift;
+
+  dealii::Triangulation<dim, spacedim> tria1, tria2, tria3, tria4, tria5, tria6,
+    tria7, tria8, tria9, tria_tmp;
+
+  // center
+  GridGenerator::subdivided_hyper_rectangle(
+    tria1,
+    {1, 4},
+    Point<2>(-cylinder_diameter, -height / 2.),
+    Point<2>(-0.5 * cylinder_diameter, height / 2.));
+  GridGenerator::subdivided_hyper_rectangle(
+    tria2,
+    {1, 4},
+    Point<2>(+0.5 * cylinder_diameter, -height / 2.),
+    Point<2>(+cylinder_diameter, height / 2.));
+
+  // right
+  GridGenerator::subdivided_hyper_rectangle(
+    tria3,
+    {18, 4},
+    Point<2>(cylinder_diameter, -height / 2.),
+    Point<2>(length - cylinder_position, height / 2.));
+
+  // left
+  GridGenerator::subdivided_hyper_rectangle(
+    tria4,
+    {for_3D ? 4u : 1u, 4},
+    Point<2>(-cylinder_position, -height / 2.),
+    Point<2>(-cylinder_diameter, height / 2.));
+
+  tria_tmp.set_mesh_smoothing(triangulation.get_mesh_smoothing());
+  GridGenerator::merge_triangulations({&tria1, &tria2, &tria3, &tria4},
+                                      tria_tmp,
+                                      1.e-12,
+                                      true);
+  triangulation.copy_triangulation(tria_tmp);
+
+
+  Tensor<1, 3, double> normal;
+  normal[0] = 1.0;
+
+  GridTools::rotate(normal, numbers::PI / 2., triangulation);
 }

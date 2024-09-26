@@ -26,7 +26,14 @@ public:
     std::vector<std::pair<unsigned int, std::shared_ptr<Function<dim, Number>>>>
       all_inhomogeneous_dbcs;
 
+    std::set<unsigned int> all_outflow_bcs_cut;
+    std::map<unsigned int, std::shared_ptr<Function<dim, Number>>>
+      all_outflow_bcs_nitsche;
+
     std::vector<unsigned int> all_slip_bcs;
+
+    std::vector<std::tuple<unsigned int, unsigned int, unsigned int>>
+      periodic_bcs;
   };
 
   virtual ~SimulationBase() = default;
@@ -49,6 +56,10 @@ public:
 
   virtual double
   get_u_max() const;
+
+  virtual std::shared_ptr<Mapping<dim>>
+  get_mapping(const Triangulation<dim> &tria,
+              const unsigned int        mapping_degree) const;
 };
 
 
@@ -109,6 +120,10 @@ public:
   double
   get_u_max() const override;
 
+  virtual std::shared_ptr<Mapping<dim>>
+  get_mapping(const Triangulation<dim> &tria,
+              const unsigned int        mapping_degree) const override;
+
 private:
   bool        use_no_slip_cylinder_bc;
   bool        use_no_slip_wall_bc;
@@ -127,9 +142,23 @@ private:
   double geometry_cylinder_diameter;
   double geometry_cylinder_shift;
 
+  unsigned int fe_degree;
+  unsigned int mapping_degree;
+
+  bool use_exact_normal;
+  bool use_symmetric_walls;
+  bool use_outflow_bc_weak_cut;
+  bool use_outflow_bc_weak_nitsche;
+  bool use_outflow_bc_strong;
+
   mutable std::shared_ptr<const Utilities::MPI::RemotePointEvaluation<dim>> rpe;
 
   mutable std::ofstream drag_lift_pressure_file;
+
+  template <int structdim>
+  std::shared_ptr<Mapping<structdim, dim>>
+  get_mapping_private(const Triangulation<structdim, dim> &tria,
+                      const unsigned int mapping_degree) const;
 };
 
 

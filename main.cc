@@ -150,7 +150,7 @@ private:
     prm.add_parameter("linear solver",
                       linear_solver,
                       "",
-                      Patterns::Selection("GMRES|direct"));
+                      Patterns::Selection("GMRES|direct|Richardson"));
     prm.add_parameter("lin n max iterations", lin_n_max_iterations);
     prm.add_parameter("lin absolute tolerance", lin_absolute_tolerance);
     prm.add_parameter("lin relative tolerance", lin_relative_tolerance);
@@ -236,8 +236,10 @@ public:
 
     Quadrature<dim> quadrature = QGauss<dim>(params.fe_degree + 1);
 
-    MappingQ<dim> mapping((params.mapping_degree == 0) ? params.fe_degree :
-                                                         params.mapping_degree);
+    const unsigned int mapping_degree =
+      (params.mapping_degree == 0) ? params.fe_degree : params.mapping_degree;
+
+    const auto mapping = simulation->get_mapping(tria, mapping_degree);
 
     // set up constraints
     ComponentMask mask_v(dim + 1, true);
@@ -268,7 +270,11 @@ public:
 
     for (const auto bci : bcs.all_slip_bcs)
       VectorTools::compute_no_normal_flux_constraints(
-        dof_handler, 0, {bci}, constraints, mapping);
+        dof_handler, 0, {bci}, constraints, *mapping, false);
+
+    for (const auto &[face_0, face_1, direction] : bcs.periodic_bcs)
+      DoFTools::make_periodicity_constraints(
+        dof_handler, face_0, face_1, direction, constraints);
 
     DoFTools::make_hanging_node_constraints(dof_handler, constraints);
 
@@ -311,7 +317,7 @@ public:
         const bool increment_form = params.nonlinear_solver == "Newton";
 
         ns_operator = std::make_shared<NavierStokesOperator<dim, Number>>(
-          mapping,
+          *mapping,
           dof_handler,
           constraints_homogeneous,
           constraints,
@@ -320,6 +326,8 @@ public:
           params.nu,
           params.c_1,
           params.c_2,
+          bcs.all_outflow_bcs_cut,
+          bcs.all_outflow_bcs_nitsche,
           *time_integrator_data,
           params.consider_time_deriverative,
           increment_form,
@@ -331,7 +339,7 @@ public:
 
         ns_operator =
           std::make_shared<NavierStokesOperatorMatrixBased<dim, Number>>(
-            mapping,
+            *mapping,
             dof_handler,
             constraints_inhomogeneous,
             quadrature,
@@ -377,20 +385,6 @@ public:
           MGTransferGlobalCoarseningTools::create_geometric_coarsening_sequence(
             dof_handler.get_triangulation());
 
-        if (true /*TODO*/)
-          {
-            for (unsigned int i = 0; i < mg_trias.size(); ++i)
-              {
-                DataOut<dim> data_out;
-                data_out.attach_triangulation(*mg_trias[i]);
-                data_out.build_patches();
-
-                data_out.write_vtu_in_parallel("grid." + std::to_string(i) +
-                                                 ".vtu",
-                                               MPI_COMM_WORLD);
-              }
-          }
-
         unsigned int minlevel = 0;
         unsigned int maxlevel = mg_trias.size() - 1;
 
@@ -402,6 +396,20 @@ public:
 
         for (unsigned int level = minlevel; level <= maxlevel; ++level)
           {
+            const auto mapping =
+              simulation->get_mapping(*mg_trias[level], mapping_degree);
+
+            if (true)
+              {
+                DataOut<dim> data_out;
+                data_out.attach_triangulation(*mg_trias[level]);
+                data_out.build_patches(*mapping, params.fe_degree);
+
+                data_out.write_vtu_in_parallel("grid." + std::to_string(level) +
+                                                 ".vtu",
+                                               MPI_COMM_WORLD);
+              }
+
             auto &dof_handler = mg_dof_handlers[level];
             auto &constraints = mg_constraints[level];
 
@@ -468,7 +476,11 @@ public:
 
             for (const auto bci : bcs.all_slip_bcs)
               VectorTools::compute_no_normal_flux_constraints(
-                dof_handler, 0, {bci}, constraints, mapping);
+                dof_handler, 0, {bci}, constraints, *mapping, false);
+
+            for (const auto &[face_0, face_1, direction] : bcs.periodic_bcs)
+              DoFTools::make_periodicity_constraints(
+                dof_handler, face_0, face_1, direction, constraints);
 
             for (const auto &[bci, _] : bcs.all_inhomogeneous_dbcs)
               DoFTools::make_zero_boundary_constraints(dof_handler,
@@ -486,7 +498,7 @@ public:
 
                 mg_ns_operators[level] =
                   std::make_shared<NavierStokesOperator<dim, MGNumber>>(
-                    mapping,
+                    *mapping,
                     dof_handler,
                     constraints,
                     constraints,
@@ -495,6 +507,8 @@ public:
                     params.nu,
                     params.c_1,
                     params.c_2,
+                    bcs.all_outflow_bcs_cut,
+                    bcs.all_outflow_bcs_nitsche,
                     *time_integrator_data,
                     params.consider_time_deriverative,
                     increment_form,
@@ -623,9 +637,10 @@ public:
                 0,
                 {bci},
                 constraints,
-                mapping,
+                *mapping,
                 refinement_edge_indices,
-                level);
+                level,
+                false);
 
             constraints.close();
 
@@ -653,7 +668,7 @@ public:
                 const bool increment_form = params.nonlinear_solver == "Newton";
                 mg_ns_operators[level] =
                   std::make_shared<NavierStokesOperator<dim, MGNumber>>(
-                    mapping,
+                    *mapping,
                     (params.mg_use_fe_q_iso_q1 && (level == minlevel)) ?
                       dof_handler_q_iso_q1 :
                       dof_handler,
@@ -664,6 +679,8 @@ public:
                     params.nu,
                     params.c_1,
                     params.c_2,
+                    bcs.all_outflow_bcs_cut,
+                    bcs.all_outflow_bcs_nitsche,
                     *time_integrator_data,
                     params.consider_time_deriverative,
                     increment_form,
@@ -715,6 +732,13 @@ public:
                                             params.lin_relative_tolerance);
     else if (params.linear_solver == "direct")
       linear_solver = std::make_shared<LinearSolverDirect>(*ns_operator);
+    else if (params.linear_solver == "Richardson")
+      linear_solver =
+        std::make_shared<LinearSolverRichardson>(*ns_operator,
+                                                 *preconditioner,
+                                                 params.lin_n_max_iterations,
+                                                 params.lin_absolute_tolerance,
+                                                 params.lin_relative_tolerance);
     else
       AssertThrow(false, ExcNotImplemented());
 
@@ -827,7 +851,7 @@ public:
 
     if (false)
       nonlinear_solver->postprocess = [&](const VectorType<Number> &dst) {
-        output(0.0, mapping, dof_handler, dst, true);
+        output(0.0, *mapping, dof_handler, dst, true);
       };
 
     // initialize solution
@@ -844,7 +868,11 @@ public:
         {
           fu->set_time(0.0); // TODO: correct?
           VectorTools::interpolate_boundary_values(
-            mapping, dof_handler, bci, *fu, constraints_inhomogeneous, mask_v);
+            *mapping, dof_handler, bci, *fu, constraints_inhomogeneous, mask_v);
+        }
+      for (const auto &[bci, fu] : bcs.all_outflow_bcs_nitsche)
+        {
+          fu->set_time(0.0); // TODO: correct?
         }
       constraints_inhomogeneous.close();
 
@@ -854,13 +882,13 @@ public:
     double       t       = 0.0;
     unsigned int counter = 1;
 
-    output(t, mapping, dof_handler, solution.get_current_solution());
+    output(t, *mapping, dof_handler, solution.get_current_solution());
     simulation->postprocess(t,
-                            mapping,
+                            *mapping,
                             dof_handler,
                             solution.get_current_solution());
 
-    const double min_dx = GridTools::minimal_cell_diameter(tria, mapping);
+    const double min_dx = GridTools::minimal_cell_diameter(tria, *mapping);
 
     // perform time loop
     for (; t < params.t_final; ++counter)
@@ -886,12 +914,16 @@ public:
         for (const auto &[bci, fu] : bcs.all_inhomogeneous_dbcs)
           {
             fu->set_time(t); // TODO: correct?
-            VectorTools::interpolate_boundary_values(mapping,
+            VectorTools::interpolate_boundary_values(*mapping,
                                                      dof_handler,
                                                      bci,
                                                      *fu,
                                                      constraints_inhomogeneous,
                                                      mask_v);
+          }
+        for (const auto &[bci, fu] : bcs.all_outflow_bcs_nitsche)
+          {
+            fu->set_time(t); // TODO: correct?
           }
         constraints_inhomogeneous.close();
 
@@ -930,13 +962,13 @@ public:
         // postprocessing
         if (time_integrator_data->get_order() > 0)
           {
-            output(t, mapping, dof_handler, current_solution);
-            simulation->postprocess(t, mapping, dof_handler, current_solution);
+            output(t, *mapping, dof_handler, current_solution);
+            simulation->postprocess(t, *mapping, dof_handler, current_solution);
           }
         else
           {
-            output(t, mapping, dof_handler, current_solution, true);
-            simulation->postprocess(t, mapping, dof_handler, current_solution);
+            output(t, *mapping, dof_handler, current_solution, true);
+            simulation->postprocess(t, *mapping, dof_handler, current_solution);
             break;
           }
 

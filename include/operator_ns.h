@@ -19,6 +19,7 @@ class NavierStokesOperator : public OperatorBase<Number>
 {
 public:
   using FECellIntegrator = FEEvaluation<dim, -1, 0, dim + 1, Number>;
+  using FEFaceIntegrator = FEFaceEvaluation<dim, -1, 0, dim + 1, Number>;
 
   NavierStokesOperator(
     const Mapping<dim>              &mapping,
@@ -30,11 +31,14 @@ public:
     const Number                     nu,
     const Number                     c_1,
     const Number                     c_2,
-    const TimeIntegratorData        &time_integrator_data,
-    const bool                       consider_time_deriverative,
-    const bool                       increment_form,
-    const bool                       cell_wise_stabilization,
-    const unsigned int               mg_level = numbers::invalid_unsigned_int);
+    const std::set<unsigned int>    &all_outflow_bcs_cut,
+    const std::map<unsigned int, std::shared_ptr<Function<dim, double>>>
+                             &all_outflow_bcs_nitsche,
+    const TimeIntegratorData &time_integrator_data,
+    const bool                consider_time_deriverative,
+    const bool                increment_form,
+    const bool                cell_wise_stabilization,
+    const unsigned int        mg_level = numbers::invalid_unsigned_int);
 
   const AffineConstraints<Number> &
   get_constraints() const override;
@@ -99,11 +103,15 @@ private:
   const VectorizedArray<Number> nu;
   const Number                  c_1;
   const Number                  c_2;
-  const TimeIntegratorData     &time_integrator_data;
-  const bool                    consider_time_deriverative;
-  const bool                    increment_form;
-  const bool                    cell_wise_stabilization;
-  const bool compute_penalty_parameters_for_previous_solution;
+  const std::set<unsigned int>  all_outflow_bcs_cut;
+  const std::map<unsigned int, std::shared_ptr<Function<dim, double>>>
+                            all_outflow_bcs_nitsche;
+  const bool                needs_face_integrals;
+  const TimeIntegratorData &time_integrator_data;
+  const bool                consider_time_deriverative;
+  const bool                increment_form;
+  const bool                cell_wise_stabilization;
+  const bool                compute_penalty_parameters_for_previous_solution;
 
   const Table<2, bool> bool_dof_mask;
 
@@ -123,6 +131,10 @@ private:
   Table<2, Tensor<2, dim, VectorizedArray<Number>>> u_old_gradient;
   Table<2, Tensor<1, dim, VectorizedArray<Number>>> p_old_gradient;
 
+  Table<1, VectorizedArray<Number>>                     effective_beta_face;
+  Table<2, Tensor<1, dim + 1, VectorizedArray<Number>>> face_target_velocity;
+  Table<2, Tensor<1, dim, VectorizedArray<Number>>>     face_velocity;
+
   std::vector<unsigned int> constrained_indices;
 
   template <bool evaluate_residual>
@@ -135,6 +147,29 @@ private:
   template <bool evaluate_residual>
   void
   do_vmult_cell(FECellIntegrator &integrator) const;
+
+  template <bool evaluate_residual>
+  void
+  do_vmult_face_range(const MatrixFree<dim, Number>               &matrix_free,
+                      VectorType<Number>                          &dst,
+                      const VectorType<Number>                    &src,
+                      const std::pair<unsigned int, unsigned int> &range) const;
+
+  template <bool evaluate_residual>
+  void
+  do_vmult_face(FEFaceIntegrator &integrator) const;
+
+  template <bool evaluate_residual>
+  void
+  do_vmult_boundary_range(
+    const MatrixFree<dim, Number>               &matrix_free,
+    VectorType<Number>                          &dst,
+    const VectorType<Number>                    &src,
+    const std::pair<unsigned int, unsigned int> &range) const;
+
+  template <bool evaluate_residual>
+  void
+  do_vmult_boundary(FEFaceIntegrator &integrator) const;
 
   void
   initialize_system_matrix() const;

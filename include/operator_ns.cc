@@ -76,16 +76,23 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
   const Number                     nu,
   const Number                     c_1,
   const Number                     c_2,
-  const TimeIntegratorData        &time_integrator_data,
-  const bool                       consider_time_deriverative,
-  const bool                       increment_form,
-  const bool                       cell_wise_stabilization,
-  const unsigned int               mg_level)
+  const std::set<unsigned int>    &all_outflow_bcs_cut,
+  const std::map<unsigned int, std::shared_ptr<Function<dim, double>>>
+                           &all_outflow_bcs_nitsche,
+  const TimeIntegratorData &time_integrator_data,
+  const bool                consider_time_deriverative,
+  const bool                increment_form,
+  const bool                cell_wise_stabilization,
+  const unsigned int        mg_level)
   : constraints_inhomogeneous(constraints_inhomogeneous)
   , theta(time_integrator_data.get_theta())
   , nu(nu)
   , c_1(c_1)
   , c_2(c_2)
+  , all_outflow_bcs_cut(all_outflow_bcs_cut)
+  , all_outflow_bcs_nitsche(all_outflow_bcs_nitsche)
+  , needs_face_integrals(
+      !(all_outflow_bcs_cut.empty() && all_outflow_bcs_nitsche.empty()))
   , time_integrator_data(time_integrator_data)
   , consider_time_deriverative(consider_time_deriverative &&
                                (time_integrator_data.get_order() > 0))
@@ -103,7 +110,12 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
   typename MatrixFree<dim, Number>::AdditionalData additional_data;
 
   additional_data.mapping_update_flags = update_values | update_gradients;
-  additional_data.mg_level             = mg_level;
+  if (!all_outflow_bcs_cut.empty())
+    additional_data.mapping_update_flags_boundary_faces = update_values;
+  if (!all_outflow_bcs_nitsche.empty())
+    additional_data.mapping_update_flags_boundary_faces =
+      update_values | update_gradients | update_quadrature_points;
+  additional_data.mg_level = mg_level;
 
   matrix_free.reinit(
     mapping, mf_dof_handlers, mf_constraints, quadrature, additional_data);
@@ -187,12 +199,23 @@ NavierStokesOperator<dim, Number>::compute_inverse_diagonal(
 {
   MyScope scope(timer, "ns::compute_inverse_diagonal");
 
+  std::function<void(FEFaceIntegrator &)> boundary_function;
+
+  if (needs_face_integrals)
+    boundary_function = [&](auto &integrator) {
+      this->template do_vmult_boundary<false>(integrator);
+    };
+
   matrix_free.initialize_dof_vector(diagonal);
-  MatrixFreeTools::compute_diagonal(
-    matrix_free,
-    diagonal,
-    &NavierStokesOperator<dim, Number>::do_vmult_cell<false>,
-    this);
+  MatrixFreeTools::
+    compute_diagonal<dim, -1, 0, dim + 1, Number, VectorizedArray<Number>>(
+      matrix_free,
+      diagonal,
+      [&](auto &integrator) {
+        this->template do_vmult_cell<false>(integrator);
+      },
+      {},
+      boundary_function);
 
   for (unsigned int i = 0; i < edge_constrained_indices.size(); ++i)
     diagonal.local_element(edge_constrained_indices[i]) = 0.0;
@@ -304,11 +327,16 @@ NavierStokesOperator<dim, Number>::compute_penalty_parameters(
   this->valid_system = false;
 
   const unsigned n_cells             = matrix_free.n_cell_batches();
+  const unsigned n_inner_faces       = matrix_free.n_inner_face_batches();
+  const unsigned n_boundary_faces    = matrix_free.n_boundary_face_batches();
   const unsigned n_quadrature_points = matrix_free.get_quadrature().size();
+  const unsigned n_face_quadrature_points =
+    matrix_free.get_face_quadrature().size();
   const unsigned fe_degree =
     matrix_free.get_dof_handler().get_fe().tensor_degree();
 
-  FEEvaluation<dim, -1, 0, dim, Number> integrator(matrix_free);
+  FEEvaluation<dim, -1, 0, dim, Number>     integrator(matrix_free);
+  FEFaceEvaluation<dim, -1, 0, dim, Number> face_integrator(matrix_free);
 
   const bool has_ghost_elements = vec.has_ghost_elements();
 
@@ -391,6 +419,101 @@ NavierStokesOperator<dim, Number>::compute_penalty_parameters(
           delta_2_q[cell][q] = std::sqrt(u_mag_squared) * h * 0.5;
         }
     }
+
+  if (!(all_outflow_bcs_cut.empty() && all_outflow_bcs_nitsche.empty()))
+    {
+      const double beta = 1.0; // TODO
+
+      const unsigned fe_degree =
+        matrix_free.get_dof_handler().get_fe().tensor_degree();
+
+      effective_beta_face.reinit(n_boundary_faces);
+
+      for (unsigned int face = n_inner_faces;
+           face < n_inner_faces + n_boundary_faces;
+           ++face)
+        {
+          VectorizedArray<Number> cell_size = 1.0;
+
+          for (unsigned int v = 0;
+               v < matrix_free.n_active_entries_per_face_batch(face);
+               ++v)
+            {
+              const auto [cell_it, _] = matrix_free.get_face_iterator(face, v);
+
+              if (dim == 2)
+                cell_size[v] =
+                  std::sqrt(4. * cell_it->measure() / M_PI) / fe_degree;
+              else if (dim == 3)
+                cell_size[v] =
+                  std::pow(6 * cell_it->measure() / M_PI, 1. / 3.) / fe_degree;
+            }
+
+          effective_beta_face[face - n_inner_faces] =
+            beta / std::pow(cell_size, static_cast<Number>(fe_degree + 1));
+        }
+    }
+
+  if (!all_outflow_bcs_cut.empty())
+    {
+      face_velocity.reinit(n_boundary_faces, n_face_quadrature_points);
+
+      for (unsigned int face = n_inner_faces;
+           face < n_inner_faces + n_boundary_faces;
+           ++face)
+        {
+          face_integrator.reinit(face);
+
+          face_integrator.read_dof_values_plain(vec);
+          face_integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
+
+          for (const auto q : face_integrator.quadrature_point_indices())
+            face_velocity[face - n_inner_faces][q] =
+              face_integrator.get_value(q);
+        }
+    }
+  else if (!all_outflow_bcs_nitsche.empty())
+    {
+      face_target_velocity.reinit(n_boundary_faces, n_face_quadrature_points);
+
+      for (unsigned int face = n_inner_faces;
+           face < n_inner_faces + n_boundary_faces;
+           ++face)
+        {
+          face_integrator.reinit(face);
+
+          const auto fu_ptr =
+            all_outflow_bcs_nitsche.find(face_integrator.boundary_id());
+
+          if (fu_ptr == all_outflow_bcs_nitsche.end())
+            continue;
+
+          for (const auto q : face_integrator.quadrature_point_indices())
+            {
+              const auto point_batch = face_integrator.quadrature_point(q);
+
+              Tensor<1, dim + 1, VectorizedArray<Number>> target_velocity_value;
+
+              for (unsigned int v = 0;
+                   v < matrix_free.n_active_entries_per_face_batch(face);
+                   ++v)
+                {
+                  Point<dim> point;
+
+                  for (unsigned int d = 0; d < dim; ++d)
+                    point[d] = point_batch[d][v];
+
+                  for (unsigned int d = 0; d < dim; ++d)
+                    target_velocity_value[d][v] =
+                      fu_ptr->second->value(point, d);
+                }
+
+              face_target_velocity[face - n_inner_faces][q] =
+                target_velocity_value;
+            }
+        }
+    }
+
 
   if (has_ghost_elements == false)
     vec.zero_out_ghost_values();
@@ -528,12 +651,22 @@ NavierStokesOperator<dim, Number>::evaluate_residual(
   VectorType<Number> tmp = src;              // TODO: needed?
   constraints_inhomogeneous.distribute(tmp); //
 
-  this->matrix_free.cell_loop(
-    &NavierStokesOperator<dim, Number>::do_vmult_range<true>,
-    this,
-    dst,
-    tmp,
-    true);
+  if (!needs_face_integrals)
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim, Number>::do_vmult_range<true>,
+      this,
+      dst,
+      tmp,
+      true);
+  else
+    this->matrix_free.loop(
+      &NavierStokesOperator<dim, Number>::do_vmult_range<true>,
+      &NavierStokesOperator<dim, Number>::do_vmult_face_range<true>,
+      &NavierStokesOperator<dim, Number>::do_vmult_boundary_range<true>,
+      this,
+      dst,
+      tmp,
+      true);
 
   // apply constraints
   matrix_free.get_affine_constraints(0).set_zero(dst);
@@ -560,12 +693,22 @@ NavierStokesOperator<dim, Number>::vmult(VectorType<Number>       &dst,
         .local_element(edge_constrained_indices[i]) = 0.;
     }
 
-  this->matrix_free.cell_loop(
-    &NavierStokesOperator<dim, Number>::do_vmult_range<false>,
-    this,
-    dst,
-    src,
-    true);
+  if (!needs_face_integrals)
+    this->matrix_free.cell_loop(
+      &NavierStokesOperator<dim, Number>::do_vmult_range<false>,
+      this,
+      dst,
+      src,
+      true);
+  else
+    this->matrix_free.loop(
+      &NavierStokesOperator<dim, Number>::do_vmult_range<false>,
+      &NavierStokesOperator<dim, Number>::do_vmult_face_range<false>,
+      &NavierStokesOperator<dim, Number>::do_vmult_boundary_range<false>,
+      this,
+      dst,
+      src,
+      true);
 
   for (unsigned int i = 0; i < constrained_indices.size(); ++i)
     dst.local_element(constrained_indices[i]) =
@@ -675,6 +818,55 @@ NavierStokesOperator<dim, Number>::do_vmult_range(
         phi.read_dof_values(src);
 
       do_vmult_cell<evaluate_residual>(phi);
+
+      phi.distribute_local_to_global(dst);
+    }
+}
+
+template <int dim, typename Number>
+template <bool evaluate_residual>
+void
+NavierStokesOperator<dim, Number>::do_vmult_face_range(
+  const MatrixFree<dim, Number>               &matrix_free,
+  VectorType<Number>                          &dst,
+  const VectorType<Number>                    &src,
+  const std::pair<unsigned int, unsigned int> &range) const
+{
+  (void)matrix_free;
+  (void)dst;
+  (void)src;
+  (void)range;
+
+  // nothing to do
+}
+
+template <int dim, typename Number>
+template <bool evaluate_residual>
+void
+NavierStokesOperator<dim, Number>::do_vmult_boundary_range(
+  const MatrixFree<dim, Number>               &matrix_free,
+  VectorType<Number>                          &dst,
+  const VectorType<Number>                    &src,
+  const std::pair<unsigned int, unsigned int> &range) const
+{
+  FEFaceIntegrator phi(matrix_free, true, 0);
+
+  for (auto cell = range.first; cell < range.second; ++cell)
+    {
+      phi.reinit(cell);
+
+      if ((all_outflow_bcs_cut.find(phi.boundary_id()) ==
+           all_outflow_bcs_cut.end()) &&
+          (all_outflow_bcs_nitsche.find(phi.boundary_id()) ==
+           all_outflow_bcs_nitsche.end()))
+        continue;
+
+      if (evaluate_residual)
+        phi.read_dof_values_plain(src);
+      else
+        phi.read_dof_values(src);
+
+      do_vmult_boundary<evaluate_residual>(phi);
 
       phi.distribute_local_to_global(dst);
     }
@@ -984,6 +1176,122 @@ NavierStokesOperator<dim, Number>::do_vmult_cell(
 }
 
 template <int dim, typename Number>
+template <bool evaluate_residual>
+void
+NavierStokesOperator<dim, Number>::do_vmult_face(
+  FEFaceIntegrator &integrator) const
+{
+  (void)integrator;
+
+  // nothing to do
+}
+
+template <int dim, typename Number>
+template <bool evaluate_residual>
+void
+NavierStokesOperator<dim, Number>::do_vmult_boundary(
+  FEFaceIntegrator &integrator) const
+{
+  if (all_outflow_bcs_cut.find(integrator.boundary_id()) !=
+      all_outflow_bcs_cut.end())
+    {
+      const auto         face       = integrator.get_current_cell_index();
+      const unsigned int face_index = face - matrix_free.n_inner_face_batches();
+
+      const auto penalty_parameter = this->effective_beta_face[face_index];
+
+      integrator.evaluate(EvaluationFlags::EvaluationFlags::values);
+
+      for (const auto q : integrator.quadrature_point_indices())
+        {
+          typename FEFaceIntegrator::value_type value_result = {};
+
+          const auto value = integrator.get_value(q);
+
+          Tensor<1, dim, VectorizedArray<Number>> star_velocity;
+
+          if (evaluate_residual)
+            {
+              for (unsigned int d = 0; d < dim; ++d)
+                star_velocity[d] = value[d];
+            }
+          else
+            {
+              star_velocity = face_velocity[face_index][q];
+            }
+
+          const VectorizedArray<Number> zero = 0.0;
+
+          VectorizedArray<Number> normal_outflux =
+            star_velocity * integrator.get_normal_vector(q);
+          normal_outflux = std::min(zero, normal_outflux);
+
+          for (unsigned int d = 0; d < dim; ++d)
+            value_result[d] = penalty_parameter * normal_outflux * value[d];
+
+          integrator.submit_value(value_result, q);
+        }
+
+      integrator.integrate(EvaluationFlags::EvaluationFlags::values);
+    }
+  else if (all_outflow_bcs_nitsche.find(integrator.boundary_id()) !=
+           all_outflow_bcs_nitsche.end())
+    {
+      const auto         face       = integrator.get_current_cell_index();
+      const unsigned int face_index = face - matrix_free.n_inner_face_batches();
+
+      const auto penalty_parameter = this->effective_beta_face[face_index];
+
+      integrator.evaluate(EvaluationFlags::EvaluationFlags::values |
+                          EvaluationFlags::EvaluationFlags::gradients);
+
+      for (const auto q : integrator.quadrature_point_indices())
+        {
+          typename FEFaceIntegrator::value_type    value_result    = {};
+          typename FEFaceIntegrator::gradient_type gradient_result = {};
+
+          const auto normal_vector = integrator.get_normal_vector(q);
+
+          auto       value    = integrator.get_value(q);
+          const auto gradient = integrator.get_gradient(q);
+
+          // If we are assembling the residual, substract the target velocity
+          // from the velocity value.
+          if constexpr (evaluate_residual)
+            value -= this->face_target_velocity[face_index][q];
+
+          for (unsigned int d = 0; d < dim; ++d)
+            {
+              // Assemble (v,beta (u-u_target))
+              value_result[d] += penalty_parameter * value[d];
+
+              // Assemble ν(v,∇δu·n)
+              for (unsigned int i = 0; i < dim; ++i)
+                value_result[d] -= nu * gradient[d][i] * normal_vector[i];
+
+              // Assemble ν(∇v·n,(u-u_target))
+              for (unsigned int i = 0; i < dim; ++i)
+                gradient_result[d][i] -= nu * value[d] * normal_vector[i];
+            }
+
+          integrator.submit_value(value_result, q);
+          integrator.submit_gradient(gradient_result, q);
+        }
+      integrator.integrate(EvaluationFlags::EvaluationFlags::values |
+                           EvaluationFlags::EvaluationFlags::gradients);
+    }
+  else
+    {
+      const VectorizedArray<Number> zero = 0.0;
+
+      for (unsigned int i = 0; i < integrator.dofs_per_cell; ++i)
+        integrator.begin_dof_values()[i] = zero;
+
+      return;
+    }
+}
+
+template <int dim, typename Number>
 void
 NavierStokesOperator<dim, Number>::initialize_system_matrix() const
 {
@@ -1063,11 +1371,36 @@ NavierStokesOperator<dim, Number>::initialize_system_matrix() const
         matrix_free.get_shape_info().lexicographic_numbering;
 
       unsigned int cell   = numbers::invalid_unsigned_int;
+      unsigned int face   = numbers::invalid_unsigned_int;
       unsigned int column = numbers::invalid_unsigned_int;
+
+      std::function<void(FEFaceIntegrator &)> boundary_function;
+
+      if (needs_face_integrals)
+        boundary_function = [&](auto &integrator) {
+          if (face != integrator.get_current_cell_index())
+            {
+              face   = integrator.get_current_cell_index();
+              column = 0;
+            }
+
+          this->template do_vmult_boundary<false>(integrator);
+
+          // remove spurious entries for FE_Q_iso_Q1
+          for (unsigned int i = 0; i < lexicographic_numbering.size(); ++i)
+            if (!bool_dof_mask[lexicographic_numbering[i]]
+                              [lexicographic_numbering[column]])
+              integrator.begin_dof_values()[i] = 0.0;
+
+          column++;
+        };
 
       MatrixFreeTools::
         compute_matrix<dim, -1, 0, dim + 1, Number, VectorizedArray<Number>>(
-          matrix_free, constraints, system_matrix, [&](auto &integrator) {
+          matrix_free,
+          constraints,
+          system_matrix,
+          [&](auto &integrator) {
             if (cell != integrator.get_current_cell_index())
               {
                 cell   = integrator.get_current_cell_index();
@@ -1083,7 +1416,9 @@ NavierStokesOperator<dim, Number>::initialize_system_matrix() const
                 integrator.begin_dof_values()[i] = 0.0;
 
             column++;
-          });
+          },
+          {},
+          boundary_function);
 
       this->valid_system = true;
     }
