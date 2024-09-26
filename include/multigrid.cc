@@ -155,6 +155,7 @@ PreconditionerGMGAdditionalData::add_parameters(ParameterHandler &prm)
 {
   // smoother
   prm.add_parameter("gmg output details", output_details);
+  prm.add_parameter("gmg compute evs n levels", compute_evs_n_levels);
 
   // smoother
   prm.add_parameter("gmg smoothing n iterations", smoothing_n_iterations);
@@ -163,7 +164,7 @@ PreconditionerGMGAdditionalData::add_parameters(ParameterHandler &prm)
   prm.add_parameter("gmg coarse grid solver",
                     coarse_grid_solver,
                     "",
-                    Patterns::Selection("AMG|direct|identity"));
+                    Patterns::Selection("AMG|ILU|direct|identity"));
   prm.add_parameter("gmg coarse grid iterate", coarse_grid_iterate);
 
   // coarse-grid GMRES
@@ -187,7 +188,8 @@ PreconditionerGMG<dim>::PreconditionerGMG(
   : pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   , pcout_cond(std::cout,
                (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0) &&
-                 additional_data.output_details)
+                 (additional_data.output_details ||
+                  additional_data.compute_evs_n_levels > 0))
   , dof_handler(dof_handler)
   , op(op)
   , transfer(transfer)
@@ -302,13 +304,24 @@ PreconditionerGMG<dim>::initialize()
       }
   }
 
-  if (false)
-    for (unsigned int level = min_level; level <= min_level; ++level)
+  if (additional_data.compute_evs_n_levels > 0)
+    for (unsigned int level = min_level;
+         level <=
+         std::min(max_level,
+                  min_level + additional_data.compute_evs_n_levels - 1);
+         ++level)
       {
         const auto &matrix = op[level]->get_system_matrix();
 
         LAPACKFullMatrix<double> lapack_full_matrix;
         lapack_full_matrix.copy_from(matrix);
+
+        const auto &diag = smoother_data[level].preconditioner->get_vector();
+
+        for (unsigned int i = 0; i < matrix.m(); ++i)
+          for (unsigned int j = 0; j < matrix.n(); ++j)
+            lapack_full_matrix(i, j) *= diag[i];
+
         lapack_full_matrix.compute_eigenvalues();
 
         std::vector<double> eigenvalues;
@@ -318,8 +331,10 @@ PreconditionerGMG<dim>::initialize()
 
         std::sort(eigenvalues.begin(), eigenvalues.end());
 
-        std::cout << level << " " << eigenvalues.size() << " " << eigenvalues[0]
-                  << " " << eigenvalues.back() << std::endl;
+        pcout_cond << "    [M]  - level: " << level
+                   << ", ev_n: " << eigenvalues.size()
+                   << ", ev_min: " << eigenvalues[0]
+                   << ", ev_max: " << eigenvalues.back() << std::endl;
 
         if (false)
           {
@@ -337,7 +352,11 @@ PreconditionerGMG<dim>::initialize()
 
   {
     MyScope scope(timer, "gmg::initialize::smoother::init1");
-    for (unsigned int level = min_level + 1; level <= max_level; ++level)
+    for (unsigned int level =
+           ((additional_data.compute_evs_n_levels == 0) ? (min_level + 1) :
+                                                          min_level);
+         level <= max_level;
+         ++level)
       {
         VectorType<MGNumber> vec;
         op[level]->initialize_dof_vector(vec);
@@ -412,6 +431,20 @@ PreconditionerGMG<dim>::initialize()
           precondition_amg->initialize(matrix, amg_data);
         }
     }
+  else if (additional_data.coarse_grid_solver == "ILU")
+    {
+      MyScope scope(timer, "gmg::initialize::ilu");
+
+      precondition_ilu = std::make_unique<TrilinosWrappers::PreconditionILU>();
+
+      const int    current_preconditioner_fill_level = 0;
+      const double ilu_atol                          = 1e-12;
+      const double ilu_rtol                          = 1.00;
+      TrilinosWrappers::PreconditionILU::AdditionalData ad(
+        current_preconditioner_fill_level, ilu_atol, ilu_rtol, 0);
+
+      precondition_ilu->initialize(op[min_level]->get_system_matrix(), ad);
+    }
   else if (additional_data.coarse_grid_solver == "direct")
     {
       MyScope scope(timer, "gmg::initialize::direct");
@@ -436,6 +469,11 @@ PreconditionerGMG<dim>::initialize()
           MGCoarseGridApplyPreconditioner<VectorType<MGNumber>,
                                           TrilinosWrappers::PreconditionAMG>>(
           *precondition_amg);
+      else if (additional_data.coarse_grid_solver == "ILU")
+        mg_coarse = std::make_unique<
+          MGCoarseGridApplyPreconditioner<VectorType<MGNumber>,
+                                          TrilinosWrappers::PreconditionILU>>(
+          *precondition_ilu);
       else if (additional_data.coarse_grid_solver == "direct")
         mg_coarse = std::make_unique<
           MGCoarseGridApplyPreconditioner<VectorType<MGNumber>,
@@ -471,14 +509,26 @@ PreconditionerGMG<dim>::initialize()
             return SolverControl::State::success;
           });
 
-      mg_coarse = std::make_unique<
-        MGCoarseGridIterativeSolver<VectorType<MGNumber>,
-                                    SolverGMRES<VectorType<Number>>,
-                                    TrilinosWrappers::SparseMatrix,
-                                    TrilinosWrappers::PreconditionAMG>>(
-        *coarse_grid_solver,
-        op[min_level]->get_system_matrix(),
-        *precondition_amg);
+      if (additional_data.coarse_grid_solver == "AMG")
+        mg_coarse = std::make_unique<
+          MGCoarseGridIterativeSolver<VectorType<MGNumber>,
+                                      SolverGMRES<VectorType<Number>>,
+                                      TrilinosWrappers::SparseMatrix,
+                                      TrilinosWrappers::PreconditionAMG>>(
+          *coarse_grid_solver,
+          op[min_level]->get_system_matrix(),
+          *precondition_amg);
+      else if (additional_data.coarse_grid_solver == "ILU")
+        mg_coarse = std::make_unique<
+          MGCoarseGridIterativeSolver<VectorType<MGNumber>,
+                                      SolverGMRES<VectorType<Number>>,
+                                      TrilinosWrappers::SparseMatrix,
+                                      TrilinosWrappers::PreconditionILU>>(
+          *coarse_grid_solver,
+          op[min_level]->get_system_matrix(),
+          *precondition_ilu);
+      else
+        AssertThrow(false, ExcInternalError());
     }
 
   mg = std::make_unique<Multigrid<VectorType<MGNumber>>>(*mg_matrix,

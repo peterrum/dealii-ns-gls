@@ -2,7 +2,7 @@
   "dim"                  : 2,
   "fe degree"            : 2,
   "mapping degree"       : 0,
-  "n global refinements" : 4,
+  "n global refinements" : 2,
 
   "simulation name" : "cylinder",
 
@@ -20,14 +20,18 @@
 
   "use matrix free ns operator" : true,
 
-  "linear solver" : "direct",
+  "linear solver" : "GMRES",
   "lin relative tolerance" : 1e-2,
   "lin n max iterations" : 100000,
 
-  "preconditioner" : "ILU",
+  "preconditioner" : "GMG",
 
-  "gmg coarse grid solver"       : "direct",
-  "gmg coarse grid iterate"      : false,
+  "gmg coarse grid solver"       : "AMG",
+  "gmg coarse grid iterate"      : true,
+  "gmg coarse grid use fe q iso q1" : true,
+  "gmg coarse grid amg use default parameters" : false, 
+  "gmg output details" : false,
+  "gmg compute evs n levels" : 1,
 
   "nonlinear solver" : "Newton",
   "newton inexact"   : false,

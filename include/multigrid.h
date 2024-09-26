@@ -23,7 +23,8 @@
 
 struct PreconditionerGMGAdditionalData
 {
-  bool output_details = false;
+  bool         output_details       = false;
+  unsigned int compute_evs_n_levels = 0;
 
   // smoother (relaxation + point Jacobi)
   double       smoothing_range               = 20;
@@ -115,6 +116,8 @@ private:
     mg_smoother;
 
   mutable std::unique_ptr<TrilinosWrappers::PreconditionAMG> precondition_amg;
+
+  mutable std::unique_ptr<TrilinosWrappers::PreconditionILU> precondition_ilu;
 
   mutable std::unique_ptr<TrilinosWrappers::SolverDirect> precondition_direct;
 

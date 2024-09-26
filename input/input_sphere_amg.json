@@ -1,8 +1,9 @@
 {
   "dim"                  : 3,
-  "fe degree"            : 1,
+  "fe degree"            : 2,
   "mapping degree"       : 0,
-  "n global refinements" : 2,
+  "n global refinements" : 3,
+  "gmg coarse grid use fe q iso q1" : true,
 
   "simulation name" : "sphere",
 
@@ -27,7 +28,7 @@
   "preconditioner" : "GMG",
 
   "gmg coarse grid solver"                     : "AMG",
-  "gmg coarse grid iterate"                    : false,
+  "gmg coarse grid iterate"                    : true,
   "gmg coarse grid amg use default parameters" : true,
 
   "nonlinear solver" : "Newton",
