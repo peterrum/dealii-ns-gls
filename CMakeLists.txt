@@ -53,11 +53,18 @@ if(NOT DEAL_II_WITH_TRILINOS)
 endif()
 deal_ii_initialize_cached_variables()
 
+deal_ii_query_git_information(NS_GLS)
+
+CONFIGURE_FILE(
+  ${CMAKE_CURRENT_SOURCE_DIR}/include/revision.h.in
+  ${CMAKE_CURRENT_BINARY_DIR}/include/revision.h
+)
+
 set(libName "gls")
 
 DEAL_II_INITIALIZE_CACHED_VARIABLES()
 
-include_directories(include ${CMAKE_CURRENT_BINARY_DIR}/include)
+include_directories(include ${CMAKE_CURRENT_BINARY_DIR}/include ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 file(GLOB_RECURSE sources "${CMAKE_SOURCE_DIR}/include/*.cc")
 
