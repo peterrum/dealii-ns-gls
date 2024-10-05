@@ -604,7 +604,20 @@ SimulationCylinder<dim>::postprocess(const double              t,
 
           data_out.set_flags(flags);
 
-          data_out.add_data_vector(dof_handler, solution, "solution");
+          std::vector<std::string> labels(dim + 1, "u");
+          labels[dim] = "p";
+
+          std::vector<DataComponentInterpretation::DataComponentInterpretation>
+            data_component_interpretation(
+              dim + 1,
+              DataComponentInterpretation::component_is_part_of_vector);
+          data_component_interpretation[dim] =
+            DataComponentInterpretation::component_is_scalar;
+
+          data_out.add_data_vector(dof_handler,
+                                   solution,
+                                   labels,
+                                   data_component_interpretation);
           data_out.build_patches(mapping, fe_degree);
           data_out.write_vtu_in_parallel(paraview_prefix + "_slice_" +
                                            std::to_string(c) + "_" +
