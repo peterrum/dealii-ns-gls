@@ -44,6 +44,20 @@
 
 using namespace dealii;
 
+#include <deal.II/base/revision.h>
+
+#include <revision.h>
+
+std::string
+concatenate_strings(const int argc, char **argv)
+{
+  std::string result = std::string(argv[0]);
+
+  for (int i = 1; i < argc; ++i)
+    result = result + " " + std::string(argv[i]);
+
+  return result;
+}
 
 
 /**
@@ -1044,6 +1058,31 @@ main(int argc, char *argv[])
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
+  ConditionalOStream pcout(std::cout,
+                           Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) ==
+                             0);
+
+  const bool print_details = true;
+
+  if (print_details)
+    {
+      pcout << "Running ("
+            <<
+#ifdef DEBUG
+        "debug"
+#else
+        "release"
+#endif
+            << "): " << concatenate_strings(argc, argv) << std::endl;
+      pcout << "  - deal.II (branch: " << DEAL_II_GIT_BRANCH
+            << "; revision: " << DEAL_II_GIT_REVISION
+            << "; short: " << DEAL_II_GIT_SHORTREV << ")" << std::endl;
+      pcout << "  - Lethe (branch: " << NS_GLS_GIT_BRANCH
+            << "; revision: " << NS_GLS_GIT_REVISION
+            << "; short: " << NS_GLS_GIT_SHORTREV << ")" << std::endl;
+      pcout << std::endl << std::endl;
+    }
+
   // parse input file to get dimension
   const std::string file_name = (argc == 1) ? "" : argv[1];
   unsigned int      dim       = 2;
@@ -1052,7 +1091,17 @@ main(int argc, char *argv[])
   prm.add_parameter("dim", dim);
 
   if (file_name != "")
-    prm.parse_input(file_name, "", true);
+    {
+      prm.parse_input(file_name, "", true);
+
+      if (print_details)
+        {
+          std::ifstream f(file_name);
+          if (f.is_open())
+            pcout << f.rdbuf();
+          pcout << std::endl << std::endl;
+        }
+    }
 
   if (dim == 2)
     {

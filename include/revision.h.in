@@ -1,0 +1,16 @@
+#pragma once
+
+/**
+ * Name of the local git branch of the source directory.
+ */
+#define NS_GLS_GIT_BRANCH "@NS_GLS_GIT_BRANCH@"
+
+/**
+ * Full sha1 revision of the current git HEAD.
+ */
+#define NS_GLS_GIT_REVISION "@NS_GLS_GIT_REVISION@"
+
+/**
+ * Short sha1 revision of the current git HEAD.
+ */
+#define NS_GLS_GIT_SHORTREV "@NS_GLS_GIT_SHORTREV@"
