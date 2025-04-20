@@ -129,6 +129,7 @@ private:
   bool        use_no_slip_wall_bc;
   double      nu;
   bool        rotate;
+  double      distortion;
   double      t_init;
   int         reset_manifold_level;
   double      u_max;
