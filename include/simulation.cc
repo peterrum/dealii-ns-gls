@@ -15,6 +15,8 @@
 
 #include "grid_cylinder.h"
 
+#include <random>
+
 using namespace dealii;
 
 namespace InflowBoundaryValues
@@ -367,7 +369,7 @@ SimulationCylinder<dim>::create_triangulation(
     }
 
   if (distortion != 0.0)
-    GridTools::distort_random(distortion, tria);
+    GridTools::distort_random(distortion, tria, std::random_device()());
 }
 
 template <int dim>
