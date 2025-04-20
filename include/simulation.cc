@@ -199,6 +199,7 @@ SimulationCylinder<dim>::SimulationCylinder()
   , use_no_slip_wall_bc(true)
   , nu(0.0)
   , rotate(false)
+  , distortion(0.0)
   , t_init(0.0)
   , reset_manifold_level(-1)
   , u_max(1.0)
@@ -242,6 +243,7 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("simulation no slip cylinder", use_no_slip_cylinder_bc);
   prm.add_parameter("simulation no slip wall", use_no_slip_wall_bc);
   prm.add_parameter("simulation rotate", rotate);
+  prm.add_parameter("simulation distortion", distortion);
   prm.add_parameter("simulation t init", t_init);
   prm.add_parameter("simulation reset manifold level", reset_manifold_level);
   prm.add_parameter("simulation u max", u_max);
@@ -363,6 +365,9 @@ SimulationCylinder<dim>::create_triangulation(
               vertex_state[cell->vertex_index(v)] = true;
             }
     }
+
+  if (distortion != 0.0)
+    GridTools::distort_random(distortion, tria);
 }
 
 template <int dim>
