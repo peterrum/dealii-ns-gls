@@ -15,6 +15,8 @@
 
 #include "grid_cylinder.h"
 
+#include <random>
+
 using namespace dealii;
 
 namespace InflowBoundaryValues
@@ -200,6 +202,7 @@ SimulationCylinder<dim>::SimulationCylinder()
   , nu(0.0)
   , rotate(false)
   , distortion(0.0)
+  , distortion_cylinder(0.0)
   , t_init(0.0)
   , reset_manifold_level(-1)
   , u_max(1.0)
@@ -244,6 +247,8 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("simulation no slip wall", use_no_slip_wall_bc);
   prm.add_parameter("simulation rotate", rotate);
   prm.add_parameter("simulation distortion", distortion);
+  prm.add_parameter("simulation distortion cylinder vertices",
+                    distortion_cylinder);
   prm.add_parameter("simulation t init", t_init);
   prm.add_parameter("simulation reset manifold level", reset_manifold_level);
   prm.add_parameter("simulation u max", u_max);
@@ -361,6 +366,69 @@ SimulationCylinder<dim>::create_triangulation(
                   vertex[0] = vertex_2D[0];
                   vertex[1] = vertex_2D[1];
                 }
+
+              vertex_state[cell->vertex_index(v)] = true;
+            }
+    }
+
+  if (distortion_cylinder != 0.0)
+    {
+      std::vector<double> minimal_length(tria.n_vertices(), 1.0e5);
+
+      for (const auto &cell : tria.active_cell_iterators())
+        if (cell->is_locally_owned())
+          {
+            for (unsigned int i = 0; i < cell->n_lines(); ++i)
+              {
+                const auto line = cell->line(i);
+                minimal_length[line->vertex_index(0)] =
+                  std::min(line->diameter(),
+                           minimal_length[line->vertex_index(0)]);
+                minimal_length[line->vertex_index(1)] =
+                  std::min(line->diameter(),
+                           minimal_length[line->vertex_index(1)]);
+              }
+          }
+
+      std::vector<bool> vertex_state(tria.n_vertices(), false);
+
+      for (auto cell : tria.cell_iterators())
+        for (const auto v : cell->vertex_indices())
+          if (vertex_state[cell->vertex_index(v)] == false)
+            {
+              auto &vertex = cell->vertex(v);
+
+              const double radius =
+                std::sqrt(vertex[0] * vertex[0] + vertex[1] * vertex[1]);
+              if (std::abs(radius - geometry_cylinder_diameter / 2.) > 1.e-10)
+                continue;
+
+              if constexpr (dim == 3)
+                if (std::abs(std::abs(vertex[2]) -
+                             geometry_channel_height / 2.) < 1.0e-10)
+                  continue;
+
+              static std::default_random_engine generator =
+                  std::default_random_engine(std::random_device()());
+              static std::uniform_real_distribution<Number> //
+                          distribution(-1., 1.);
+              static auto draw = std::bind(distribution, generator);
+
+              Point<dim> shift_vector;
+              for (unsigned int d = 0; d < dim; ++d)
+                shift_vector[d] = draw();
+
+              shift_vector *= distortion_cylinder *
+                              minimal_length[cell->vertex_index(v)] /
+                              shift_vector.norm();
+
+              vertex += shift_vector;
+
+              const double new_radius =
+                std::sqrt(vertex[0] * vertex[0] + vertex[1] * vertex[1]);
+
+              vertex[0] *= radius / new_radius;
+              vertex[1] *= radius / new_radius;
 
               vertex_state[cell->vertex_index(v)] = true;
             }

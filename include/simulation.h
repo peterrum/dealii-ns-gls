@@ -130,6 +130,7 @@ private:
   double      nu;
   bool        rotate;
   double      distortion;
+  double      distortion_cylinder;
   double      t_init;
   int         reset_manifold_level;
   double      u_max;
