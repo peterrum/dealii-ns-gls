@@ -147,7 +147,7 @@ private:
   unsigned int mapping_degree;
 
   bool use_exact_normal;
-  bool use_symmetric_walls;
+  bool use_wall_bc_periodic;
   bool use_outflow_bc_weak_cut;
   bool use_outflow_bc_weak_nitsche;
   bool use_outflow_bc_strong;

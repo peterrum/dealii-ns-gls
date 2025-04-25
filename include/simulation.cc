@@ -215,7 +215,7 @@ SimulationCylinder<dim>::SimulationCylinder()
   , geometry_cylinder_shift(0.005)
   , fe_degree(1)
   , mapping_degree(1)
-  , use_symmetric_walls(false)
+  , use_wall_bc_periodic(false)
   , use_outflow_bc_weak_cut(false)
   , use_outflow_bc_weak_nitsche(false)
   , use_outflow_bc_strong(false)
@@ -264,6 +264,9 @@ SimulationCylinder<dim>::parse_parameters(const std::string &file_name)
   prm.add_parameter("simulation geometry cylinder shift",
                     geometry_cylinder_shift);
 
+  prm.add_parameter("simulation use wall bc periodic",
+                    use_wall_bc_periodic);
+
   prm.add_parameter("simulation use outflow bc weak cut",
                     use_outflow_bc_weak_cut);
   prm.add_parameter("simulation use outflow bc weak nitsche",
@@ -306,7 +309,7 @@ SimulationCylinder<dim>::create_triangulation(
            geometry_cylinder_position,
            geometry_cylinder_diameter,
            geometry_cylinder_shift,
-           use_symmetric_walls);
+           use_wall_bc_periodic);
 
   if (reset_manifold_level != -1)
     tria.reset_all_manifolds();
@@ -400,7 +403,7 @@ SimulationCylinder<dim>::get_boundary_descriptor() const
     bcs.all_homogeneous_nbcs.push_back(1);
 
   // walls
-  if (use_symmetric_walls)
+  if (use_wall_bc_periodic)
     {
       bcs.periodic_bcs.emplace_back(3, 4, 1);
 
@@ -575,7 +578,7 @@ SimulationCylinder<dim>::postprocess(const double              t,
                        geometry_cylinder_position,
                        geometry_cylinder_diameter,
                        geometry_cylinder_shift,
-                       use_symmetric_walls,
+                       use_wall_bc_periodic,
                        true);
 
               if (reset_manifold_level != -1)
