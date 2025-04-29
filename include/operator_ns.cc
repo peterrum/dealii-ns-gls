@@ -80,7 +80,7 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
   const std::map<unsigned int, std::shared_ptr<Function<dim, double>>>
                            &all_outflow_bcs_nitsche,
   const TimeIntegratorData &time_integrator_data,
-  const bool                consider_time_deriverative,
+  const bool                consider_time_derivative,
   const bool                increment_form,
   const bool                cell_wise_stabilization,
   const unsigned int        mg_level)
@@ -94,7 +94,7 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
   , needs_face_integrals(
       !(all_outflow_bcs_cut.empty() && all_outflow_bcs_nitsche.empty()))
   , time_integrator_data(time_integrator_data)
-  , consider_time_deriverative(consider_time_deriverative &&
+  , consider_time_derivative(consider_time_derivative &&
                                (time_integrator_data.get_order() > 0))
   , increment_form(increment_form)
   , cell_wise_stabilization(cell_wise_stabilization)
@@ -123,7 +123,7 @@ NavierStokesOperator<dim, Number>::NavierStokesOperator(
   for (auto i : this->matrix_free.get_constrained_dofs())
     constrained_indices.push_back(i);
 
-  if (consider_time_deriverative)
+  if (consider_time_derivative)
     {
       AssertThrow(theta[0] == 1.0, ExcInternalError());
     }
@@ -925,7 +925,7 @@ namespace
  *  - B     := θ u^{n+1} + (1-θ) u^{n}
  *  - P     := θ p^{n+1} + (1-θ) p^{n}
  *  - p     := p^{n+1}
- *  - ∂t(u) := time deriverative (one-step-theta method, BDF)
+ *  - ∂t(u) := time derivative (one-step-theta method, BDF)
  *
  *
  * Linearized system (only BDF):
@@ -1025,7 +1025,7 @@ NavierStokesOperator<dim, Number>::do_vmult_cell(
 
           //  e)  δ_1 (S⋅∇v, ∂t(u) + ∇P + S⋅∇B) -> SUPG stabilization
           const auto residual_0 =
-            delta_1 * ((consider_time_deriverative ?
+            delta_1 * ((consider_time_derivative ?
                           u_time_derivative :
                           Tensor<1, dim, VectorizedArray<Number>>()) +
                        p_bar_gradient + s_grad_b);
@@ -1045,7 +1045,7 @@ NavierStokesOperator<dim, Number>::do_vmult_cell(
 
           //  b)  δ_1 (∇q, ∂t(u) + ∇p + S⋅∇B) -> PSPG stabilization
           gradient_result[dim] =
-            delta_1 * ((consider_time_deriverative ?
+            delta_1 * ((consider_time_derivative ?
                           u_time_derivative :
                           Tensor<1, dim, VectorizedArray<Number>>()) +
                        p_gradient + s_grad_b);
@@ -1133,13 +1133,13 @@ NavierStokesOperator<dim, Number>::do_vmult_cell(
           //  d)  δ_1 (U⋅∇v, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) +
           //      δ_1 (u⋅∇v, ∂t'(U) + ∇P + U⋅∇U) -> SUPG stabilization
           const auto residual_0 =
-            delta_1 * ((consider_time_deriverative ?
+            delta_1 * ((consider_time_derivative ?
                           u_time_derivative :
                           Tensor<1, dim, VectorizedArray<Number>>()) +
                        p_gradient + s_grad_u + u_grad_s);
           const auto residual_1 =
             delta_1 *
-            ((consider_time_deriverative ?
+            ((consider_time_derivative ?
                 (u_star_value * weight + this->u_time_derivative_old[cell][q]) :
                 Tensor<1, dim, VectorizedArray<Number>>()) +
              p_star_gradient + s_grad_s);
@@ -1160,7 +1160,7 @@ NavierStokesOperator<dim, Number>::do_vmult_cell(
 
           //  b)  δ_1 (∇q, ∂t'(u) + ∇p + U⋅∇u + u⋅∇U) -> PSPG stabilization
           gradient_result[dim] =
-            delta_1 * ((consider_time_deriverative ?
+            delta_1 * ((consider_time_derivative ?
                           u_time_derivative :
                           Tensor<1, dim, VectorizedArray<Number>>()) +
                        p_gradient + s_grad_u + u_grad_s);

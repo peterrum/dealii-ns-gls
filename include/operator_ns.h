@@ -35,7 +35,7 @@ public:
     const std::map<unsigned int, std::shared_ptr<Function<dim, double>>>
                              &all_outflow_bcs_nitsche,
     const TimeIntegratorData &time_integrator_data,
-    const bool                consider_time_deriverative,
+    const bool                consider_time_derivative,
     const bool                increment_form,
     const bool                cell_wise_stabilization,
     const unsigned int        mg_level = numbers::invalid_unsigned_int);
@@ -108,7 +108,7 @@ private:
                             all_outflow_bcs_nitsche;
   const bool                needs_face_integrals;
   const TimeIntegratorData &time_integrator_data;
-  const bool                consider_time_deriverative;
+  const bool                consider_time_derivative;
   const bool                increment_form;
   const bool                cell_wise_stabilization;
   const bool                compute_penalty_parameters_for_previous_solution;

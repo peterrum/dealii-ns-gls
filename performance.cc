@@ -17,7 +17,7 @@ run(const unsigned int n_global_refinements, const unsigned int fe_degree)
   double             nu                         = 0.1;
   double             c_1                        = 4.0;
   double             c_2                        = 2.0;
-  bool               consider_time_deriverative = false;
+  bool               consider_time_derivative = false;
   bool               cell_wise_stabilization    = true;
   const bool         increment_form             = true;
   const unsigned int bdf_order                  = 2;
@@ -57,7 +57,7 @@ run(const unsigned int n_global_refinements, const unsigned int fe_degree)
                                                 {},
                                                 {},
                                                 time_integrator_data,
-                                                consider_time_deriverative,
+                                                consider_time_derivative,
                                                 increment_form,
                                                 cell_wise_stabilization);
 

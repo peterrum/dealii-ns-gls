@@ -16,7 +16,7 @@
   "c1"                         : 1.0,
   "c2"                         : 1.0,
   "nu"                         : 0.1,
-  "consider time deriverative" : true,
+  "consider time derivative" : true,
   "cell wise stabilization"    : false,
 
   "use matrix free ns operator" : true,

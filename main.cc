@@ -86,7 +86,7 @@ struct Parameters
   double nu                         = 0.1;
   double c_1                        = 4.0;
   double c_2                        = 2.0;
-  bool   consider_time_deriverative = false;
+  bool   consider_time_derivative = false;
   bool   cell_wise_stabilization    = true;
 
   // implmentation of operator evaluation
@@ -153,7 +153,7 @@ private:
     prm.add_parameter("nu", nu);
     prm.add_parameter("c1", c_1);
     prm.add_parameter("c2", c_2);
-    prm.add_parameter("consider time deriverative", consider_time_deriverative);
+    prm.add_parameter("consider time derivative", consider_time_derivative);
     prm.add_parameter("cell wise stabilization", cell_wise_stabilization);
 
     // implmentation of operator evaluation
@@ -343,7 +343,7 @@ public:
           bcs.all_outflow_bcs_cut,
           bcs.all_outflow_bcs_nitsche,
           *time_integrator_data,
-          params.consider_time_deriverative,
+          params.consider_time_derivative,
           increment_form,
           params.cell_wise_stabilization);
       }
@@ -524,7 +524,7 @@ public:
                     bcs.all_outflow_bcs_cut,
                     bcs.all_outflow_bcs_nitsche,
                     *time_integrator_data,
-                    params.consider_time_deriverative,
+                    params.consider_time_derivative,
                     increment_form,
                     params.cell_wise_stabilization);
               }
@@ -696,7 +696,7 @@ public:
                     bcs.all_outflow_bcs_cut,
                     bcs.all_outflow_bcs_nitsche,
                     *time_integrator_data,
-                    params.consider_time_deriverative,
+                    params.consider_time_derivative,
                     increment_form,
                     params.cell_wise_stabilization,
                     level);
