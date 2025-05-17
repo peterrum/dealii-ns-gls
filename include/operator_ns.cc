@@ -422,6 +422,9 @@ NavierStokesOperator<dim, Number>::compute_penalty_parameters(
 
   if (!(all_outflow_bcs_cut.empty() && all_outflow_bcs_nitsche.empty()))
     {
+      // adopted from
+      // https://github.com/chaos-polymtl/lethe/blob/9e25b0bd06dfd9392baf798ed3758abaee6dbb9e/source/solvers/fluid_dynamics_matrix_free_operators.cc#L965
+      
       const double beta = 1.0; // TODO
 
       const unsigned fe_degree =
@@ -474,6 +477,9 @@ NavierStokesOperator<dim, Number>::compute_penalty_parameters(
     }
   else if (!all_outflow_bcs_nitsche.empty())
     {
+      // adopted from
+      // https://github.com/chaos-polymtl/lethe/blob/9e25b0bd06dfd9392baf798ed3758abaee6dbb9e/source/solvers/fluid_dynamics_matrix_free_operators.cc#L966
+
       face_target_velocity.reinit(n_boundary_faces, n_face_quadrature_points);
 
       for (unsigned int face = n_inner_faces;
@@ -1237,6 +1243,9 @@ NavierStokesOperator<dim, Number>::do_vmult_boundary(
   else if (all_outflow_bcs_nitsche.find(integrator.boundary_id()) !=
            all_outflow_bcs_nitsche.end())
     {
+      // adopted from:
+      // https://github.com/chaos-polymtl/lethe/blob/9e25b0bd06dfd9392baf798ed3758abaee6dbb9e/source/solvers/fluid_dynamics_matrix_free_operators.cc#L1241
+
       const auto         face       = integrator.get_current_cell_index();
       const unsigned int face_index = face - matrix_free.n_inner_face_batches();
 
